@@ -19,11 +19,17 @@ jobs:
       ANGLE_REVISION: 8efd15f71c27cd0bc2a9cf0074d77e899ca9c448
       ANGLE_REPOSITORY: https://chromium.googlesource.com/angle/angle.git
       DEPOT_TOOLS_REPOSITORY: https://chromium.googlesource.com/chromium/tools/depot_tools.git
-      ANGLE_ROOT: ${{ runner.temp }}/angle
-      DEPOT_TOOLS_ROOT: ${{ runner.temp }}/depot_tools
-      ARTIFACT_DIR: ${{ runner.temp }}/angle-artifact
 
     steps:
+      - name: Initialize runner paths
+        shell: bash
+        run: |
+          {
+            echo "ANGLE_ROOT=$RUNNER_TEMP/angle"
+            echo "DEPOT_TOOLS_ROOT=$RUNNER_TEMP/depot_tools"
+            echo "ARTIFACT_DIR=$RUNNER_TEMP/angle-artifact"
+          } >> "$GITHUB_ENV"
+
       - name: Check out workflow repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
