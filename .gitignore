@@ -1,0 +1,20 @@
+# Local source and build trees
+angle/
+chromium/
+out/
+
+# Downloaded workflow artifacts and generated binaries
+artifacts/
+downloads/
+*.dylib
+*.dSYM/
+*.zip
+*.tar.gz
+
+# Local browser data and application bundles
+profiles/
+*.app/
+
+# Local operating-system and temporary files
+.DS_Store
+tmp/

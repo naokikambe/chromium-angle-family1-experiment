@@ -1,0 +1,200 @@
+name: Build unmodified ANGLE for macOS x86_64
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: angle-macos-x64-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: unmodified-angle-macos-x64
+    runs-on: macos-15-intel
+    timeout-minutes: 120
+    env:
+      ANGLE_REVISION: 8efd15f71c27cd0bc2a9cf0074d77e899ca9c448
+      ANGLE_REPOSITORY: https://chromium.googlesource.com/angle/angle.git
+      DEPOT_TOOLS_REPOSITORY: https://chromium.googlesource.com/chromium/tools/depot_tools.git
+      ANGLE_ROOT: ${{ runner.temp }}/angle
+      DEPOT_TOOLS_ROOT: ${{ runner.temp }}/depot_tools
+      ARTIFACT_DIR: ${{ runner.temp }}/angle-artifact
+
+    steps:
+      - name: Check out workflow repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Record runner and source inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'runner.os=%s\n' "$RUNNER_OS"
+          printf 'runner.arch=%s\n' "$RUNNER_ARCH"
+          printf 'cpu.architecture=%s\n' "$(uname -m)"
+          printf 'cpu.count=%s\n' "$(sysctl -n hw.ncpu)"
+          sw_vers
+          printf 'expected ANGLE revision: %s\n' "$ANGLE_REVISION"
+          xcodebuild -version
+          printf 'macOS SDK version: %s\n' "$(xcrun --show-sdk-version)"
+          xcrun clang --version
+          python3 --version
+          df -h .
+
+      - name: Get depot_tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth=1 "$DEPOT_TOOLS_REPOSITORY" "$DEPOT_TOOLS_ROOT"
+          printf 'depot_tools revision: %s\n' "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)"
+          printf '%s\n' "$DEPOT_TOOLS_ROOT" >> "$GITHUB_PATH"
+
+      - name: Fetch and pin ANGLE source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init "$ANGLE_ROOT"
+          git -C "$ANGLE_ROOT" remote add origin "$ANGLE_REPOSITORY"
+          git -C "$ANGLE_ROOT" fetch --depth=1 origin "$ANGLE_REVISION"
+          git -C "$ANGLE_ROOT" checkout --detach FETCH_HEAD
+          actual_revision=$(git -C "$ANGLE_ROOT" rev-parse HEAD)
+          printf 'actual ANGLE revision after checkout: %s\n' "$actual_revision"
+          test "$actual_revision" = "$ANGLE_REVISION"
+          git -C "$ANGLE_ROOT" status --short --branch
+
+      - name: Bootstrap the minimal standalone checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ANGLE_ROOT"
+          python3 scripts/bootstrap.py
+          python3 - <<'PY'
+          from pathlib import Path
+          from pprint import pformat
+
+          path = Path('.gclient')
+          scope = {}
+          exec(path.read_text(encoding='utf-8'), {'__builtins__': {}}, scope)
+          solutions = scope.get('solutions')
+          if not isinstance(solutions, list) or len(solutions) != 1:
+              raise SystemExit('unexpected .gclient solutions; refusing to edit it')
+          custom_vars = solutions[0].get('custom_vars', {})
+          if not isinstance(custom_vars, dict):
+              raise SystemExit('unexpected custom_vars type; refusing to edit it')
+          custom_vars = dict(custom_vars)
+          custom_vars.update({
+              'checkout_angle_cl_deps': False,
+              'checkout_angle_dawn_deps': False,
+              'checkout_angle_internal': False,
+              'checkout_angle_mesa': False,
+              'checkout_angle_partition_alloc': False,
+              'checkout_angle_restricted_traces': False,
+              'checkout_extra_traces': False,
+          })
+          solutions[0]['custom_vars'] = custom_vars
+          path.write_text('solutions = ' + pformat(solutions, sort_dicts=False) + '\n', encoding='utf-8')
+          PY
+          gclient sync --no-history
+          actual_revision=$(git rev-parse HEAD)
+          printf 'actual ANGLE revision after gclient sync: %s\n' "$actual_revision"
+          test "$actual_revision" = "$ANGLE_REVISION"
+          git status --short --branch
+          printf 'depot_tools revision: %s\n' "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)"
+          printf 'disk usage after checkout: '
+          du -sk . | awk '{print $1 " KiB"}'
+
+      - name: Generate the release build files
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ANGLE_ROOT"
+          mkdir -p out/Release
+          cat > out/Release/args.gn <<'EOF'
+          is_debug = false
+          is_component_build = false
+          target_cpu = "x64"
+          use_system_xcode = true
+          clang_use_chrome_plugins = false
+          mac_deployment_target = "13.0"
+          mac_min_system_version = "13.0"
+          angle_assert_always_on = false
+          angle_enable_metal = true
+          angle_enable_gl = false
+          angle_enable_vulkan = false
+          angle_enable_swiftshader = false
+          angle_enable_null = false
+          angle_enable_wgpu = false
+          angle_enable_cl = false
+          angle_build_tests = false
+          build_angle_deqp_tests = false
+          symbol_level = 0
+          EOF
+          printf 'GN args:\n'
+          sed -n '1,200p' out/Release/args.gn
+          gn gen out/Release
+          printf 'disk usage after GN generation: '
+          du -sk . | awk '{print $1 " KiB"}'
+
+      - name: Build only the dynamic ANGLE libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ANGLE_ROOT"
+          printf 'Ninja targets: libEGL libGLESv2\n'
+          ninja -C out/Release libEGL libGLESv2
+          printf 'Ninja version: '
+          ninja --version
+          printf 'disk usage after build: '
+          du -sk . | awk '{print $1 " KiB"}'
+          ls -lh out/Release/libEGL.dylib out/Release/libGLESv2.dylib
+
+      - name: Assemble and verify artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR/licenses"
+          install -m 0755 "$ANGLE_ROOT/out/Release/libEGL.dylib" "$ARTIFACT_DIR/libEGL.dylib"
+          install -m 0755 "$ANGLE_ROOT/out/Release/libGLESv2.dylib" "$ARTIFACT_DIR/libGLESv2.dylib"
+          printf '%s\n' "$ANGLE_REVISION" > "$ARTIFACT_DIR/ANGLE_REVISION"
+          install -m 0644 "$ANGLE_ROOT/out/Release/args.gn" "$ARTIFACT_DIR/args.gn"
+          install -m 0644 "$ANGLE_ROOT/LICENSE" "$ARTIFACT_DIR/LICENSE"
+          while IFS= read -r -d '' license_file; do
+            relative_path=${license_file#"$ANGLE_ROOT"/}
+            destination="$ARTIFACT_DIR/licenses/$relative_path"
+            mkdir -p "$(dirname "$destination")"
+            install -m 0644 "$license_file" "$destination"
+          done < <(find "$ANGLE_ROOT" -type f \( -iname 'LICENSE*' -o -iname 'NOTICE*' \) \
+            -not -path "$ANGLE_ROOT/.git/*" -not -path "$ANGLE_ROOT/out/*" -print0)
+          {
+            printf 'ANGLE_EXPECTED_REVISION=%s\n' "$ANGLE_REVISION"
+            printf 'ANGLE_ACTUAL_REVISION=%s\n' "$(git -C "$ANGLE_ROOT" rev-parse HEAD)"
+            printf 'DEPOT_TOOLS_REVISION=%s\n' "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)"
+            printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
+            printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
+            printf 'CPU_ARCHITECTURE=%s\n' "$(uname -m)"
+            xcodebuild -version
+            printf 'MACOS_SDK_VERSION=%s\n' "$(xcrun --show-sdk-version)"
+            xcrun clang --version
+            python3 --version
+            printf 'NINJA_VERSION=%s\n' "$(ninja --version)"
+            printf 'NINJA_TARGETS=libEGL libGLESv2\n'
+          } > "$ARTIFACT_DIR/build-environment.txt"
+          bash "$GITHUB_WORKSPACE/scripts/verify-artifact.sh" "$ARTIFACT_DIR"
+          printf 'artifact files and sizes:\n'
+          (
+            cd "$ARTIFACT_DIR"
+            find . -type f -print0 | xargs -0 stat -f '%z %N' | sort -n
+            cat checksums.sha256
+          )
+
+      - name: Upload ANGLE artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: angle-macos-x86_64-${{ github.run_id }}
+          path: ${{ env.ARTIFACT_DIR }}
+          if-no-files-found: error
+          retention-days: 14
