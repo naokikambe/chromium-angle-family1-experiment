@@ -1,7 +1,18 @@
 # Phase 2A — 無改造 ANGLE の macOS x86_64 ビルド構成
 
 更新日: 2026-09-20
-状態: **構成作成済み、CI 未実行**。この文書は固定ソースで確認した事実、設定上の判断、CI または実機でのみ確認できる事項を区別する。Family 1 向け変更、診断ログ追加、Chrome.app 操作は含まない。
+状態: **Phase 2B 初回workflow検証失敗、再実行禁止**。この文書は固定ソースで確認した事実、設定上の判断、CI または実機でのみ確認できる事項を区別する。Family 1 向け変更、診断ログ追加、Chrome.app 操作は含まない。
+
+## Phase 2B 初回実行記録
+
+- 実行日時: 2026-09-20 07:00:24 UTC
+- GitHub repository: `https://github.com/naokikambe/chromium-angle-family1-experiment`（public、default branch `main`）
+- 対象commit: `4d5904ed745a26019ea3d8f2bf2fe0b109db7171`
+- GitHub workflow ID: `362502195`。唯一作成されたrunは [`35495704110`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/35495704110)（event `push`、結論 `failure`、created/updated ともに 07:00:24 UTC）である。
+- 明示した `gh workflow run build-angle-macos-x64.yml --ref main` はrunを作成できず、HTTP 422 で停止した。GitHubが報告した最初の本質的エラーは、workflow 22–24行の `runner.temp` が job-level `env` では利用できないため `Unrecognized named-value: 'runner'` である。
+- runnerは割り当てられず、jobsは0件、run logは存在しない。したがって所要時間は実質0秒であり、depot_tools SHA、GN生成、Ninja、Metal toolchain、容量推移、artifact名、dylib一覧、SHA-256、署名状態、ライセンス収集はすべて未取得である。
+- 原因分類はGN、Ninja、Metal toolchain、容量、timeout、runner供給ではなく、GitHub workflow context validationである。修正候補は、`runner.temp` をjob-level expressionから除き、各 `run` stepで提供される `RUNNER_TEMP` を用いる構成へ変更すること。ただし初回失敗後にworkflow、GN args、runner、timeout、dependency設定を変更または再実行しないというPhase 2B制約に従い、本作業では変更しない。
+- artifactが存在しないため、追加dylib、install name、`@rpath` / `@loader_path` / `@executable_path`、absolute runner path、未解決非system依存、x86_64 Mach-O、署名有効性を判定できない。Phase 3へは進めない。
 
 ## 固定入力と runner
 
