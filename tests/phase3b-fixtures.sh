@@ -16,15 +16,49 @@ target=${!#}
 if [[ " $* " == *' --force '* ]]; then touch "$target/.fixture-ad-hoc"; exit 0; fi
 if [[ " $* " == *' --verify '* ]]; then
   [[ "${CODESIGN_INVALID:-0}" != 1 ]] || exit 1
+  if [[ "$target" == *'Chrome Source.app'* ]]; then
+    case "${CODESIGN_SOURCE_STRICT:-success}" in
+      detritus) printf '%s: resource fork, Finder information, or similar detritus not allowed\n' "$target" >&2; exit 1 ;;
+      unknown) printf '%s: fixture unknown signature failure\n' "$target" >&2; exit 1 ;;
+    esac
+  fi
+  if [[ "$target" == *'ANGLE Test.app'* && -n "${CODESIGN_COPY_STRICT_TARGET:-}" ]]; then
+    case "${CODESIGN_COPY_STRICT_TARGET}" in
+      app) [[ "$target" == *.app ]] && { printf 'fixture copy app strict failure\n' >&2; exit 1; } ;;
+      main) [[ "$target" == */Contents/MacOS/Google\ Chrome ]] && { printf 'fixture copy main strict failure\n' >&2; exit 1; } ;;
+      framework) [[ "$target" == *.framework ]] && { printf 'fixture copy Framework strict failure\n' >&2; exit 1; } ;;
+      gpu) [[ "$target" == *'Google Chrome Helper (GPU)' ]] && { printf 'fixture copy GPU Helper strict failure\n' >&2; exit 1; } ;;
+    esac
+  fi
   if [[ "$target" == *'ANGLE Test.app'* && -f "$target/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib" && ! -e "$target/.fixture-ad-hoc" ]]; then exit 1; fi
   exit 0
 fi
-if [[ -e "$target/.fixture-ad-hoc" && "${CODESIGN_NONADHOC:-0}" != 1 ]]; then echo 'Signature=adhoc'; else echo 'TeamIdentifier=EQHXZ8M8AV'; echo 'flags=0x10000(runtime)'; fi
+case "$target" in
+  *.framework) executable="$target/Versions/Current/Google Chrome Framework" ;;
+  *.app) executable="$target/Contents/MacOS/Google Chrome" ;;
+  *) executable="$target" ;;
+esac
+printf 'Executable=%s\n' "$executable"
+if [[ -e "$target/.fixture-ad-hoc" && "${CODESIGN_NONADHOC:-0}" != 1 ]]; then
+  echo 'Signature=adhoc'
+elif [[ "$target" == *'ANGLE Test.app'* && "${CODESIGN_COPY_TEAM_MISMATCH:-0}" == 1 ]]; then
+  echo 'Authority=Developer ID Application: Other LLC (BADTEAM)'
+  echo 'TeamIdentifier=BADTEAM'
+  echo 'CodeDirectory v=20500 flags=0x10000(runtime)'
+else
+  echo 'Authority=Developer ID Application: Google LLC (EQHXZ8M8AV)'
+  echo 'TeamIdentifier=EQHXZ8M8AV'
+  echo 'CodeDirectory v=20500 flags=0x10000(runtime)'
+fi
 EOF
 cat > "$stub_dir/xattr" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'xattr %q\n' "$*" >> "$PHASE3_FIXTURE_LOG"
+target=${!#}
+if [[ "${XATTR_COPY_DETRITUS:-0}" == 1 && "$target" == *'ANGLE Test.app'* ]]; then
+  printf '%s: com.apple.FinderInfo: fixture\n' "$target"
+fi
 exit 0
 EOF
 cat > "$stub_dir/ditto" <<'EOF'
@@ -88,15 +122,16 @@ export PATH="$stub_dir:$PATH"
 
 source_app="$fixture/Chrome Source.app"
 artifact="$fixture/artifact"
-mkdir -p "$source_app/Contents/MacOS" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS" "$artifact"
+mkdir -p "$source_app/Contents/MacOS" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS" "$artifact"
 cat > "$source_app/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>154.0.8037.45</string><key>CFBundleExecutable</key><string>Google Chrome</string></dict></plist>
 EOF
 printf '#!/usr/bin/env bash\nexit 0\n' > "$source_app/Contents/MacOS/Google Chrome"
+printf 'fixture framework\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Google Chrome Framework"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"
-chmod +x "$source_app/Contents/MacOS/Google Chrome" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"
+chmod +x "$source_app/Contents/MacOS/Google Chrome" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Google Chrome Framework" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"
 printf 'fixture egl\n' > "$artifact/libEGL.dylib"
 printf 'fixture gles\n' > "$artifact/libGLESv2.dylib"
 printf '%s\n' '72b8f72a7587ec776d7d2a57d275a6e9b1781b1d' > "$artifact/ANGLE_REVISION"
@@ -129,8 +164,45 @@ expect_fail "$prepare" "$fixture/wrong-version.app" "$artifact" "$fixture/versio
 
 source_snapshot="$fixture/source-snapshot"
 cp -R "$source_app" "$source_snapshot"
+assert_source_unchanged() { diff -qr "$source_app" "$source_snapshot"; }
+
+source_detritus_output="$fixture/source detritus/Google Chrome 154 ANGLE Test.app"
+mkdir -p "$(dirname "$source_detritus_output")"
+env CODESIGN_SOURCE_STRICT=detritus "$prepare" "$source_app" "$artifact" "$source_detritus_output"
+assert_source_unchanged
+test -f "$source_detritus_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
+
+source_unknown_output="$fixture/source unknown/Google Chrome 154 ANGLE Test.app"
+mkdir -p "$(dirname "$source_unknown_output")"
+printf '' > "$PHASE3_FIXTURE_LOG"
+expect_fail env CODESIGN_SOURCE_STRICT=unknown "$prepare" "$source_app" "$artifact" "$source_unknown_output"
+assert_source_unchanged
+test ! -e "$source_unknown_output"
+! grep -F 'ditto ' "$PHASE3_FIXTURE_LOG"
+
+for copy_failure in app main framework gpu; do
+  copy_failure_output="$fixture/copy strict ${copy_failure}/Google Chrome 154 ANGLE Test.app"
+  mkdir -p "$(dirname "$copy_failure_output")"
+  expect_fail env CODESIGN_COPY_STRICT_TARGET="$copy_failure" "$prepare" "$source_app" "$artifact" "$copy_failure_output"
+  assert_source_unchanged
+  test -d "$copy_failure_output"
+  test ! -e "$copy_failure_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
+done
+
+copy_team_output="$fixture/copy team mismatch/Google Chrome 154 ANGLE Test.app"
+mkdir -p "$(dirname "$copy_team_output")"
+expect_fail env CODESIGN_COPY_TEAM_MISMATCH=1 "$prepare" "$source_app" "$artifact" "$copy_team_output"
+assert_source_unchanged
+test ! -e "$copy_team_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
+
+copy_xattr_output="$fixture/copy xattr detritus/Google Chrome 154 ANGLE Test.app"
+mkdir -p "$(dirname "$copy_xattr_output")"
+expect_fail env XATTR_COPY_DETRITUS=1 "$prepare" "$source_app" "$artifact" "$copy_xattr_output"
+assert_source_unchanged
+test ! -e "$copy_xattr_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
+
 "$prepare" "$source_app" "$artifact" "$output"
-diff -qr "$source_app" "$source_snapshot"
+assert_source_unchanged
 test -f "$output.phase3-angle-manifest"
 expect_fail "$run" CASE_B "$output" "$fixture/run-unsigned"
 expect_fail "$sign" "$source_app" "$fixture/sign-original" --dry-run

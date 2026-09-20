@@ -44,6 +44,16 @@ prepareはapp外部にread-only manifestと別SHA-256 fileを作る。manifest�
 
 `collect-phase3-evidence.sh`は署名前後のsignature/entitlement record、dylib hashと署名、GPU PID/command、`lsof`または`vmmap`を保存する。`--use-dynamic-angle`は要求の証拠に過ぎず、両dylibのtest copy内絶対pathが同一GPU processで確認できた場合だけ外部ANGLEロードを確認済みとする。KOOV、Family 1改修、Case B/C実機起動はさらに後であり、今回未実施である。
 
+### Source metadata とclean copyのstrict gate
+
+Phase 3B prepareの実機初回試行ではartifact検証まで成功したが、source main executableの`codesign --verify --strict`が`resource fork, Finder information, or similar detritus not allowed`でStage 1停止した。test copy、manifest、dylib、signing receiptは生成されていない。このsource-side failureは元Chromeにあるextended attributeの記録であり、元appのxattrは変更しない。
+
+prepare scriptはsource app/main executable/Framework/GPU Helperごとに、strict verificationのstdout/stderr、exit status、`codesign -dvvv`、entitlements、read-only xattr一覧、実行ファイルSHA-256を保存する。strict failureはこの既知message**だけ**をwarningとしてStage 2へ進め、ほかの署名エラーはfatalである。`--ignore-resources`は使用せず、source strict結果を成功へ書き換えない。
+
+`ditto --noextattr --noqtn`後のcopyは、app全体の`--verify --deep --strict`、main executable、Framework、GPU Helperの各`--verify --strict`、Google Developer ID Authority、TeamIdentifier `EQHXZ8M8AV`、再帰xattr一覧のFinderInfo/ResourceFork不在を**すべて**満たすまでdylibを配置しない。source/copyの各主要componentは、pathを除いたAuthority/TeamIdentifier/CodeDirectory identityとSHA-256を比較して証拠化する。copy側のmetadata detritus又は署名failureは許容しない。
+
+失敗したprepareのevidence、output、sidecarは削除・上書きしない。次の実機試行は、既存の`/Users/donkee/tmp/chromium-angle-phase3b-35515036255`ではなく、例えば`/Users/donkee/tmp/chromium-angle-phase3b-35515036255-retry1`のような未使用のuser-owned rootとtest app pathを明示して行う。
+
 artifact保存期限後にも再検証できるよう、利用者はGit管理外の保全先を作り、CI完了後に記録するrun IDと2本のSHA-256を指定して次を実行し、そのディレクトリとchecksumsを保管する。
 
 ```sh
