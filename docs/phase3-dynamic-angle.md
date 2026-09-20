@@ -10,7 +10,13 @@
 - Chrome: `154.0.8037.45`、Chromium: `731082f0a26ce4b3976c3d82943092f5d13daf13`
 - ANGLE: `72b8f72a7587ec776d7d2a57d275a6e9b1781b1d`、depot_tools: `0306e4682b4ac35287c726fa35a983157a625902`
 - Chromium tag [`154.0.8037.45`](https://chromium.googlesource.com/chromium/src/+/refs/tags/154.0.8037.45) の `chrome/VERSION` はこのChrome versionを示し、同commitの [`DEPS` 350–353行](https://chromium.googlesource.com/chromium/src/+/731082f0a26ce4b3976c3d82943092f5d13daf13/DEPS#350) は `angle_revision` を上記SHAへ固定する。
-- workflowはこのpairを対象にする。artifact名は `angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-<run-id>` とし、.17向けartifactとの混同を避ける。現時点ではこのartifactのCIは未実行であり、dylib SHA-256は未確定である。
+- workflowはこのpairを対象にする。artifact名は `angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-<run-id>` とし、.17向けartifactとの混同を避ける。dylib SHA-256は未確定である。
+
+## `.45` workflow 初回実行（失敗、再実行しない）
+
+手動run [`35514080466`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/35514080466) は、commit `60b1c4410ce06ecccd7b1e31c14f6efbfcdc05fa`で2026-09-20 13:38–13:43 UTCに`macos-15-intel` runnerへ割り当てられた。ANGLE SHAとdepot_tools SHA（`0306e4682b4ac35287c726fa35a983157a625902`）は`gclient sync`後に一致確認した。checkout時のdisk使用量は`8791452 KiB`だった。
+
+GN生成stepは`python3_bin_reldir.txt not found. need to initialize depot_tools by running gclient, update_depot_tools or ensure_bootstrap.`で失敗した。このrunの`gclient sync`は完了しているが、固定したdepot_toolsでGNが要求する初期化が完了していない。Ninja、dylib作成、artifact検証、uploadは実行されず、artifact・新しいSHA-256は存在しない。workflow、GN args、runner、timeoutはこの失敗後に変更せず、再実行もしない。次の最小作業は、固定depot_toolsを維持したまま、当該固定revisionでGN前に必要なbootstrap手順を一次ソースで特定し、人間レビュー後にworkflowへ最小変更を行うことである。
 
 artifact保存期限後にも再検証できるよう、利用者はGit管理外の保全先を作り、CI完了後に記録するrun IDと2本のSHA-256を指定して次を実行し、そのディレクトリとchecksumsを保管する。
 
