@@ -15,18 +15,16 @@ capture() {
 phase3_reject_root
 test_app=$1
 results_dir=$2
-for command in codesign file otool shasum pgrep ps find; do command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"; done
+for command in codesign file otool shasum ps awk find; do command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"; done
 [[ -d "$test_app" ]] || phase3_fail "test app does not exist: $test_app"
 [[ -d "$results_dir" && ! -L "$results_dir" ]] || phase3_fail "results directory does not exist: $results_dir"
 test_app_real=$(phase3_real_directory "$test_app")
 phase3_reject_applications_path "$test_app_real"
 results_real=$(phase3_real_directory "$results_dir")
-phase3_validate_manifest "$test_app_real"
-receipt=$(phase3_receipt_path "$test_app_real")
-phase3_verify_sidecar_hash "$receipt" "$(phase3_receipt_hash_path "$test_app_real")"
-[[ "$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')" == 'ad-hoc-deep' ]] || phase3_fail 'test copy signing receipt is not ad-hoc'
+phase3_validate_signed_test_copy "$test_app_real"
 
 manifest=$(phase3_manifest_path "$test_app_real")
+receipt=$(phase3_receipt_path "$test_app_real")
 source_app=$(phase3_manifest_value "$manifest" 'SOURCE_APP')
 framework="$test_app_real/Contents/Frameworks/Google Chrome Framework.framework"
 libraries_dir="$(cd "$framework" && pwd -P)/Libraries"
@@ -54,9 +52,10 @@ if [[ -d "$sign_results" && ! -L "$sign_results" ]]; then
   find "$sign_results" -maxdepth 1 -type f \( -name '*-details.diff' -o -name '*-entitlements.diff' -o -name 'signing-metadata.txt' \) -exec cp {} "$results_real" \;
 fi
 
+process_snapshot="$results_real/process-table-snapshot.txt"
+phase3_capture_process_snapshot "$process_snapshot"
 gpu_pids_file="$results_real/gpu-processes.txt"
-: > "$gpu_pids_file"
-pgrep -af "$framework" 2>/dev/null | grep 'Google Chrome Helper (GPU)' >> "$gpu_pids_file" || true
+phase3_snapshot_matching_processes "$process_snapshot" "$framework" 'Google Chrome Helper (GPU)' > "$gpu_pids_file"
 if [[ ! -s "$gpu_pids_file" ]]; then
   printf 'No matching GPU process was observed; dynamic ANGLE load is unconfirmed.\n' >> "$gpu_pids_file"
 else

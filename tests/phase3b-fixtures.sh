@@ -15,10 +15,11 @@ printf 'codesign %q\n' "$*" >> "$PHASE3_FIXTURE_LOG"
 target=${!#}
 if [[ " $* " == *' --force '* ]]; then touch "$target/.fixture-ad-hoc"; exit 0; fi
 if [[ " $* " == *' --verify '* ]]; then
+  [[ "${CODESIGN_INVALID:-0}" != 1 ]] || exit 1
   if [[ "$target" == *'ANGLE Test.app'* && -f "$target/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib" && ! -e "$target/.fixture-ad-hoc" ]]; then exit 1; fi
   exit 0
 fi
-if [[ -e "$target/.fixture-ad-hoc" ]]; then echo 'Signature=adhoc'; else echo 'TeamIdentifier=EQHXZ8M8AV'; echo 'flags=0x10000(runtime)'; fi
+if [[ -e "$target/.fixture-ad-hoc" && "${CODESIGN_NONADHOC:-0}" != 1 ]]; then echo 'Signature=adhoc'; else echo 'TeamIdentifier=EQHXZ8M8AV'; echo 'flags=0x10000(runtime)'; fi
 EOF
 cat > "$stub_dir/xattr" <<'EOF'
 #!/usr/bin/env bash
@@ -52,9 +53,35 @@ for argument in "$@"; do
 done
 exec /usr/bin/shasum "$@"
 EOF
-cat > "$stub_dir/pgrep" <<'EOF'
+cat > "$stub_dir/ps" <<'EOF'
 #!/usr/bin/env bash
-exit 1
+set -euo pipefail
+if [[ " $* " == *' -wwaxo pid=,command= '* ]]; then
+  cat "$PHASE3_FIXTURE_PS_SNAPSHOT"
+  exit 0
+fi
+printf '%s fixture process\n' "${PHASE3_FIXTURE_PS_PID:-0}"
+EOF
+cat > "$stub_dir/file" <<'EOF'
+#!/usr/bin/env bash
+printf '%s: fixture Mach-O\n' "$1"
+EOF
+cat > "$stub_dir/otool" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+cat > "$stub_dir/lsof" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${PHASE3_FIXTURE_LSOF_BOTH:-0}" == 1 ]]; then
+  printf 'fixture %s\n' "$PHASE3_FIXTURE_LIBRARIES/libEGL.dylib"
+  printf 'fixture %s\n' "$PHASE3_FIXTURE_LIBRARIES/libGLESv2.dylib"
+else
+  printf 'fixture %s\n' "$PHASE3_FIXTURE_LIBRARIES/libEGL.dylib"
+fi
+EOF
+cat > "$stub_dir/vmmap" <<'EOF'
+#!/usr/bin/env bash
+exit 0
 EOF
 chmod +x "$stub_dir"/*
 export PATH="$stub_dir:$PATH"
@@ -78,6 +105,7 @@ expect_fail() { if "$@" >/dev/null 2>&1; then printf 'expected failure: %q\n' "$
 prepare="$repo_root/scripts/prepare-chrome-angle-test-copy.sh"
 sign="$repo_root/scripts/sign-chrome-angle-test-copy.sh"
 run="$repo_root/scripts/run-dynamic-angle-test.sh"
+collect="$repo_root/scripts/collect-phase3-evidence.sh"
 output="$fixture/output with spaces/Google Chrome 154 ANGLE Test.app"
 output_after_tamper="$fixture/output after tamper/Google Chrome 154 ANGLE Test.app"
 
@@ -127,8 +155,42 @@ output_signed="$fixture/output signed/Google Chrome 154 ANGLE Test.app"
 mkdir -p "$(dirname "$output_signed")"
 "$prepare" "$source_app" "$artifact" "$output_signed"
 "$sign" "$output_signed" "$fixture/sign-confirmed" --confirm-ad-hoc-signing
+process_snapshot="$fixture/process-snapshot.txt"
+printf '111 fixture caller argument only: %s\n' "$output_signed" > "$process_snapshot"
+export PHASE3_FIXTURE_PS_SNAPSHOT="$process_snapshot"
 "$run" CASE_B "$output_signed" "$fixture/case-b"
 "$run" CASE_C "$output_signed" "$fixture/case-c"
 ! grep -F -- '--disable-angle-features=requireGpuFamily2' "$fixture/case-b/run-metadata.txt"
 grep -F -- '--disable-angle-features=requireGpuFamily2' "$fixture/case-c/run-metadata.txt" >/dev/null
+printf '222 %s --type=gpu-process\n' "$output_signed/Contents/MacOS/Google Chrome" > "$process_snapshot"
+expect_fail "$run" CASE_B "$output_signed" "$fixture/case-already-running"
+
+framework="$output_signed/Contents/Frameworks/Google Chrome Framework.framework"
+libraries="$framework/Libraries"
+export PHASE3_FIXTURE_LIBRARIES="$libraries"
+cat > "$process_snapshot" <<EOF
+333 /unrelated/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU) --type=gpu-process
+444 $framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU) --type=gpu-process
+EOF
+mkdir "$fixture/evidence-one-library" "$fixture/evidence-both-libraries" "$fixture/evidence-invalid-signature" "$fixture/evidence-nonadhoc" "$fixture/evidence-tampered-receipt"
+unset PHASE3_FIXTURE_LSOF_BOTH
+"$collect" "$output_signed" "$fixture/evidence-one-library"
+! grep -F 'direct dynamic ANGLE load evidence' "$fixture/evidence-one-library/load-evidence.txt"
+export PHASE3_FIXTURE_LSOF_BOTH=1
+"$collect" "$output_signed" "$fixture/evidence-both-libraries"
+grep -F 'direct dynamic ANGLE load evidence: lsof confirmed both test-copy dylib absolute paths for GPU PID 444' "$fixture/evidence-both-libraries/load-evidence.txt" >/dev/null
+grep -F '444 ' "$fixture/evidence-both-libraries/gpu-processes.txt" >/dev/null
+! grep -F '333 ' "$fixture/evidence-both-libraries/gpu-processes.txt"
+expect_fail env CODESIGN_INVALID=1 "$collect" "$output_signed" "$fixture/evidence-invalid-signature"
+expect_fail env CODESIGN_NONADHOC=1 "$collect" "$output_signed" "$fixture/evidence-nonadhoc"
+
+receipt="$output_signed.phase3-angle-signing-receipt"
+receipt_hash="$receipt.sha256"
+chmod u+w "$receipt" "$receipt_hash"
+awk 'BEGIN { FS = OFS = "=" } $1 == "PREPARE_MANIFEST_SHA256" { $2 = "0000000000000000000000000000000000000000000000000000000000000000" } { print }' "$receipt" > "$receipt.new"
+mv "$receipt.new" "$receipt"
+printf '%s  %s\n' "$(shasum -a 256 "$receipt" | awk '{print $1}')" "$(basename "$receipt")" > "$receipt_hash"
+chmod 0444 "$receipt" "$receipt_hash"
+expect_fail "$run" CASE_B "$output_signed" "$fixture/case-tampered-receipt"
+expect_fail "$collect" "$output_signed" "$fixture/evidence-tampered-receipt"
 printf 'phase3b fixture tests passed\n'

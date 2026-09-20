@@ -87,10 +87,11 @@ Chromium固定commitの[`gl_initializer_mac.cc` 34–110行](https://chromium.go
 
 1. `scripts/inspect-chrome-for-dynamic-angle.sh "$SOURCE_CHROME_APP"` を読み取り実行し、Chrome 154/x86_64と元appの署名を確認する。
 2. `scripts/download-angle-artifact.sh "$ARTIFACT_DIRECTORY"` でartifactをGit管理外へ保全・再検証する。
-3. `scripts/prepare-chrome-angle-test-copy.sh "$SOURCE_CHROME_APP" "$ARTIFACT_DIRECTORY" "$TEST_APP"` を実行する。署名無効化が記録されたら、Phase 3Bの人間レビューで停止する。
-4. 人間が`sign-chrome-angle-test-copy.sh "$TEST_APP" "$SIGN_RESULTS" --dry-run`を確認し、承認後に`--confirm-ad-hoc-signing`を明示して署名する。承認済みの有効なテストcopyだけに対して、`scripts/run-dynamic-angle-test.sh CASE_B "$TEST_APP" "$RESULTS_DIRECTORY"` を実行する。Case Bに`--disable-angle-features`は付与しない。
-5. Case Bの直接ロード証拠が得られた後だけ、`CASE_C`を実行する。Case Cだけが`--disable-angle-features=requireGpuFamily2`を付与する。
-6. `scripts/collect-phase3-evidence.sh "$TEST_APP" "$RESULTS_DIRECTORY"` と手動の`chrome://gpu`保存手順で結果を保全する。
+3. `scripts/prepare-chrome-angle-test-copy.sh "$SOURCE_CHROME_APP" "$ARTIFACT_DIRECTORY" "$TEST_APP"` を実行し、結果を人間がレビューする。署名無効化が記録されたら、承認まで停止する。
+4. 承認後に`sign-chrome-angle-test-copy.sh "$TEST_APP" "$SIGN_RESULTS" --dry-run`を確認し、さらに承認後に`--confirm-ad-hoc-signing`を明示して署名する。
+5. 承認済みの有効なtest copyだけに対して、`scripts/run-dynamic-angle-test.sh CASE_B "$TEST_APP" "$RESULTS_DIRECTORY"` を実行する。Case Bに`--disable-angle-features`は付与しない。
+6. `scripts/collect-phase3-evidence.sh "$TEST_APP" "$RESULTS_DIRECTORY"` と手動の`chrome://gpu`保存手順で結果を保全する。`lsof`、`vmmap`などで両dylibのtest copy内絶対pathが確認できるまで、外部ANGLEは未確認とする。
+7. Case Bの直接ロード証拠が得られた後だけ、`CASE_C`を実行する。Case Cだけが`--disable-angle-features=requireGpuFamily2`を付与する。
 
 run scriptは既存Chrome processを検出すると停止し、`open -a`を使わずtest appのexecutableだけを起動する。各runは新規`mktemp`の`--user-data-dir`を使い、既存profileを指定・削除・利用しない。結果は`local-results/`など`.gitignore`対象に置き、profileは自動削除しない。
 

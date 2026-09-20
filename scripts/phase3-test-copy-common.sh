@@ -171,6 +171,55 @@ phase3_validate_manifest() {
   phase3_verify_hash "$libraries_dir/libGLESv2.dylib" "$PHASE3_LIBGLESV2_SHA256"
 }
 
+phase3_validate_signed_test_copy() {
+  local app=$1
+  local manifest
+  local receipt
+  local manifest_sha256
+
+  phase3_validate_manifest "$app"
+  manifest=$(phase3_manifest_path "$app")
+  receipt=$(phase3_receipt_path "$app")
+  phase3_verify_sidecar_hash "$receipt" "$(phase3_receipt_hash_path "$app")"
+  [[ "$(phase3_manifest_value "$receipt" 'SCHEMA')" == 'phase3-angle-signing-receipt-v1' ]] ||
+    phase3_fail 'unsupported signing receipt schema'
+  [[ "$(phase3_manifest_value "$receipt" 'TEST_APP')" == "$app" ]] ||
+    phase3_fail 'signing receipt app path does not match'
+  [[ "$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')" == 'ad-hoc-deep' ]] ||
+    phase3_fail 'test copy was not ad-hoc signed'
+  [[ "$(phase3_manifest_value "$receipt" 'STRICT_VERIFICATION')" == 'passed' ]] ||
+    phase3_fail 'signing receipt does not record strict verification'
+  manifest_sha256=$(phase3_hash "$manifest")
+  [[ "$(phase3_manifest_value "$receipt" 'PREPARE_MANIFEST_SHA256')" == "$manifest_sha256" ]] ||
+    phase3_fail 'signing receipt does not match the current preparation manifest'
+  codesign --verify --deep --strict "$app" || phase3_fail 'test copy strict signature verification failed'
+  codesign -dvvv "$app" 2>&1 | grep -F 'Signature=adhoc' >/dev/null ||
+    phase3_fail 'test copy is not currently ad-hoc signed'
+}
+
+phase3_capture_process_snapshot() {
+  local destination=$1
+  ps -wwaxo pid=,command= > "$destination"
+}
+
+phase3_snapshot_matching_processes() {
+  local snapshot=$1
+  local first_required=$2
+  local second_required=${3:-}
+
+  awk -v first_required="$first_required" -v second_required="$second_required" '
+    {
+      process_id = $1
+      command = $0
+      sub(/^[[:space:]]*[0-9]+[[:space:]]+/, "", command)
+      if (process_id ~ /^[0-9]+$/ && index(command, first_required) &&
+          (second_required == "" || index(command, second_required))) {
+        print process_id " " command
+      }
+    }
+  ' "$snapshot"
+}
+
 phase3_capture_signature() {
   local destination_prefix=$1
   local target=$2

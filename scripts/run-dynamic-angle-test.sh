@@ -11,7 +11,7 @@ test_case=$1
 test_app=$2
 results_dir=$3
 case "$test_case" in CASE_B|CASE_C) ;; *) phase3_fail 'case must be CASE_B or CASE_C' ;; esac
-for command in lipo codesign shasum pgrep; do command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"; done
+for command in lipo codesign shasum ps awk; do command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"; done
 [[ -d "$test_app" ]] || phase3_fail "test app does not exist: $test_app"
 [[ ! -e "$results_dir" && ! -L "$results_dir" ]] || phase3_fail "refusing existing results: $results_dir"
 test_app_real=$(phase3_real_directory "$test_app")
@@ -20,17 +20,7 @@ results_parent_real=$(phase3_real_directory "$(dirname "$results_dir")")
 phase3_require_user_owned_directory "$results_parent_real"
 results_real="$results_parent_real/$(basename "$results_dir")"
 phase3_reject_symlink_components "$results_real"
-phase3_validate_manifest "$test_app_real"
-
-receipt=$(phase3_receipt_path "$test_app_real")
-receipt_hash=$(phase3_receipt_hash_path "$test_app_real")
-phase3_verify_sidecar_hash "$receipt" "$receipt_hash"
-[[ "$(phase3_manifest_value "$receipt" 'SCHEMA')" == 'phase3-angle-signing-receipt-v1' ]] || phase3_fail 'unsupported signing receipt schema'
-[[ "$(phase3_manifest_value "$receipt" 'TEST_APP')" == "$test_app_real" ]] || phase3_fail 'signing receipt app path does not match'
-[[ "$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')" == 'ad-hoc-deep' ]] || phase3_fail 'test copy was not ad-hoc signed'
-[[ "$(phase3_manifest_value "$receipt" 'STRICT_VERIFICATION')" == 'passed' ]] || phase3_fail 'signing receipt does not record strict verification'
-codesign --verify --deep --strict "$test_app_real" || phase3_fail 'test copy strict signature verification failed'
-codesign -dvvv "$test_app_real" 2>&1 | grep -F 'Signature=adhoc' >/dev/null || phase3_fail 'test copy is not currently ad-hoc signed'
+phase3_validate_signed_test_copy "$test_app_real"
 
 info_plist="$test_app_real/Contents/Info.plist"
 chrome_version=$(phase3_plist_value CFBundleShortVersionString "$info_plist") || phase3_fail 'cannot read Chrome version'
@@ -40,16 +30,19 @@ chrome_executable="$test_app_real/Contents/MacOS/$executable_name"
 [[ -x "$chrome_executable" ]] || phase3_fail 'test app main executable is missing'
 lipo -info "$chrome_executable" | grep -Eq '(^|[[:space:]])x86_64($|[[:space:]])' || phase3_fail 'test app main executable has no x86_64 slice'
 
-if pgrep -fl 'Google Chrome' >/dev/null 2>&1; then
-  printf 'existing Chrome process detected; do not mix the test app with an existing Chrome/profile:\n' >&2
-  pgrep -fl 'Google Chrome' >&2 || true
+mkdir "$results_real"
+process_snapshot="$results_real/process-table-before-launch.txt"
+phase3_capture_process_snapshot "$process_snapshot"
+source_app=$(phase3_manifest_value "$(phase3_manifest_path "$test_app_real")" 'SOURCE_APP')
+source_executable="$source_app/Contents/MacOS/$executable_name"
+if source_matches=$(phase3_snapshot_matching_processes "$process_snapshot" "$source_executable") && [[ -n "$source_matches" ]]; then
+  printf 'source Chrome process detected; do not mix it with the test copy:\n%s\n' "$source_matches" >&2
   exit 1
 fi
-if pgrep -af "$test_app_real" >/dev/null 2>&1; then
-  phase3_fail 'the test copy is already running'
+if test_copy_matches=$(phase3_snapshot_matching_processes "$process_snapshot" "$chrome_executable") && [[ -n "$test_copy_matches" ]]; then
+  printf 'the test copy is already running:\n%s\n' "$test_copy_matches" >&2
+  exit 1
 fi
-
-mkdir "$results_real"
 profile_dir=$(mktemp -d "${TMPDIR:-/tmp}/chrome-angle-${test_case}.XXXXXX")
 command=(
   "$chrome_executable"
