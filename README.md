@@ -5,14 +5,15 @@ Reproducible, standalone ANGLE build configuration for a macOS x86_64 experiment
 - Chrome: `154.0.8037.17`
 - Chromium: `62d2fcb41a84e4dcefd8c4da7dfa534e6c482854`
 - ANGLE: `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`
-- Current stage: Phase 2B — build and artifact validation only
+- Current stage: Phase 3A — local test-harness preparation only
 
 The workflow builds unmodified ANGLE targets `libEGL` and `libGLESv2` on
 `macos-15-intel`. It does not modify Chrome, place libraries into a browser,
 launch Chrome or KOOV, or perform any MacBookAir6,1 testing.
 
 See `docs/phase-status.md` for current status and `docs/phase2-build.md` for
-the build and validation design.
+the build and validation design. `docs/phase3-dynamic-angle.md` defines the
+separate, opt-in device-test procedure; it does not authorize a Chrome launch.
 
 ## License
 
@@ -24,5 +25,6 @@ notices in its build artifact.
 
 Google Chrome and KOOV binaries, teaching materials, and assets are outside
 this repository's license. This is an independent experimental project, is not
-affiliated with or endorsed by Google, the Chromium project, the ANGLE project,
-or KOOV, and provides no warranty or safety guarantee.
+affiliated with or endorsed by Google, Sony, the Chromium project, the ANGLE
+project, KOOV, or the OCLP project, and provides no warranty or safety
+guarantee.

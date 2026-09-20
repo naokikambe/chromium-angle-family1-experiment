@@ -13,6 +13,10 @@ downloads/
 
 # Local browser data and application bundles
 profiles/
+chrome-test-profiles/
+local-results/
+*.crash
+*.ips
 *.app/
 
 # Local operating-system and temporary files
