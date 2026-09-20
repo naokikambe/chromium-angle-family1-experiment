@@ -1,7 +1,7 @@
 # Phase 2A — 無改造 ANGLE の macOS x86_64 ビルド構成
 
 更新日: 2026-09-20
-状態: **Phase 2B follow-up build失敗、再実行禁止**。この文書は固定ソースで確認した事実、設定上の判断、CI または実機でのみ確認できる事項を区別する。Family 1 向け変更、診断ログ追加、Chrome.app 操作は含まない。
+状態: **Phase 2B 完了**。この文書は固定ソースで確認した事実、設定上の判断、CI または実機でのみ確認できる事項を区別する。Family 1 向け変更、診断ログ追加、Chrome.app 操作は含まない。
 
 ## Phase 2B 初回実行記録
 
@@ -22,8 +22,20 @@
 - 固定ANGLE checkoutと `gclient sync` は成功した。sync後の実HEADは `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`、depot_tools実HEADは `0306e4682b4ac35287c726fa35a983157a625902`。worktree使用量は checkout後 `8805476 KiB`、GN後 `8819920 KiB`、build後 `8881416 KiB` であり、容量不足・timeoutは発生していない。
 - GNは17秒未満で成功し、指定した `is_component_build = false` を含む `args.gn` から1324 targetsを生成した。`ninja -C out/Release libEGL libGLESv2` は1314/1314で成功し、runner上の出力は `libEGL.dylib` 68 KiB、`libGLESv2.dylib` 6.1 MiBだった。Metal backend objectのコンパイルもbuild logで確認した。
 - 最初の本質的エラーは `Assemble and verify artifact` stepの `verification failed: libEGL.dylib has an unexpected non-system dependency: ./libEGL.dylib` である。run logには`otool`の結果ファイルが残らないため、その項目が実際に先頭だったこと自体はartifactから再確認できない。一方、失敗時のscriptは `otool -L` の全`NR > 1`項目を実依存として処理しており、macOSの`otool -L`で先頭に出る自己`LC_ID_DYLIB`を意味的に除外していなかった。`libGLESv2.dylib`の検証には到達せず、他の検証エラーもこのrunからは観測されていない。2 dylibはartifact staging directoryへコピー済みだったが、検証scriptが終わる前に失敗したためupload stepはskipされた。よってdownload可能なartifact、`otool`、`file`、`lipo`、install name、追加dylib、absolute path混入、署名状態、SHA-256、収集済みライセンスは確認できない。
-- 原因分類はGN、Ninja、Metal toolchain、runner供給、容量、timeoutではなく、自己`LC_ID_DYLIB`と`LC_LOAD_DYLIB`を区別しない検証ロジックである。次のreview済み最小修正は、x86_64の`otool -D`からinstall nameを取得し、x86_64の`otool -L`の先頭項目がその値と完全一致する場合だけ自己IDとして除外することである。自己ID以外の `./*.dylib` は従来どおり失敗させる。この修正の実行結果は次の手動runで確認し、artifactの実 `otool -L`、install name、署名、hashは成功時にのみ記録する。
+- 原因分類はGN、Ninja、Metal toolchain、runner供給、容量、timeoutではなく、自己`LC_ID_DYLIB`と`LC_LOAD_DYLIB`を区別しない検証ロジックである。review済み最小修正は、x86_64の`otool -D`からinstall nameを取得し、x86_64の`otool -L`の先頭項目がその値と完全一致する場合だけ自己IDとして除外することである。自己ID以外の `./*.dylib` は従来どおり失敗させる。この修正は下記の手動runで確認し、artifactの実 `otool -L`、install name、署名、hashを記録した。
 - GitHubは `actions/checkout` のNode 20 deprecation annotationを出したが、Node 24へ強制移行してcheckoutは成功した。これは今回の失敗原因ではない。Phase 3へは、有効なartifactのuploadと全検証の成功がないため進めない。
+
+## Phase 2B 2回目follow-up 実行記録
+
+- 修正commitは `cb334c0a4fc73110b85e716689bb4883ea7a8077`（`Distinguish dylib install names from dependencies`）。workflowのANGLE SHA、GN args、runner、timeout、Action SHAは変更していない。`scripts/verify-artifact.sh` は、各x86_64 dylibの`otool -D`からinstall nameを1件だけ取得し、x86_64の`otool -L`先頭項目がその値と完全一致する場合だけ自己`LC_ID_DYLIB`として除外する。以降の`./*.dylib`を含む全項目は従来どおり実依存として検査する。
+- ローカル回帰は`bash -n`と`git diff --check`を通過した。一時的なx86_64 dylibで、自己IDとsystem依存を含む未署名artifactは成功、必須`libGLESv2.dylib`欠落・自己ID以外の`./missing.dylib`・模擬した無効署名はそれぞれ失敗することを確認した。テスト生成物はcommitしていない。
+- 手動dispatchのrunは [`35501697418`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/35501697418)（commit `cb334c0a4fc73110b85e716689bb4883ea7a8077`、2026-09-20 09:13:11–09:40:14 UTC、26分59秒、結論`success`）である。これがこの修正に対する唯一の手動runであり、retryはしていない。
+- runnerはmacOS 15.7.9 (24G830)、`runner.arch=X64`、`uname -m=x86_64`、4 CPU、Xcode 16.4 (16F6)、SDK 15.5、Apple clang 17.0.0、Python 3.14.7だった。ANGLE実HEADはcheckout後と`gclient sync`後の両方で `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`、depot_toolsは `0306e4682b4ac35287c726fa35a983157a625902`。使用量はcheckout後 `8828760 KiB`、GN後 `8843204 KiB`、build後 `8904700 KiB`。GNは1324 targets、Ninjaは1314/1314で成功した。build stepはNinja 1.12.1を記録し、artifactの環境スナップショットはNinja 1.13.2を記録しているため、この差異は実行環境の記録として残し、原因は未確認とする。
+- upload artifact名は `angle-macos-x86_64-35501697418`（artifact ID `10602489653`、zip `4214588` bytes）。Git管理外へdownloadして再検証した。全922ファイルのうちrootは`ANGLE_REVISION`、`LICENSE`、`args.gn`、`build-environment.txt`、`checksums.sha256`、`codesign-results.txt`、`file-results.txt`、`lipo-results.txt`、`otool-results.txt`、2 dylibであり、残る911ファイルは`licenses/`配下の第三者license/NOTICEである。
+- artifact直下のdylibは`libEGL.dylib`と`libGLESv2.dylib`のみ。両方ともthin x86_64 Mach-Oで、install nameはそれぞれ`./libEGL.dylib`、`./libGLESv2.dylib`である。前回エラーの`./libEGL.dylib`は`libEGL.dylib`自身の`LC_ID_DYLIB`であり、今回の検証では実依存として扱われなかった。`libGLESv2.dylib`の`LC_LOAD_DYLIB`に`./libEGL.dylib`は存在しない。
+- 実依存は両dylibとも`/System/Library/...`または`/usr/lib/...`だけである。`libEGL`はMetal、Foundation、CoreFoundation、libSystemをloadし、`libGLESv2`はweak MetalとFoundation、CoreFoundation、libobjc、CoreGraphics、IOKit、IOSurface、QuartzCore、Cocoa、CoreServices、libSystemをloadする。両方の`LC_RPATH`は`@executable_path/`である。`otool-results.txt`にrunner固有絶対パスはなく、未解決の非system依存もない。
+- 両dylibは`codesign`で未署名と記録され、Phase 2の許容条件である（有効・無効署名ではない）。SHA-256は`libEGL.dylib`が `f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`、`libGLESv2.dylib`が `2e0aadc21e76b0bb1adcfb3b908e757906995b75abb9e90edb3dfb5c1d1adef0`。artifactの値とローカル再計算は一致した。
+- `artifact verification passed`、upload、ローカル再検証まで成功したためPhase 2Bの成功判定を満たす。ただしChrome 154へのload、`@executable_path/`がChrome bundleで解決すること、Library Validation、実機Metal、Feature override、KOOVは未確認である。Phase 0の基準ログ保全を完了し、artifact結果をレビューするまでPhase 3へは進めない。
 
 ## 固定入力と runner
 
