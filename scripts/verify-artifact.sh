@@ -70,17 +70,49 @@ for library in "${libraries[@]}"; do
   fi
 
   printf '== %s: install name ==\n' "$library" >> otool-results.txt
-  otool -D "$library" >> otool-results.txt
-  install_name=$(otool -D "$library" | sed -n '2p')
-  [[ -n "$install_name" ]] || fail "$library has no install name"
+  if ! install_name_report=$(otool -D "$library"); then
+    fail "$library install name report failed"
+  fi
+  printf '%s\n' "$install_name_report" >> otool-results.txt
+  if ! install_name_output=$(otool -arch x86_64 -D "$library"); then
+    fail "$library install name lookup failed"
+  fi
+  install_name=''
+  install_name_count=0
+  while IFS= read -r install_name_line; do
+    [[ -n "$install_name_line" ]] || continue
+    install_name=$install_name_line
+    ((install_name_count += 1))
+  done < <(printf '%s\n' "$install_name_output" | awk 'NR > 1 && NF { print }')
+  (( install_name_count == 1 )) ||
+    fail "$library has an ambiguous or missing x86_64 install name"
+  printf 'x86_64 install name: %s\n' "$install_name" >> otool-results.txt
 
   printf '== %s: dependencies ==\n' "$library" >> otool-results.txt
-  otool -L "$library" >> otool-results.txt
+  if ! dependency_report=$(otool -L "$library"); then
+    fail "$library dependency report failed"
+  fi
+  printf '%s\n' "$dependency_report" >> otool-results.txt
   printf '== %s: load commands ==\n' "$library" >> otool-results.txt
   otool -l "$library" >> otool-results.txt
 
+  if ! dependency_output=$(otool -arch x86_64 -L "$library"); then
+    fail "$library dependency lookup failed"
+  fi
+  dependencies=()
   while IFS= read -r dependency; do
     [[ -n "$dependency" ]] || continue
+    dependencies+=("$dependency")
+  done < <(printf '%s\n' "$dependency_output" | awk 'NR > 1 && NF { print $1 }')
+  (( ${#dependencies[@]} > 0 )) || fail "$library has no x86_64 otool -L entries"
+
+  for dependency_index in "${!dependencies[@]}"; do
+    dependency=${dependencies[dependency_index]}
+    if (( dependency_index == 0 )); then
+      [[ "$dependency" == "$install_name" ]] ||
+        fail "$library x86_64 self install name does not match its first otool -L entry"
+      continue
+    fi
     case "$dependency" in
       /System/Library/*|/usr/lib/*)
         ;;
@@ -93,7 +125,7 @@ for library in "${libraries[@]}"; do
         fail "$library has an unexpected non-system dependency: $dependency"
         ;;
     esac
-  done < <(otool -L "$library" | awk 'NR > 1 { print $1 }')
+  done
 
   {
     printf '== %s ==\n' "$library"
