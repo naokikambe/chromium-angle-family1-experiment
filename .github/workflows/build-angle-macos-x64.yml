@@ -71,6 +71,32 @@ jobs:
           test "$actual_revision" = "$DEPOT_TOOLS_REVISION"
           printf '%s\n' "$DEPOT_TOOLS_ROOT" >> "$GITHUB_PATH"
 
+      - name: Bootstrap pinned depot_tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_before=$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)
+          printf 'depot_tools revision before bootstrap: %s\n' "$actual_before"
+          test "$actual_before" = "$DEPOT_TOOLS_REVISION"
+          "$DEPOT_TOOLS_ROOT/ensure_bootstrap"
+          test -s "$DEPOT_TOOLS_ROOT/python3_bin_reldir.txt"
+          python3_bin_reldir=$(<"$DEPOT_TOOLS_ROOT/python3_bin_reldir.txt")
+          test -n "$python3_bin_reldir"
+          bootstrap_python="$DEPOT_TOOLS_ROOT/$python3_bin_reldir/python3"
+          test -x "$bootstrap_python"
+          bootstrap_python_version=$("$DEPOT_TOOLS_ROOT/python-bin/python3" --version 2>&1)
+          printf 'depot_tools python3_bin_reldir: %s\n' "$python3_bin_reldir"
+          printf 'depot_tools bootstrap Python: %s\n' "$bootstrap_python_version"
+          actual_after=$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)
+          printf 'depot_tools revision after bootstrap: %s\n' "$actual_after"
+          test "$actual_after" = "$DEPOT_TOOLS_REVISION"
+          {
+            printf 'DEPOT_TOOLS_BOOTSTRAP_HEAD_BEFORE=%s\n' "$actual_before"
+            printf 'DEPOT_TOOLS_BOOTSTRAP_HEAD_AFTER=%s\n' "$actual_after"
+            printf 'DEPOT_TOOLS_PYTHON3_BIN_RELDIR=%s\n' "$python3_bin_reldir"
+            printf 'DEPOT_TOOLS_BOOTSTRAP_PYTHON_VERSION=%s\n' "$bootstrap_python_version"
+          } >> "$GITHUB_ENV"
+
       - name: Fetch and pin ANGLE source
         shell: bash
         run: |
@@ -196,6 +222,10 @@ jobs:
             printf 'ANGLE_ACTUAL_REVISION=%s\n' "$(git -C "$ANGLE_ROOT" rev-parse HEAD)"
             printf 'DEPOT_TOOLS_EXPECTED_REVISION=%s\n' "$DEPOT_TOOLS_REVISION"
             printf 'DEPOT_TOOLS_ACTUAL_REVISION=%s\n' "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)"
+            printf 'DEPOT_TOOLS_BOOTSTRAP_HEAD_BEFORE=%s\n' "$DEPOT_TOOLS_BOOTSTRAP_HEAD_BEFORE"
+            printf 'DEPOT_TOOLS_BOOTSTRAP_HEAD_AFTER=%s\n' "$DEPOT_TOOLS_BOOTSTRAP_HEAD_AFTER"
+            printf 'DEPOT_TOOLS_PYTHON3_BIN_RELDIR=%s\n' "$DEPOT_TOOLS_PYTHON3_BIN_RELDIR"
+            printf 'DEPOT_TOOLS_BOOTSTRAP_PYTHON_VERSION=%s\n' "$DEPOT_TOOLS_BOOTSTRAP_PYTHON_VERSION"
             printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
             printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
             printf 'CPU_ARCHITECTURE=%s\n' "$(uname -m)"
