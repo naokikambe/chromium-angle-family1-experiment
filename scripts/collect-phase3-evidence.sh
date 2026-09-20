@@ -1,111 +1,88 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-fail() {
-  printf 'collect-phase3-evidence: %s\n' "$1" >&2
-  exit 1
-}
-
-plist_value() {
-  /usr/libexec/PlistBuddy -c "Print :$1" "$2"
-}
+PHASE3_SCRIPT_NAME='collect-phase3-evidence'
+readonly PHASE3_SCRIPT_NAME
+source "$(cd "$(dirname "$0")" && pwd -P)/phase3-test-copy-common.sh"
 
 capture() {
   local destination=$1
   shift
-  if "$@" > "$destination" 2>&1; then
-    printf 'success\n' >> "$destination"
-  else
-    printf 'command failed: %s\n' "$?" >> "$destination"
-  fi
+  if "$@" > "$destination" 2>&1; then printf 'status: success\n' >> "$destination"; else printf 'status: failed (%s)\n' "$?" >> "$destination"; fi
 }
 
-if [[ $# -ne 2 ]]; then
-  printf 'usage: %s TEST_CHROME_APP RESULTS_DIRECTORY\n' "$0" >&2
-  exit 64
-fi
-
-for command in codesign file otool shasum pgrep ps; do
-  command -v "$command" >/dev/null 2>&1 || fail "required command is unavailable: $command"
-done
-
+[[ $# -eq 2 ]] || { printf 'usage: %s TEST_CHROME_APP RESULTS_DIRECTORY\n' "$0" >&2; exit 64; }
+phase3_reject_root
 test_app=$1
 results_dir=$2
-[[ -d "$test_app" ]] || fail "test Chrome app does not exist: $test_app"
-[[ -d "$results_dir" ]] || fail "results directory does not exist: $results_dir"
-test_app_real=$(cd "$test_app" && pwd -P)
-case "$test_app_real" in
-  /Applications/*) fail 'refusing to collect evidence from an app under /Applications' ;;
-esac
-[[ "$(basename "$test_app_real")" == *'ANGLE Test.app' ]] ||
-  fail 'test app name must end with "ANGLE Test.app"'
+for command in codesign file otool shasum pgrep ps find; do command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"; done
+[[ -d "$test_app" ]] || phase3_fail "test app does not exist: $test_app"
+[[ -d "$results_dir" && ! -L "$results_dir" ]] || phase3_fail "results directory does not exist: $results_dir"
+test_app_real=$(phase3_real_directory "$test_app")
+phase3_reject_applications_path "$test_app_real"
+results_real=$(phase3_real_directory "$results_dir")
+phase3_validate_manifest "$test_app_real"
+receipt=$(phase3_receipt_path "$test_app_real")
+phase3_verify_sidecar_hash "$receipt" "$(phase3_receipt_hash_path "$test_app_real")"
+[[ "$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')" == 'ad-hoc-deep' ]] || phase3_fail 'test copy signing receipt is not ad-hoc'
 
-info_plist="$test_app_real/Contents/Info.plist"
-[[ -f "$info_plist" ]] || fail 'test app has no Info.plist'
-chrome_version=$(plist_value CFBundleShortVersionString "$info_plist") || fail 'cannot read Chrome version'
-executable_name=$(plist_value CFBundleExecutable "$info_plist") || fail 'cannot read Chrome executable name'
-main_executable="$test_app_real/Contents/MacOS/$executable_name"
+manifest=$(phase3_manifest_path "$test_app_real")
+source_app=$(phase3_manifest_value "$manifest" 'SOURCE_APP')
 framework="$test_app_real/Contents/Frameworks/Google Chrome Framework.framework"
-[[ -d "$framework" ]] || fail 'test app framework is missing'
-framework_real=$(cd "$framework" && pwd -P)
-libraries_dir="$framework_real/Libraries"
+libraries_dir="$(cd "$framework" && pwd -P)/Libraries"
+executable_name=$(phase3_plist_value CFBundleExecutable "$test_app_real/Contents/Info.plist") || phase3_fail 'cannot read Chrome executable name'
+main_executable="$test_app_real/Contents/MacOS/$executable_name"
+gpu_helper=$(find "$framework" -type f -path '*/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)' -print -quit)
+[[ -n "$gpu_helper" ]] || phase3_fail 'GPU Helper is missing'
 
-gpu_helper=$(find "$framework_real" -type f -path '*/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)' -print -quit)
-{
-  printf 'chrome_version=%s\n' "$chrome_version"
-  printf 'test_app=%s\n' "$test_app_real"
-  printf 'framework=%s\n' "$framework_real"
-  printf 'libraries=%s\n' "$libraries_dir"
-  [[ -f "$results_dir/run-metadata.txt" ]] && cat "$results_dir/run-metadata.txt"
-} > "$results_dir/environment.txt"
-
+phase3_capture_signature "$results_real/test-copy-current" "$test_app_real"
+phase3_capture_signature "$results_real/main-current" "$main_executable"
+phase3_capture_signature "$results_real/framework-current" "$framework"
+phase3_capture_signature "$results_real/gpu-helper-current" "$gpu_helper"
+if [[ -d "$source_app" && ! -L "$source_app" ]]; then phase3_capture_signature "$results_real/source-current-read-only" "$source_app"; fi
 for library in libEGL.dylib libGLESv2.dylib; do
   library_path="$libraries_dir/$library"
-  [[ -f "$library_path" ]] || fail "required dynamic ANGLE library is missing: $library_path"
-  capture "$results_dir/${library}.file.txt" file "$library_path"
-  capture "$results_dir/${library}.otool-D.txt" otool -D "$library_path"
-  capture "$results_dir/${library}.otool-L.txt" otool -L "$library_path"
-  capture "$results_dir/${library}.codesign.txt" codesign -dvvv "$library_path"
+  capture "$results_real/${library}.file.txt" file "$library_path"
+  capture "$results_real/${library}.otool-D.txt" otool -D "$library_path"
+  capture "$results_real/${library}.otool-L.txt" otool -L "$library_path"
+  phase3_capture_signature "$results_real/${library}" "$library_path"
 done
-shasum -a 256 "$libraries_dir/libEGL.dylib" "$libraries_dir/libGLESv2.dylib" > "$results_dir/dylib-sha256.txt"
-capture "$results_dir/app-codesign.txt" codesign -dvvv "$test_app_real"
-capture "$results_dir/app-entitlements.txt" codesign -d --entitlements :- "$test_app_real"
-capture "$results_dir/gpu-helper-entitlements.txt" codesign -d --entitlements :- "$gpu_helper"
+shasum -a 256 "$libraries_dir/libEGL.dylib" "$libraries_dir/libGLESv2.dylib" > "$results_real/dylib-sha256.txt"
 
-gpu_pids_file="$results_dir/gpu-processes.txt"
+sign_results=$(phase3_manifest_value "$receipt" 'RESULTS_DIRECTORY')
+if [[ -d "$sign_results" && ! -L "$sign_results" ]]; then
+  find "$sign_results" -maxdepth 1 -type f \( -name '*-details.diff' -o -name '*-entitlements.diff' -o -name 'signing-metadata.txt' \) -exec cp {} "$results_real" \;
+fi
+
+gpu_pids_file="$results_real/gpu-processes.txt"
 : > "$gpu_pids_file"
-pgrep -af "$framework_real" 2>/dev/null | grep 'Google Chrome Helper (GPU)' >> "$gpu_pids_file" || true
+pgrep -af "$framework" 2>/dev/null | grep 'Google Chrome Helper (GPU)' >> "$gpu_pids_file" || true
 if [[ ! -s "$gpu_pids_file" ]]; then
   printf 'No matching GPU process was observed; dynamic ANGLE load is unconfirmed.\n' >> "$gpu_pids_file"
 else
   while IFS= read -r gpu_line; do
     gpu_pid=${gpu_line%% *}
     [[ "$gpu_pid" =~ ^[0-9]+$ ]] || continue
-    capture "$results_dir/gpu-${gpu_pid}-command.txt" ps -ww -p "$gpu_pid" -o pid=,command=
+    capture "$results_real/gpu-${gpu_pid}-command.txt" ps -ww -p "$gpu_pid" -o pid=,command=
     if command -v lsof >/dev/null 2>&1; then
-      capture "$results_dir/gpu-${gpu_pid}-lsof.txt" lsof -p "$gpu_pid"
-      if grep -F -- "$libraries_dir/libEGL.dylib" "$results_dir/gpu-${gpu_pid}-lsof.txt" >/dev/null && \
-         grep -F -- "$libraries_dir/libGLESv2.dylib" "$results_dir/gpu-${gpu_pid}-lsof.txt" >/dev/null; then
-        printf 'direct dynamic ANGLE load evidence: lsof confirmed both dylib absolute paths for GPU PID %s\n' "$gpu_pid" >> "$results_dir/load-evidence.txt"
+      capture "$results_real/gpu-${gpu_pid}-lsof.txt" lsof -p "$gpu_pid"
+      if grep -F -- "$libraries_dir/libEGL.dylib" "$results_real/gpu-${gpu_pid}-lsof.txt" >/dev/null && grep -F -- "$libraries_dir/libGLESv2.dylib" "$results_real/gpu-${gpu_pid}-lsof.txt" >/dev/null; then
+        printf 'direct dynamic ANGLE load evidence: lsof confirmed both test-copy dylib absolute paths for GPU PID %s\n' "$gpu_pid" >> "$results_real/load-evidence.txt"
       fi
     fi
     if command -v vmmap >/dev/null 2>&1; then
-      capture "$results_dir/gpu-${gpu_pid}-vmmap.txt" vmmap "$gpu_pid"
-      if grep -F -- "$libraries_dir/libEGL.dylib" "$results_dir/gpu-${gpu_pid}-vmmap.txt" >/dev/null && \
-         grep -F -- "$libraries_dir/libGLESv2.dylib" "$results_dir/gpu-${gpu_pid}-vmmap.txt" >/dev/null; then
-        printf 'direct dynamic ANGLE load evidence: vmmap confirmed both dylib absolute paths for GPU PID %s\n' "$gpu_pid" >> "$results_dir/load-evidence.txt"
+      capture "$results_real/gpu-${gpu_pid}-vmmap.txt" vmmap "$gpu_pid"
+      if grep -F -- "$libraries_dir/libEGL.dylib" "$results_real/gpu-${gpu_pid}-vmmap.txt" >/dev/null && grep -F -- "$libraries_dir/libGLESv2.dylib" "$results_real/gpu-${gpu_pid}-vmmap.txt" >/dev/null; then
+        printf 'direct dynamic ANGLE load evidence: vmmap confirmed both test-copy dylib absolute paths for GPU PID %s\n' "$gpu_pid" >> "$results_real/load-evidence.txt"
       fi
     fi
   done < "$gpu_pids_file"
 fi
-[[ -f "$results_dir/load-evidence.txt" ]] ||
-  printf 'No direct dylib load evidence was collected; do not report dynamic ANGLE as loaded.\n' > "$results_dir/load-evidence.txt"
-
-if [[ -f "$results_dir/stderr.log" ]]; then
-  grep -Ei 'EGL|Metal|requireGpuFamily2|GL implementation|Display type|GL_VENDOR|GL_RENDERER|WebGL|Compositing|Rasterization|GPU process|crash' \
-    "$results_dir/stderr.log" > "$results_dir/chrome-log-extract.txt" || true
+[[ -f "$results_real/load-evidence.txt" ]] || printf 'No direct dylib load evidence was collected; do not report dynamic ANGLE as loaded.\n' > "$results_real/load-evidence.txt"
+if [[ -f "$results_real/stderr.log" ]]; then
+  grep -Ei 'EGL|Metal|requireGpuFamily2|GL implementation|Display type|GL_VENDOR|GL_RENDERER|WebGL|Compositing|Rasterization|GPU process|crash' "$results_real/stderr.log" > "$results_real/chrome-log-extract.txt" || true
 fi
-cat > "$results_dir/chrome-gpu-manual.txt" <<'EOF'
-Save chrome://gpu from the isolated test app after the run. Record GPU process crash count, GL implementation parts, Display type, GL_VENDOR, GL_RENDERER, WebGL, Compositing, Rasterization, and any EGL or Metal error. The command line only proves requested switches; require lsof, vmmap, or an equivalent dyld record before claiming external ANGLE was loaded.
+cat > "$results_real/chrome-gpu-manual.txt" <<'EOF'
+Save chrome://gpu from the isolated test app after the run. Record GPU process crash count, GL implementation parts, Display type, GL_VENDOR, GL_RENDERER, WebGL, Compositing, Rasterization, and EGL/Metal errors. Command-line switches are not load proof: report external ANGLE as loaded only when lsof, vmmap, or equivalent direct evidence names both test-copy dylib absolute paths.
 EOF
-printf 'evidence collection complete: %s\n' "$results_dir"
+printf 'evidence collection complete: %s\n' "$results_real"

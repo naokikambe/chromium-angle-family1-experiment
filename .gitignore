@@ -18,6 +18,9 @@ local-results/
 *.crash
 *.ips
 *.app/
+*.phase3-angle-manifest*
+*.phase3-angle-signing-receipt*
+*.phase3-angle-results*/
 
 # Local operating-system and temporary files
 .DS_Store

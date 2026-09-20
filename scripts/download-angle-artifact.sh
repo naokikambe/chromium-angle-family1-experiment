@@ -6,14 +6,17 @@ readonly CHROME_VERSION='154.0.8037.45'
 readonly CHROMIUM_REVISION='731082f0a26ce4b3976c3d82943092f5d13daf13'
 readonly ANGLE_REVISION='72b8f72a7587ec776d7d2a57d275a6e9b1781b1d'
 readonly ANGLE_SHORT_REVISION='72b8f72a'
+readonly WORKFLOW_RUN_ID='35515036255'
+readonly LIBEGL_SHA256='f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8'
+readonly LIBGLESV2_SHA256='8d3d188d3d4f23cf3f96ecea209b084c6db9c6192244f879cfb6bf0fb2e02cf0'
 
 fail() {
   printf 'download-angle-artifact: %s\n' "$1" >&2
   exit 1
 }
 
-if [[ $# -ne 4 ]]; then
-  printf 'usage: %s OUTPUT_DIRECTORY RUN_ID LIBEGL_SHA256 LIBGLESV2_SHA256\n' "$0" >&2
+if [[ $# -ne 1 ]]; then
+  printf 'usage: %s OUTPUT_DIRECTORY\n' "$0" >&2
   exit 64
 fi
 
@@ -22,12 +25,9 @@ command -v shasum >/dev/null 2>&1 || fail 'shasum is required'
 command -v git >/dev/null 2>&1 || fail 'git is required'
 
 output_dir=$1
-run_id=$2
-expected_libegl_sha256=$3
-expected_libglesv2_sha256=$4
-[[ "$run_id" =~ ^[0-9]+$ ]] || fail "invalid GitHub Actions run ID: $run_id"
-[[ "$expected_libegl_sha256" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid libEGL.dylib SHA-256'
-[[ "$expected_libglesv2_sha256" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid libGLESv2.dylib SHA-256'
+run_id=$WORKFLOW_RUN_ID
+expected_libegl_sha256=$LIBEGL_SHA256
+expected_libglesv2_sha256=$LIBGLESV2_SHA256
 artifact_name="angle-macos-x86_64-chrome-${CHROME_VERSION}-angle-${ANGLE_SHORT_REVISION}-${run_id}"
 output_parent=$(dirname "$output_dir")
 output_name=$(basename "$output_dir")

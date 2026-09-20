@@ -30,11 +30,24 @@ GN、Ninja（`libEGL libGLESv2`、1314 target）、artifact検証、uploadは成
 
 両dylibのinstall nameはそれぞれ`./libEGL.dylib`、`./libGLESv2.dylib`であり、`otool -L`先頭の同名項目は自己IDとして依存判定から除外した。残る依存は`/System/Library`または`/usr/lib`のみであり、非system依存、runner固有絶対path、未解決依存は検出されなかった。これはartifactの形式検証結果であり、未署名dylibをChromeが実機でloadできることを意味しない。Chrome app、xattr、署名、プロファイル、KOOVはこのrunおよびartifact検証で操作していない。
 
+## Phase 3B のtest copyと署名境界（実機未実施）
+
+`scripts/download-angle-artifact.sh`はrun `35515036255`のartifactだけを取得し、`libEGL.dylib`の`f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`と`libGLESv2.dylib`の`8d3d188d3d4f23cf3f96ecea209b084c6db9c6192244f879cfb6bf0fb2e02cf0`を固定して検証する。artifactにはANGLE revision、build environment、GN args、2本のdylib、形式/署名/`otool` report、root `LICENSE`、`licenses/LICENSE`がある。dylibはthin x86_64 Mach-Oで未署名、自己install name以外の依存はsystem libraryだけである。
+
+固定ANGLE [`update_chrome_angle.py` 35–43行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/scripts/update_chrome_angle.py#35)はmacOSのCanary Framework `Libraries`を対象に2本のdylibとcomponent build用optional dylibを定義し、[`114–118行`](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/scripts/update_chrome_angle.py#114)で`xattr -cr`と`codesign --force --sign - --deep`を実行する。Phase 3Bのsign scriptは署名方式を変えず、この方式を**user-owned test copyだけ**に採用する。`--preserve-metadata`などは追加しない。Library Validationやentitlementsへの効果は推測せず、署名前後のdetails、CodeDirectory flags、TeamIdentifier、Authority、Runtime、entitlementsを保存して比較する。
+
+`prepare-chrome-angle-test-copy.sh`はsource/outputを明示指定し、root、`/Applications`、symlink component、既存output、非所有parent、version/x86_64/SHA mismatchを拒否する。`ditto --help`で確認した`--noextattr --noqtn`を使い、copyのFinderInfo/ResourceFork不在とstrict signature検証成功を確認してから2本だけを配置する。sourceのmain executable、Framework、GPU Helperは前後で読み取り検証する。dylib配置によるcopyのGoogle署名無効化は記録するが、このscriptは再署名も起動も行わない。
+
+prepareはapp外部にread-only manifestと別SHA-256 fileを作る。manifestにはcanonical test/source app path、source Chrome version、Chromium/ANGLE revision、artifact名、2本のSHA、作成時刻、unsigned stageを記録する。これとdylib再hashおよびLibraries内dylibが2本だけであることをsign/run/collectが検証する。所有者がmanifestとchecksumの両方を改変した場合を防ぐ秘密鍵はないため、これは完全な耐改ざん境界ではない。安全境界は`/Applications`、source、rootを拒否し、user-owned test copyだけを署名対象とすることにある。
+
+`sign-chrome-angle-test-copy.sh`はprepared manifest、2本のhash、strict確認済みad-hoc signing receiptを必須にする。`--dry-run`は`xattr`/`codesign`を実行せず、実行には`--confirm-ad-hoc-signing`が必須である。実行時はGoogle Developer ID署名とnotarization状態を失うため、通常利用・通常Web閲覧・既存profileでの使用を禁止する。`run-dynamic-angle-test.sh`はad-hoc receipt、現在のstrict verification、`Signature=adhoc`、new `mktemp` profile、Case B/Cを確認する。Case Bにはoverrideを付けず、Case Cだけが`--disable-angle-features=requireGpuFamily2`を付ける。
+
+`collect-phase3-evidence.sh`は署名前後のsignature/entitlement record、dylib hashと署名、GPU PID/command、`lsof`または`vmmap`を保存する。`--use-dynamic-angle`は要求の証拠に過ぎず、両dylibのtest copy内絶対pathが同一GPU processで確認できた場合だけ外部ANGLEロードを確認済みとする。KOOV、Family 1改修、Case B/C実機起動はさらに後であり、今回未実施である。
+
 artifact保存期限後にも再検証できるよう、利用者はGit管理外の保全先を作り、CI完了後に記録するrun IDと2本のSHA-256を指定して次を実行し、そのディレクトリとchecksumsを保管する。
 
 ```sh
-scripts/download-angle-artifact.sh "$ARTIFACT_ARCHIVE_DIRECTORY" "$RUN_ID" \
-  "$LIBEGL_SHA256" "$LIBGLESV2_SHA256"
+scripts/download-angle-artifact.sh "$ARTIFACT_ARCHIVE_DIRECTORY"
 ```
 
 このscriptはrepository内へのdownload、既存出力の上書き、Chrome/Chromium/ANGLE識別子またはSHAの不一致を拒否する。artifactの未署名dylibをChromeへ配置することは、署名・Library Validationを含む明示的なPhase 3B判断まで行わない。
@@ -74,8 +87,8 @@ Chromium固定commitの[`gl_initializer_mac.cc` 34–110行](https://chromium.go
 
 1. `scripts/inspect-chrome-for-dynamic-angle.sh "$SOURCE_CHROME_APP"` を読み取り実行し、Chrome 154/x86_64と元appの署名を確認する。
 2. `scripts/download-angle-artifact.sh "$ARTIFACT_DIRECTORY"` でartifactをGit管理外へ保全・再検証する。
-3. `scripts/prepare-chrome-angle-test-copy.sh "$SOURCE_CHROME_APP" "$ARTIFACT_DIRECTORY"` を実行する。署名無効化が記録されたら、Phase 3Bの人間レビューで停止する。
-4. 承認済みの有効なテストcopyだけに対して、`scripts/run-dynamic-angle-test.sh CASE_B "$TEST_APP" "$RESULTS_DIRECTORY"` を実行する。Case Bに`--disable-angle-features`は付与しない。
+3. `scripts/prepare-chrome-angle-test-copy.sh "$SOURCE_CHROME_APP" "$ARTIFACT_DIRECTORY" "$TEST_APP"` を実行する。署名無効化が記録されたら、Phase 3Bの人間レビューで停止する。
+4. 人間が`sign-chrome-angle-test-copy.sh "$TEST_APP" "$SIGN_RESULTS" --dry-run`を確認し、承認後に`--confirm-ad-hoc-signing`を明示して署名する。承認済みの有効なテストcopyだけに対して、`scripts/run-dynamic-angle-test.sh CASE_B "$TEST_APP" "$RESULTS_DIRECTORY"` を実行する。Case Bに`--disable-angle-features`は付与しない。
 5. Case Bの直接ロード証拠が得られた後だけ、`CASE_C`を実行する。Case Cだけが`--disable-angle-features=requireGpuFamily2`を付与する。
 6. `scripts/collect-phase3-evidence.sh "$TEST_APP" "$RESULTS_DIRECTORY"` と手動の`chrome://gpu`保存手順で結果を保全する。
 
