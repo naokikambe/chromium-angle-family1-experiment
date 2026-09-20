@@ -10,13 +10,25 @@
 - Chrome: `154.0.8037.45`、Chromium: `731082f0a26ce4b3976c3d82943092f5d13daf13`
 - ANGLE: `72b8f72a7587ec776d7d2a57d275a6e9b1781b1d`、depot_tools: `0306e4682b4ac35287c726fa35a983157a625902`
 - Chromium tag [`154.0.8037.45`](https://chromium.googlesource.com/chromium/src/+/refs/tags/154.0.8037.45) の `chrome/VERSION` はこのChrome versionを示し、同commitの [`DEPS` 350–353行](https://chromium.googlesource.com/chromium/src/+/731082f0a26ce4b3976c3d82943092f5d13daf13/DEPS#350) は `angle_revision` を上記SHAへ固定する。
-- workflowはこのpairを対象にする。artifact名は `angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-<run-id>` とし、.17向けartifactとの混同を避ける。dylib SHA-256は未確定である。
+- workflowはこのpairを対象にする。artifact名は `angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-<run-id>` とし、.17向けartifactとの混同を避ける。最新成功artifactとdylib SHA-256は後述する。
 
 ## `.45` workflow 初回実行（失敗、再実行しない）
 
 手動run [`35514080466`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/35514080466) は、commit `60b1c4410ce06ecccd7b1e31c14f6efbfcdc05fa`で2026-09-20 13:38–13:43 UTCに`macos-15-intel` runnerへ割り当てられた。ANGLE SHAとdepot_tools SHA（`0306e4682b4ac35287c726fa35a983157a625902`）は`gclient sync`後に一致確認した。checkout時のdisk使用量は`8791452 KiB`だった。
 
-GN生成stepは`python3_bin_reldir.txt not found. need to initialize depot_tools by running gclient, update_depot_tools or ensure_bootstrap.`で失敗した。このrunの`gclient sync`は完了しているが、固定したdepot_toolsでGNが要求する初期化が完了していない。Ninja、dylib作成、artifact検証、uploadは実行されず、artifact・新しいSHA-256は存在しない。workflow、GN args、runner、timeoutはこの失敗後に変更せず、再実行もしない。次の最小作業は、固定depot_toolsを維持したまま、当該固定revisionでGN前に必要なbootstrap手順を一次ソースで特定し、人間レビュー後にworkflowへ最小変更を行うことである。
+GN生成stepは`python3_bin_reldir.txt not found. need to initialize depot_tools by running gclient, update_depot_tools or ensure_bootstrap.`で失敗した。このrunの`gclient sync`は完了しているが、固定したdepot_toolsでGNが要求する初期化が完了していなかった。Ninja、dylib作成、artifact検証、uploadはこのrunでは実行されず、artifact・新しいSHA-256は生成されなかった。固定depot_toolsを維持したまま一次ソースでGN前の必要手順を確認し、後述の最小修正を行った。
+
+## 固定depot_tools bootstrap修正と成功run
+
+固定depot_tools [`0306e4682b4ac35287c726fa35a983157a625902` の `ensure_bootstrap`](https://chromium.googlesource.com/chromium/tools/depot_tools/+/0306e4682b4ac35287c726fa35a983157a625902/ensure_bootstrap#15) は、現在のcheckoutでbootstrap programを準備し、`update_depot_tools`と異なりrepositoryをupdate/syncしないと明記する。同SHAの[`ensure_bootstrap` 45–64行](https://chromium.googlesource.com/chromium/tools/depot_tools/+/0306e4682b4ac35287c726fa35a983157a625902/ensure_bootstrap#45)は非Windowsで`bootstrap_python3`を呼び、CIPDと補助programを同期する。[`bootstrap_python3` 23–30行](https://chromium.googlesource.com/chromium/tools/depot_tools/+/0306e4682b4ac35287c726fa35a983157a625902/bootstrap_python3#23)はCIPD Pythonを準備して`bootstrap/bootstrap.py`を呼び、同[`bootstrap.py` 653–655行](https://chromium.googlesource.com/chromium/tools/depot_tools/+/0306e4682b4ac35287c726fa35a983157a625902/bootstrap/bootstrap.py#653)が`python3_bin_reldir.txt`を出力する。[`python-bin/python3` 14–31行](https://chromium.googlesource.com/chromium/tools/depot_tools/+/0306e4682b4ac35287c726fa35a983157a625902/python-bin/python3#14)はこのfileを読み、相対pathのPythonを実行する。
+
+workflow commit `37737c8d508a860fdd7d011eba9b9158ca65149a`は、固定SHAのdetached checkout検証直後、`gclient`より前に公式`ensure_bootstrap` stepを追加した。`DEPOT_TOOLS_UPDATE=0`は維持し、`update_depot_tools`も手作業による`python3_bin_reldir.txt`生成も行わない。stepはbootstrap前後にGit HEADが期待SHAと一致すること、生成fileが非空で相対path配下の`python3`が実行可能であること、公式`python-bin/python3 --version`が成功することを検証する。artifactの`build-environment.txt`へ前後HEAD、相対path、bootstrap Python versionを記録する。
+
+修正後の手動run [`35515036255`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/35515036255) はcommit `37737c8d508a860fdd7d011eba9b9158ca65149a`で成功した（job所要25分5秒）。`macos-15-intel` runnerはmacOS / X64、`x86_64`、4 CPU、Xcode 16.4、macOS SDK 15.5を記録した。bootstrap前後と`gclient sync`後のdepot_tools HEADはすべて`0306e4682b4ac35287c726fa35a983157a625902`で、生成relative pathは`bootstrap-2@3.11.8.chromium.35_bin/python3/bin`、bootstrap Pythonは3.11.8だった。ANGLE SHAも`gclient sync`後に期待値と一致した。
+
+GN、Ninja（`libEGL libGLESv2`、1314 target）、artifact検証、uploadは成功した。disk使用量はcheckout後`8794000 KiB`、GN後`8808444 KiB`、build後`8854780 KiB`だった。artifact `angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-35515036255` は`libEGL.dylib`、`libGLESv2.dylib`、revision、GN args、environment、検証report、root `LICENSE`と`licenses/LICENSE`を含む。2本だけがdylibで、両方thin x86_64 Mach-O shared library、未署名である。`libEGL.dylib`のSHA-256は`f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`、`libGLESv2.dylib`は`8d3d188d3d4f23cf3f96ecea209b084c6db9c6192244f879cfb6bf0fb2e02cf0`である。
+
+両dylibのinstall nameはそれぞれ`./libEGL.dylib`、`./libGLESv2.dylib`であり、`otool -L`先頭の同名項目は自己IDとして依存判定から除外した。残る依存は`/System/Library`または`/usr/lib`のみであり、非system依存、runner固有絶対path、未解決依存は検出されなかった。これはartifactの形式検証結果であり、未署名dylibをChromeが実機でloadできることを意味しない。Chrome app、xattr、署名、プロファイル、KOOVはこのrunおよびartifact検証で操作していない。
 
 artifact保存期限後にも再検証できるよう、利用者はGit管理外の保全先を作り、CI完了後に記録するrun IDと2本のSHA-256を指定して次を実行し、そのディレクトリとchecksumsを保管する。
 
