@@ -1,7 +1,7 @@
 # Phase 2A — 無改造 ANGLE の macOS x86_64 ビルド構成
 
 更新日: 2026-09-20
-状態: **Phase 2B 初回workflow検証失敗、再実行禁止**。この文書は固定ソースで確認した事実、設定上の判断、CI または実機でのみ確認できる事項を区別する。Family 1 向け変更、診断ログ追加、Chrome.app 操作は含まない。
+状態: **Phase 2B follow-up build失敗、再実行禁止**。この文書は固定ソースで確認した事実、設定上の判断、CI または実機でのみ確認できる事項を区別する。Family 1 向け変更、診断ログ追加、Chrome.app 操作は含まない。
 
 ## Phase 2B 初回実行記録
 
@@ -13,6 +13,17 @@
 - runnerは割り当てられず、jobsは0件、run logは存在しない。したがって所要時間は実質0秒であり、depot_tools SHA、GN生成、Ninja、Metal toolchain、容量推移、artifact名、dylib一覧、SHA-256、署名状態、ライセンス収集はすべて未取得である。
 - 原因分類はGN、Ninja、Metal toolchain、容量、timeout、runner供給ではなく、GitHub workflow context validationである。修正候補は、`runner.temp` をjob-level expressionから除き、各 `run` stepで提供される `RUNNER_TEMP` を用いる構成へ変更すること。ただし初回失敗後にworkflow、GN args、runner、timeout、dependency設定を変更または再実行しないというPhase 2B制約に従い、本作業では変更しない。
 - artifactが存在しないため、追加dylib、install name、`@rpath` / `@loader_path` / `@executable_path`、absolute runner path、未解決非system依存、x86_64 Mach-O、署名有効性を判定できない。Phase 3へは進めない。
+
+## Phase 2B follow-up 実行記録
+
+- 修正commit: `6fa13ad51faec33e93a67e4badfa7b76943a52e9`。job-level `env` から `${{ runner.temp }}` を除去し、最初の job step が既定の `$RUNNER_TEMP` を使って `ANGLE_ROOT`、`DEPOT_TOOLS_ROOT`、`ARTIFACT_DIR` を `$GITHUB_ENV` に設定した。他の入力、GN args、target、runner、timeout は変更していない。
+- 実行日時: 2026-09-20 07:42:43–08:06:40 UTC（23分57秒）。手動dispatchのrunは [`35497602637`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/35497602637)（commit `6fa13ad51faec33e93a67e4badfa7b76943a52e9`、event `workflow_dispatch`、結論 `failure`）である。このfollow-up以外の再実行はしていない。
+- runnerは正常に割り当てられた。実測は `runner.os=macOS`、`runner.arch=X64`、`uname -m=x86_64`、4 CPU、macOS 15.7.9 (24G830)、Xcode 16.4 (16F6)、macOS SDK 15.5、Apple clang 17.0.0、Python 3.14.7、Ninja 1.12.1 である。開始時の使用可能ディスクは108 GiBだったため、実際のhost容量は公開標準runner仕様の14 GB前提より大きい。
+- 固定ANGLE checkoutと `gclient sync` は成功した。sync後の実HEADは `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`、depot_tools実HEADは `0306e4682b4ac35287c726fa35a983157a625902`。worktree使用量は checkout後 `8805476 KiB`、GN後 `8819920 KiB`、build後 `8881416 KiB` であり、容量不足・timeoutは発生していない。
+- GNは17秒未満で成功し、指定した `is_component_build = false` を含む `args.gn` から1324 targetsを生成した。`ninja -C out/Release libEGL libGLESv2` は1314/1314で成功し、runner上の出力は `libEGL.dylib` 68 KiB、`libGLESv2.dylib` 6.1 MiBだった。Metal backend objectのコンパイルもbuild logで確認した。
+- 最初の本質的エラーは `Assemble and verify artifact` stepの `verification failed: libEGL.dylib has an unexpected non-system dependency: ./libEGL.dylib` である。2 dylibはartifact staging directoryへコピー済みだったが、検証scriptが終わる前に失敗したためupload stepはskipされた。よってdownload可能なartifact、`otool`、`file`、`lipo`、install name、追加dylib、absolute path混入、署名状態、SHA-256、収集済みライセンスは確認できない。
+- 原因分類はGN、Ninja、Metal toolchain、runner供給、容量、timeoutではなく、artifact内の相対参照 `./libEGL.dylib` をartifact内解決可能な依存として扱わない検証ロジックである。次の最小修正候補は、検証scriptが `./<name>.dylib` をartifact直下の同名ファイルとして解決し、存在する場合だけ許可することである。これはartifactの実 `otool -L`、install name、署名、hashが未取得であるため、次のレビューで確認してから別作業として行う。本Phase 2Bではworkflowまたはscriptを修正・再実行しない。
+- GitHubは `actions/checkout` のNode 20 deprecation annotationを出したが、Node 24へ強制移行してcheckoutは成功した。これは今回の失敗原因ではない。Phase 3へは、有効なartifactのuploadと全検証の成功がないため進めない。
 
 ## 固定入力と runner
 
