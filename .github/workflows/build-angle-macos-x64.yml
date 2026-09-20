@@ -19,6 +19,8 @@ jobs:
       ANGLE_REVISION: 8efd15f71c27cd0bc2a9cf0074d77e899ca9c448
       ANGLE_REPOSITORY: https://chromium.googlesource.com/angle/angle.git
       DEPOT_TOOLS_REPOSITORY: https://chromium.googlesource.com/chromium/tools/depot_tools.git
+      DEPOT_TOOLS_REVISION: 0306e4682b4ac35287c726fa35a983157a625902
+      DEPOT_TOOLS_UPDATE: "0"
 
     steps:
       - name: Initialize runner paths
@@ -45,6 +47,7 @@ jobs:
           printf 'cpu.count=%s\n' "$(sysctl -n hw.ncpu)"
           sw_vers
           printf 'expected ANGLE revision: %s\n' "$ANGLE_REVISION"
+          printf 'expected depot_tools revision: %s\n' "$DEPOT_TOOLS_REVISION"
           xcodebuild -version
           printf 'macOS SDK version: %s\n' "$(xcrun --show-sdk-version)"
           xcrun clang --version
@@ -55,8 +58,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git clone --depth=1 "$DEPOT_TOOLS_REPOSITORY" "$DEPOT_TOOLS_ROOT"
-          printf 'depot_tools revision: %s\n' "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)"
+          git init "$DEPOT_TOOLS_ROOT"
+          git -C "$DEPOT_TOOLS_ROOT" remote add origin "$DEPOT_TOOLS_REPOSITORY"
+          git -C "$DEPOT_TOOLS_ROOT" fetch --depth=1 origin "$DEPOT_TOOLS_REVISION"
+          git -C "$DEPOT_TOOLS_ROOT" checkout --detach FETCH_HEAD
+          actual_revision=$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)
+          printf 'actual depot_tools revision after checkout: %s\n' "$actual_revision"
+          test "$actual_revision" = "$DEPOT_TOOLS_REVISION"
           printf '%s\n' "$DEPOT_TOOLS_ROOT" >> "$GITHUB_PATH"
 
       - name: Fetch and pin ANGLE source
@@ -109,7 +117,9 @@ jobs:
           printf 'actual ANGLE revision after gclient sync: %s\n' "$actual_revision"
           test "$actual_revision" = "$ANGLE_REVISION"
           git status --short --branch
-          printf 'depot_tools revision: %s\n' "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)"
+          actual_depot_tools_revision=$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)
+          printf 'actual depot_tools revision after gclient sync: %s\n' "$actual_depot_tools_revision"
+          test "$actual_depot_tools_revision" = "$DEPOT_TOOLS_REVISION"
           printf 'disk usage after checkout: '
           du -sk . | awk '{print $1 " KiB"}'
 
@@ -178,7 +188,8 @@ jobs:
           {
             printf 'ANGLE_EXPECTED_REVISION=%s\n' "$ANGLE_REVISION"
             printf 'ANGLE_ACTUAL_REVISION=%s\n' "$(git -C "$ANGLE_ROOT" rev-parse HEAD)"
-            printf 'DEPOT_TOOLS_REVISION=%s\n' "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)"
+            printf 'DEPOT_TOOLS_EXPECTED_REVISION=%s\n' "$DEPOT_TOOLS_REVISION"
+            printf 'DEPOT_TOOLS_ACTUAL_REVISION=%s\n' "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)"
             printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
             printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
             printf 'CPU_ARCHITECTURE=%s\n' "$(uname -m)"

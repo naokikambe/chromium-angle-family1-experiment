@@ -42,7 +42,7 @@
 - ANGLE は `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448` のみを最終ビルド入力にする。workflow は空の Git repository でこの SHA を `fetch --depth=1` し、detach checkout の直後と `gclient sync` 後の両方で `HEAD` が期待値と一致することを検証する。不一致なら `set -e` と `test` により停止する。Chromium 全体は取得しない。
 - Chrome `154.0.8037.17` / Chromium `62d2fcb41a84e4dcefd8c4da7dfa534e6c482854` とこの ANGLE SHA の対応は、既に [`docs/baseline.md`](baseline.md) に記録した Chromium [`DEPS` 352 行](https://chromium.googlesource.com/chromium/src/+/62d2fcb41a84e4dcefd8c4da7dfa534e6c482854/DEPS#352) で確認済みである。
 - `runs-on: macos-15-intel` を採用する。確認日 2026-09-20 時点の GitHub 公式 [GitHub-hosted runners reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories) は、公開 repository では標準 runner が無料・無制限であり、この label は Intel、4 CPU、14 GB RAM、14 GB SSD と記載する。公式 `actions/runner-images` の [#13045](https://github.com/actions/runner-images/issues/13045) は、同 label が 2027 年 8 月まで提供される最後の x86_64 image と告知する。ただし、無料は無制限の供給・実行を保証しない。[Billing and usage](https://docs.github.com/en/actions/concepts/billing-and-usage) が示す Actions の利用制限・policy、[Additional Product Terms](https://docs.github.com/en/site-policy/github-terms/github-terms-for-additional-products-and-features) の不正利用防止規定、runner image の供給状況の影響を受ける。実行時の image、CPU、SDK、Xcode は変動し得るため、workflow が実値をログと `build-environment.txt` に保存する。
-- depot_tools は公式 repository を shallow clone する。これは GN、`gclient`、Ninja を提供するものとして固定 ANGLE の [`doc/DevSetup.md` 15–20 行](https://chromium.googlesource.com/angle/angle/+/8efd15f71c27cd0bc2a9cf0074d77e899ca9c448/doc/DevSetup.md#15) が要求する。depot_tools 自体の SHA は固定せず、取得した実 SHA をログと artifact に記録するため、再実行時に差があれば検出できる。
+- depot_tools は公式 repository の `0306e4682b4ac35287c726fa35a983157a625902` に固定する。workflow は空の Git repository でこの SHA だけを `fetch --depth=1` し、detach checkout直後と `gclient sync` 後に実HEADが期待値と一致することを検証する。`DEPOT_TOOLS_UPDATE=0` は job-level環境変数として設定し、実行中の自己更新を抑止する。固定commitの公式 [`gclient` 10–12 行](https://chromium.googlesource.com/chromium/tools/depot_tools/+/0306e4682b4ac35287c726fa35a983157a625902/gclient#10) と [`update_depot_tools` 105–106 行](https://chromium.googlesource.com/chromium/tools/depot_tools/+/0306e4682b4ac35287c726fa35a983157a625902/update_depot_tools#105) は、値 `0` のときupdate処理をskipすると実装している。`build-environment.txt` には期待SHAと実SHAを別々に記録する。Phase 2Bの過去3 runはこの固定化前であり、実SHAとして同じ値を記録したが、workflow入力としては固定・検証していなかった。
 
 ## workflow 実行と Action 固定
 
@@ -125,7 +125,7 @@ artifact は少なくとも次を含む。
 
 ## ローカル再現と Actions 実行
 
-macOS Intel host で Xcode、Python 3、Git を用意し、workflow の `Fetch and pin ANGLE source` から `Assemble and verify artifact` までを同じ環境変数・同じ順で実行する。特に depot_tools を `PATH` に加え、固定 SHA 検証を省略しない。ローカル再現は runner と SDK が異なる可能性があるため、`build-environment.txt` と `otool-results.txt` を CI artifact と比較する。
+macOS Intel host で Xcode、Python 3、Git を用意し、workflow の `Get depot_tools` から `Assemble and verify artifact` までを同じ環境変数・同じ順で実行する。特に depot_tools を `PATH` に加え、ANGLEとdepot_toolsの両方の固定 SHA 検証を省略しない。ローカル再現は runner と SDK が異なる可能性があるため、`build-environment.txt` と `otool-results.txt` を CI artifact と比較する。
 
 レビュー後の Phase 2B で GitHub Actions の **Actions → Build unmodified ANGLE for macOS x86_64 → Run workflow** を手動実行する。push、repository 作成、実行は本 Phase 2A では行わない。
 
