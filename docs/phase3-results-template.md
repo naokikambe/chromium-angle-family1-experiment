@@ -4,9 +4,9 @@
 
 | Case | Chrome version | Chromium revision | ANGLE revision | ANGLE dylib SHA | dynamic ANGLE load evidence | command-line override | GPU process result | EGL initialization | ANGLE backend | WebGL | Compositing | GPU crash count | observed error | 判定 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| A | 未実施 | `62d2fcb41a84e4dcefd8c4da7dfa534e6c482854` | 内蔵 | 該当なし | 未確認 | なし | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 |
-| B | 未実施 | `62d2fcb41a84e4dcefd8c4da7dfa534e6c482854` | `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448` | `f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8` / `2e0aadc21e76b0bb1adcfb3b908e757906995b75abb9e90edb3dfb5c1d1adef0` | 未確認 | なし | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 |
-| C | 未実施 | `62d2fcb41a84e4dcefd8c4da7dfa534e6c482854` | `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448` | `f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8` / `2e0aadc21e76b0bb1adcfb3b908e757906995b75abb9e90edb3dfb5c1d1adef0` | 未確認 | `--disable-angle-features=requireGpuFamily2` | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 |
+| A | 未実施 | `731082f0a26ce4b3976c3d82943092f5d13daf13` | 内蔵 | 該当なし | 未確認 | なし | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 |
+| B | 未実施 | `731082f0a26ce4b3976c3d82943092f5d13daf13` | `72b8f72a7587ec776d7d2a57d275a6e9b1781b1d` | CI未実行 | 未確認 | なし | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 |
+| C | 未実施 | `731082f0a26ce4b3976c3d82943092f5d13daf13` | `72b8f72a7587ec776d7d2a57d275a6e9b1781b1d` | CI未実行 | 未確認 | `--disable-angle-features=requireGpuFamily2` | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 |
 | D | 未実施 | 未実施 | Family 1実験版 | 未実施 | 未確認 | 同上 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 |
 | E | 未実施 | 未実施 | Family 1実験版 | 未実施 | 未確認 | 同上 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 |
 | F | 未実施 | 未実施 | Family 1実験版 | 未実施 | 未確認 | 同上 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 |

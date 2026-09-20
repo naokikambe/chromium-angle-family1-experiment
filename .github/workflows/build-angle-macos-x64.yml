@@ -16,7 +16,9 @@ jobs:
     runs-on: macos-15-intel
     timeout-minutes: 120
     env:
-      ANGLE_REVISION: 8efd15f71c27cd0bc2a9cf0074d77e899ca9c448
+      CHROME_VERSION: 154.0.8037.45
+      CHROMIUM_REVISION: 731082f0a26ce4b3976c3d82943092f5d13daf13
+      ANGLE_REVISION: 72b8f72a7587ec776d7d2a57d275a6e9b1781b1d
       ANGLE_REPOSITORY: https://chromium.googlesource.com/angle/angle.git
       DEPOT_TOOLS_REPOSITORY: https://chromium.googlesource.com/chromium/tools/depot_tools.git
       DEPOT_TOOLS_REVISION: 0306e4682b4ac35287c726fa35a983157a625902
@@ -47,6 +49,8 @@ jobs:
           printf 'cpu.count=%s\n' "$(sysctl -n hw.ncpu)"
           sw_vers
           printf 'expected ANGLE revision: %s\n' "$ANGLE_REVISION"
+          printf 'expected Chrome version: %s\n' "$CHROME_VERSION"
+          printf 'expected Chromium revision: %s\n' "$CHROMIUM_REVISION"
           printf 'expected depot_tools revision: %s\n' "$DEPOT_TOOLS_REVISION"
           xcodebuild -version
           printf 'macOS SDK version: %s\n' "$(xcrun --show-sdk-version)"
@@ -186,6 +190,8 @@ jobs:
           done < <(find "$ANGLE_ROOT" -type f \( -iname 'LICENSE*' -o -iname 'NOTICE*' \) \
             -not -path "$ANGLE_ROOT/.git/*" -not -path "$ANGLE_ROOT/out/*" -print0)
           {
+            printf 'CHROME_VERSION=%s\n' "$CHROME_VERSION"
+            printf 'CHROMIUM_REVISION=%s\n' "$CHROMIUM_REVISION"
             printf 'ANGLE_EXPECTED_REVISION=%s\n' "$ANGLE_REVISION"
             printf 'ANGLE_ACTUAL_REVISION=%s\n' "$(git -C "$ANGLE_ROOT" rev-parse HEAD)"
             printf 'DEPOT_TOOLS_EXPECTED_REVISION=%s\n' "$DEPOT_TOOLS_REVISION"
@@ -211,7 +217,7 @@ jobs:
       - name: Upload ANGLE artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: angle-macos-x86_64-${{ github.run_id }}
+          name: angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-${{ github.run_id }}
           path: ${{ env.ARTIFACT_DIR }}
           if-no-files-found: error
           retention-days: 14

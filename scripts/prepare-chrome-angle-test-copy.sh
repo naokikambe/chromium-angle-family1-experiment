@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly EXPECTED_CHROME_VERSION='154.0.8037.17'
+readonly EXPECTED_CHROME_VERSION='154.0.8037.45'
+readonly EXPECTED_ANGLE_REVISION='72b8f72a7587ec776d7d2a57d275a6e9b1781b1d'
 readonly LIBEGL_SHA256='f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8'
 readonly LIBGLESV2_SHA256='2e0aadc21e76b0bb1adcfb3b908e757906995b75abb9e90edb3dfb5c1d1adef0'
 
@@ -79,6 +80,9 @@ codesign --verify --deep --strict "$source_real" || fail 'source Chrome signatur
 
 verify_hash "$artifact_dir/libEGL.dylib" "$LIBEGL_SHA256"
 verify_hash "$artifact_dir/libGLESv2.dylib" "$LIBGLESV2_SHA256"
+[[ -f "$artifact_dir/ANGLE_REVISION" ]] || fail 'artifact is missing ANGLE_REVISION'
+[[ "$(cat "$artifact_dir/ANGLE_REVISION")" == "$EXPECTED_ANGLE_REVISION" ]] ||
+  fail "artifact ANGLE revision does not match $EXPECTED_ANGLE_REVISION"
 
 ditto "$source_real" "$output_real"
 [[ -d "$output_real/Contents" ]] || fail 'ditto did not create a Chrome app bundle at the requested output'

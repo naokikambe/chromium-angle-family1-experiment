@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly EXPECTED_CHROME_VERSION='154.0.8037.17'
+readonly EXPECTED_CHROME_VERSION='154.0.8037.45'
 
 fail() {
   printf 'inspect-chrome-for-dynamic-angle: %s\n' "$1" >&2

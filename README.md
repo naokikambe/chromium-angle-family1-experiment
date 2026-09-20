@@ -2,9 +2,9 @@
 
 Reproducible, standalone ANGLE build configuration for a macOS x86_64 experiment.
 
-- Chrome: `154.0.8037.17`
-- Chromium: `62d2fcb41a84e4dcefd8c4da7dfa534e6c482854`
-- ANGLE: `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`
+- Chrome: `154.0.8037.45`
+- Chromium: `731082f0a26ce4b3976c3d82943092f5d13daf13`
+- ANGLE: `72b8f72a7587ec776d7d2a57d275a6e9b1781b1d`
 - Current stage: Phase 3A — local test-harness preparation only
 
 The workflow builds unmodified ANGLE targets `libEGL` and `libGLESv2` on

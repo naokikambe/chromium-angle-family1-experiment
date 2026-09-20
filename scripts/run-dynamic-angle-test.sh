@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly EXPECTED_CHROME_VERSION='154.0.8037.17'
+readonly EXPECTED_CHROME_VERSION='154.0.8037.45'
 readonly LIBEGL_SHA256='f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8'
 readonly LIBGLESV2_SHA256='2e0aadc21e76b0bb1adcfb3b908e757906995b75abb9e90edb3dfb5c1d1adef0'
 

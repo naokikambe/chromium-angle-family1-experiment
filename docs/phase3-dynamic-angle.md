@@ -5,21 +5,33 @@
 
 このPhaseはMacBookAir6,1（Intel HD Graphics 5000、macOS 15.7.9、OCLP）での安全な比較試験を準備するだけである。この文書と付属scriptはChrome、KOOV、既存プロファイル、`/Applications/Google Chrome.app`を変更または起動しない。Family 1用ANGLEの改修も含まない。
 
-## 固定入力とartifact保全
+## 現行固定入力（Chrome 154.0.8037.45）
 
-- Chrome: `154.0.8037.17`、Chromium: `62d2fcb41a84e4dcefd8c4da7dfa534e6c482854`
-- ANGLE: `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`、depot_tools: `0306e4682b4ac35287c726fa35a983157a625902`
-- 成功run: [`35501697418`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/35501697418)、artifact: `angle-macos-x86_64-35501697418`
-- `libEGL.dylib`: `f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`
-- `libGLESv2.dylib`: `2e0aadc21e76b0bb1adcfb3b908e757906995b75abb9e90edb3dfb5c1d1adef0`
+- Chrome: `154.0.8037.45`、Chromium: `731082f0a26ce4b3976c3d82943092f5d13daf13`
+- ANGLE: `72b8f72a7587ec776d7d2a57d275a6e9b1781b1d`、depot_tools: `0306e4682b4ac35287c726fa35a983157a625902`
+- Chromium tag [`154.0.8037.45`](https://chromium.googlesource.com/chromium/src/+/refs/tags/154.0.8037.45) の `chrome/VERSION` はこのChrome versionを示し、同commitの [`DEPS` 350–353行](https://chromium.googlesource.com/chromium/src/+/731082f0a26ce4b3976c3d82943092f5d13daf13/DEPS#350) は `angle_revision` を上記SHAへ固定する。
+- workflowはこのpairを対象にする。artifact名は `angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-<run-id>` とし、.17向けartifactとの混同を避ける。現時点ではこのartifactのCIは未実行であり、dylib SHA-256は未確定である。
 
-Phase 3AでartifactをGit管理外の一時領域に取得し、`ANGLE_REVISION`、2本のSHA-256、`args.gn`、`build-environment.txt`、911個の第三者license/NOTICEを確認した。両dylibはthin x86_64 Mach-O、install nameはそれぞれ`./libEGL.dylib`、`./libGLESv2.dylib`、署名は未署名である。artifact保存期限後にも再検証できるよう、利用者はGit管理外の保全先を作り、次を実行してそのディレクトリとchecksumsを保管する。
+artifact保存期限後にも再検証できるよう、利用者はGit管理外の保全先を作り、CI完了後に記録するrun IDと2本のSHA-256を指定して次を実行し、そのディレクトリとchecksumsを保管する。
 
 ```sh
-scripts/download-angle-artifact.sh "$ARTIFACT_ARCHIVE_DIRECTORY"
+scripts/download-angle-artifact.sh "$ARTIFACT_ARCHIVE_DIRECTORY" "$RUN_ID" \
+  "$LIBEGL_SHA256" "$LIBGLESV2_SHA256"
 ```
 
-このscriptはrepository内へのdownload、既存出力の上書き、SHAまたはANGLE revisionの不一致を拒否する。artifactの未署名dylibをChromeへ配置することは、署名・Library Validationを含む明示的なPhase 3B判断まで行わない。
+このscriptはrepository内へのdownload、既存出力の上書き、Chrome/Chromium/ANGLE識別子またはSHAの不一致を拒否する。artifactの未署名dylibをChromeへ配置することは、署名・Library Validationを含む明示的なPhase 3B判断まで行わない。
+
+## 履歴artifact（Chrome 154.0.8037.17、流用禁止）
+
+run [`35501697418`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/35501697418) の `angle-macos-x86_64-35501697418` は、Chromium `62d2fcb41a84e4dcefd8c4da7dfa534e6c482854` とANGLE `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448` 向けである。Phase 3AでGit管理外の一時領域へ取得し、`ANGLE_REVISION`、2本のSHA-256、`args.gn`、`build-environment.txt`、911個の第三者license/NOTICEを確認した。`libEGL.dylib`は`f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`、`libGLESv2.dylib`は`2e0aadc21e76b0bb1adcfb3b908e757906995b75abb9e90edb3dfb5c1d1adef0`で、両方thin x86_64 Mach-O・未署名だった。**これはChrome 154.0.8037.45へ流用しない。**
+
+## .45 固定ソース確認と .17との差分
+
+- Chromium [`ui/gl/gl_switches.cc` 95–98、191–196行](https://chromium.googlesource.com/chromium/src/+/731082f0a26ce4b3976c3d82943092f5d13daf13/ui/gl/gl_switches.cc#95) は`USE_STATIC_ANGLE`で`--use-dynamic-angle`を定義し、GPU processへコピーするGL switch一覧に含める。[`gpu_process_host.cc` 1476–1485行](https://chromium.googlesource.com/chromium/src/+/731082f0a26ce4b3976c3d82943092f5d13daf13/content/browser/gpu/gpu_process_host.cc#1476) はこの一覧をbrowser command lineからGPU processへcopyする。
+- 同commitの [`gl_initializer_mac.cc` 34–110行](https://chromium.googlesource.com/chromium/src/+/731082f0a26ce4b3976c3d82943092f5d13daf13/ui/gl/init/gl_initializer_mac.cc#34) はapp bundleのFramework `Libraries`から`libGLESv2.dylib`、続いて`libEGL.dylib`をloadし、static ANGLE buildで`--use-dynamic-angle`がある場合はstatic loaderを使わない。
+- ANGLE [`mtl_features.json` 367–373行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/include/platform/mtl_features.json#367) と生成済み [`FeaturesMtl_autogen.h` 305–309行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/include/platform/autogen/FeaturesMtl_autogen.h#305) は`requireGpuFamily2`の定義とCLI名を示す。[`DisplayMtl.mm` 141–145行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/src/libANGLE/renderer/metal/DisplayMtl.mm#141) は有効かつMac GPU Family 2非対応時に初期化を停止し、[1209–1213行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/src/libANGLE/renderer/metal/DisplayMtl.mm#1209)でoverride適用後、[1314–1316行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/src/libANGLE/renderer/metal/DisplayMtl.mm#1314)で既定有効化を行う。
+- [`Feature.h` 16–23、143–147行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/include/platform/Feature.h#16)の`ANGLE_FEATURE_CONDITION`は`hasOverride`がfalseの場合だけ既定値を設定する。[`renderer_utils.cpp` 72–76、1715–1721行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/src/libANGLE/renderer/renderer_utils.cpp#72)ではoverrideが`enabled`を設定して`hasOverride = true`にし、disabled一覧はfalseとして適用する。入力文字列が実機で認識されたこと自体は未確認である。
+- `git diff`をChromiumの上記3ファイルとANGLEの上記5ファイルに限定して`.17`固定commitと`.45`固定commitを比較し、これらのdynamic loader、switch転送、`requireGpuFamily2`、override処理に差分がないことを確認した。対象外の変更が動作に無関係と断定するものではない。
 
 ## 比較ケース
 
@@ -36,7 +48,7 @@ Case Bが実機で外部standard ANGLEの直接ロード証拠を得るまで、
 
 ## 配置根拠と安全境界
 
-Chromium固定commitの[`gl_initializer_mac.cc` 34–110行](https://chromium.googlesource.com/chromium/src/+/62d2fcb41a84e4dcefd8c4da7dfa534e6c482854/ui/gl/init/gl_initializer_mac.cc#34)は、app bundleで`FrameworkBundlePath().Append("Libraries")`から`libGLESv2.dylib`、`libEGL.dylib`を順にloadする。ANGLE固定commitの[`update_chrome_angle.py` 35–43行](https://chromium.googlesource.com/angle/angle/+/8efd15f71c27cd0bc2a9cf0074d77e899ca9c448/scripts/update_chrome_angle.py#35)も`Google Chrome Framework.framework/Libraries`をコピー先として示す。このためprepare scriptは**コピー後のテストappだけ**のFramework実体内`Libraries`を対象にする。元appと同一出力、`/Applications`配下への出力、既存appの暗黙上書き、再署名、SIP/Gatekeeper/AMFI/Library Validationの回避は拒否する。
+Chromium固定commitの[`gl_initializer_mac.cc` 34–110行](https://chromium.googlesource.com/chromium/src/+/731082f0a26ce4b3976c3d82943092f5d13daf13/ui/gl/init/gl_initializer_mac.cc#34)は、app bundleで`FrameworkBundlePath().Append("Libraries")`から`libGLESv2.dylib`、`libEGL.dylib`を順にloadする。ANGLE固定commitの[`update_chrome_angle.py` 35–43行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/scripts/update_chrome_angle.py#35)も`Google Chrome Framework.framework/Libraries`をコピー先として示す。このためprepare scriptは**コピー後のテストappだけ**のFramework実体内`Libraries`を対象にする。元appと同一出力、`/Applications`配下への出力、既存appの暗黙上書き、再署名、SIP/Gatekeeper/AMFI/Library Validationの回避は拒否する。
 
 `scripts/inspect-chrome-for-dynamic-angle.sh`は読み取り専用で、対象version、architecture、Framework実体、Libraries候補、app/main executable/Framework/GPU Helperの署名、TeamIdentifier、Hardened Runtime表示、entitlements、既存dylibを記録する。Hardened Runtimeと`com.apple.security.cs.disable-library-validation`の有無は、各対象の`codesign`詳細・entitlements出力を人間が確認する必要がある。未署名dylibの配置後に署名が無効なら、prepare scriptは再署名せず停止する。
 
@@ -68,3 +80,5 @@ local-results/
 `--use-dynamic-angle`がcommand lineやGPU process command lineに現れるだけでは外部ANGLEロードの証拠にならない。`collect-phase3-evidence.sh`はGPU processが存続する場合、`lsof`または`vmmap`でtest bundle内の`libEGL.dylib`と`libGLESv2.dylib`の**絶対パスの両方**を確認したときだけ`load-evidence.txt`に直接ロード証拠として記録する。短時間終了、権限不足、またはpath未検出なら「未確認」であり成功と推測しない。信頼できるdyld load記録も同等の証拠として扱える。
 
 実機でのみ未確認なのは、Chrome 154がこのtest copyを起動・loadできるか、未署名dylibに対する署名・Library Validation、GPU processの存続、Metal/EGL初期化、`requireGpuFamily2`入力認識、WebGL/Compositing/Rasterization、GPU crash count、KOOV動作である。Chrome本体、KOOV、実機profileを変更・起動する前に、これらの境界と結果公開時の秘匿情報を人間がレビューする。
+
+実機の元Chrome app全体に対する`codesign --verify --deep --strict`は`com.apple.FinderInfo`属性のため失敗した。一方、main executable、Framework、GPU Helperの個別Google署名は有効だった。この差異は未解決事項として記録し、元appの`xattr`は変更しない。
