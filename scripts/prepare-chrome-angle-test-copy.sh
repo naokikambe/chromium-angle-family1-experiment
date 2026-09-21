@@ -180,7 +180,10 @@ printf '%s\n' 'ditto --norsrc --noextattr --noacl --noqtn SOURCE_APP OUTPUT_APP'
 ditto --norsrc --noextattr --noacl --noqtn "$source_real" "$output_real"
 [[ -d "$output_real/Contents" && ! -L "$output_real" ]] || phase3_fail 'ditto did not create a regular app bundle'
 capture_xattrs "$evidence_dir/copy-xattrs-before-dylibs-recursive.txt" "$output_real" true
-if rg -F 'com.apple.FinderInfo' "$evidence_dir/copy-xattrs-before-dylibs-recursive.txt" >/dev/null || rg -F 'com.apple.ResourceFork' "$evidence_dir/copy-xattrs-before-dylibs-recursive.txt" >/dev/null; then
+if grep -F 'com.apple.FinderInfo' "$evidence_dir/copy-xattrs-before-dylibs-recursive.txt" >/dev/null; then
+  phase3_fail 'copied test app retained FinderInfo or ResourceFork; no dylib was placed'
+fi
+if grep -F 'com.apple.ResourceFork' "$evidence_dir/copy-xattrs-before-dylibs-recursive.txt" >/dev/null; then
   phase3_fail 'copied test app retained FinderInfo or ResourceFork; no dylib was placed'
 fi
 verify_clean_copy_components "$output_real" "$evidence_dir"
