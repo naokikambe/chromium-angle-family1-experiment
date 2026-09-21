@@ -61,7 +61,12 @@ phase3_reject_applications_path "$artifact_real"
 retry_root=$(dirname "$output_app")
 results_root=$(dirname "$results_dir")
 [[ "$retry_root" == "$results_root" ]] || phase3_fail 'output and results must be direct children of one retry root'
-[[ "$(basename "$retry_root")" == retry4 ]] || phase3_fail 'prospective retry root must be named retry4'
+retry_root_name=$(basename "$retry_root")
+[[ "$retry_root_name" == retry4 || "$retry_root_name" == *-retry4 ]] ||
+  phase3_fail 'prospective retry root must end in retry4'
+case "$retry_root_name" in
+  retry[0-3]|*-retry[0-3]) phase3_fail 'retry0-retry3 roots are reserved' ;;
+esac
 [[ -n "$(basename "$output_app")" && -n "$(basename "$results_dir")" ]] || phase3_fail 'output and results must have non-empty child names'
 [[ ! -e "$retry_root" && ! -L "$retry_root" ]] || phase3_fail 'prospective retry root already exists'
 [[ ! -e "$output_app" && ! -L "$output_app" ]] || phase3_fail 'output app already exists'
@@ -94,13 +99,14 @@ process_snapshot=$(mktemp "${TMPDIR:-/tmp}/phase3c-process.XXXXXX")
 inspection=$(mktemp "${TMPDIR:-/tmp}/phase3c-inspection.XXXXXX")
 trap 'rm -f "$process_snapshot" "$inspection"' EXIT
 phase3_capture_process_snapshot "$process_snapshot"
-source_process=$(phase3_snapshot_matching_processes "$process_snapshot" "$source_real/Contents/MacOS/$source_executable_name")
+source_process=$(phase3_snapshot_matching_processes "$process_snapshot" "$source_real/Contents/MacOS/$source_executable_name" |
+  awk -v self_pid="$$" '$1 != self_pid')
 [[ -z "$source_process" ]] || phase3_fail 'source Chrome process is already running'
 "$script_dir/inspect-chrome-for-dynamic-angle.sh" "$source_real" > "$inspection" 2>&1
 
 mkdir "$retry_root"
 retry_root_real=$(phase3_real_directory "$retry_root")
-[[ "$retry_root_real" == "$retry_parent_real/retry4" ]] || phase3_fail 'retry root canonical path changed'
+[[ "$retry_root_real" == "$retry_parent_real/$retry_root_name" ]] || phase3_fail 'retry root canonical path changed'
 [[ ! -L "$retry_root" ]] || phase3_fail 'retry root became a symlink'
 phase3_require_user_owned_directory "$retry_root_real"
 phase3_reject_applications_path "$retry_root_real"
