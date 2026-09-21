@@ -6,7 +6,7 @@ readonly PHASE3_ANGLE_REVISION='72b8f72a7587ec776d7d2a57d275a6e9b1781b1d'
 readonly PHASE3_ARTIFACT_NAME='angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-35515036255'
 readonly PHASE3_LIBEGL_SHA256='f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8'
 readonly PHASE3_LIBGLESV2_SHA256='8d3d188d3d4f23cf3f96ecea209b084c6db9c6192244f879cfb6bf0fb2e02cf0'
-readonly PHASE3_TEST_COPY_MANIFEST_SCHEMA='phase3-angle-test-copy-v2'
+readonly PHASE3_TEST_COPY_MANIFEST_SCHEMA='phase3-angle-test-copy-v3'
 readonly PHASE3_COPY_POLICY='norsrc,noextattr,noacl,noqtn'
 readonly PHASE3_LIBRARIES_SYMLINK_TARGET='Versions/Current/Libraries'
 
@@ -173,6 +173,80 @@ phase3_validate_new_libraries_path() {
   esac
 }
 
+phase3_validate_inventory_field() {
+  local value=$1
+  local description=$2
+  if printf '%s' "$value" | LC_ALL=C grep '[[:cntrl:]]' >/dev/null; then
+    phase3_fail "Libraries inventory ${description} contains a control character"
+  fi
+}
+
+phase3_validate_inventory_file() {
+  local inventory=$1
+  local line remainder name type value
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" == *$'\t'*$'\t'* ]] || phase3_fail "invalid Libraries inventory record: $inventory"
+    name=${line%%$'\t'*}
+    remainder=${line#*$'\t'}
+    type=${remainder%%$'\t'*}
+    value=${remainder#*$'\t'}
+    phase3_validate_inventory_field "$name" 'entry name'
+    case "$type" in
+      file)
+        [[ "$value" =~ ^[0-9a-f]{64}$ ]] || phase3_fail "invalid Libraries file inventory record: $name"
+        ;;
+      symlink)
+        phase3_validate_inventory_field "$value" 'symlink target'
+        ;;
+      *) phase3_fail "invalid Libraries inventory entry type: $type" ;;
+    esac
+    line=''
+  done < "$inventory"
+}
+
+phase3_inventory_libraries() {
+  local libraries_real=$1
+  local inventory=$2
+  local entry name link_target hash
+  : > "$inventory"
+  while IFS= read -r -d '' entry; do
+    name=${entry##*/}
+    phase3_validate_inventory_field "$name" 'entry name'
+    if [[ -L "$entry" ]]; then
+      link_target=$({ readlink -n "$entry"; printf '\001'; }) || phase3_fail "cannot read Libraries entry: $entry"
+      link_target=${link_target%$'\001'}
+      phase3_validate_inventory_field "$link_target" 'symlink target'
+      printf '%s\tsymlink\t%s\n' "$name" "$link_target" >> "$inventory"
+    elif [[ -f "$entry" ]]; then
+      hash=$(phase3_hash "$entry")
+      printf '%s\tfile\t%s\n' "$name" "$hash" >> "$inventory"
+    else
+      phase3_fail "unsupported Libraries entry type: $entry"
+    fi
+  done < <(find "$libraries_real" -mindepth 1 -maxdepth 1 -print0 | LC_ALL=C sort -z)
+}
+
+phase3_validate_post_inventory() {
+  local baseline=$1
+  local actual=$2
+  local name type value actual_line
+  phase3_validate_inventory_file "$baseline"
+  phase3_validate_inventory_file "$actual"
+  while IFS=$'\t' read -r name type value; do
+    actual_line=$(awk -F '\t' -v n="$name" '$1 == n {print; found=1} END {if (!found) exit 1}' "$actual") ||
+      phase3_fail "baseline Libraries entry is missing: $name"
+    [[ "$actual_line" == "$name	$type	$value" ]] || phase3_fail "baseline Libraries entry changed: $name"
+  done < "$baseline"
+  for name in libEGL.dylib libGLESv2.dylib; do
+    actual_line=$(awk -F '\t' -v n="$name" '$1 == n {print; found=1} END {if (!found) exit 1}' "$actual") ||
+      phase3_fail "ANGLE Libraries entry is missing: $name"
+    [[ "$actual_line" == "$name	file	${name/libEGL.dylib/$PHASE3_LIBEGL_SHA256}" || "$actual_line" == "$name	file	${name/libGLESv2.dylib/$PHASE3_LIBGLESV2_SHA256}" ]] ||
+      phase3_fail "ANGLE Libraries entry has unexpected content: $name"
+  done
+  [[ $(wc -l < "$actual" | tr -d ' ') == $(($(wc -l < "$baseline") + 2)) ]] ||
+    phase3_fail 'unexpected additional or missing Libraries entries'
+}
+
 phase3_require_only_angle_dylibs() {
   local libraries_dir=$1
   local framework_dir=$2
@@ -196,6 +270,8 @@ phase3_validate_manifest() {
   local manifest_hash
   local framework
   local libraries_dir
+  local evidence_dir
+  local current_inventory
 
   manifest=$(phase3_manifest_path "$app")
   manifest_hash=$(phase3_manifest_hash_path "$app")
@@ -220,7 +296,16 @@ phase3_validate_manifest() {
   framework="$app/Contents/Frameworks/Google Chrome Framework.framework"
   [[ -d "$framework" && ! -L "$framework" ]] || phase3_fail 'test app framework is missing or symlinked'
   libraries_dir="$(cd "$framework" && pwd -P)/Libraries"
-  phase3_require_only_angle_dylibs "$libraries_dir" "$framework"
+  evidence_dir="$(phase3_manifest_path "$app").evidence"
+  phase3_verify_sidecar_hash "$evidence_dir/libraries-baseline-inventory.txt" "$evidence_dir/libraries-baseline-inventory.sha256"
+  phase3_verify_sidecar_hash "$evidence_dir/libraries-final-inventory.txt" "$evidence_dir/libraries-final-inventory.sha256"
+  [[ "$(phase3_manifest_value "$(phase3_manifest_path "$app")" 'LIBRARIES_BASELINE_INVENTORY_SHA256')" == "$(phase3_hash "$evidence_dir/libraries-baseline-inventory.txt")" ]] ||
+    phase3_fail 'manifest Libraries baseline inventory hash does not match'
+  phase3_validate_post_inventory "$evidence_dir/libraries-baseline-inventory.txt" "$evidence_dir/libraries-final-inventory.txt"
+  current_inventory=$(mktemp "${TMPDIR:-/tmp}/phase3-current-inventory.XXXXXX")
+  phase3_inventory_libraries "$(phase3_validate_libraries_directory "$libraries_dir" "$framework")" "$current_inventory"
+  cmp "$evidence_dir/libraries-final-inventory.txt" "$current_inventory" || phase3_fail 'current Libraries inventory differs from prepared inventory'
+  rm -f "$current_inventory"
   phase3_verify_hash "$libraries_dir/libEGL.dylib" "$PHASE3_LIBEGL_SHA256"
   phase3_verify_hash "$libraries_dir/libGLESv2.dylib" "$PHASE3_LIBGLESV2_SHA256"
 }

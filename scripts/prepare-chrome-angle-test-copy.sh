@@ -197,6 +197,13 @@ done
 framework="$output_real/Contents/Frameworks/Google Chrome Framework.framework"
 [[ -d "$framework" && ! -L "$framework" ]] || phase3_fail 'test copy framework is missing or symlinked'
 libraries_dir="$(cd "$framework" && pwd -P)/Libraries"
+source_libraries_real=$(phase3_validate_libraries_directory "$(cd "$source_real/Contents/Frameworks/Google Chrome Framework.framework" && pwd -P)/Libraries" "$source_real/Contents/Frameworks/Google Chrome Framework.framework")
+phase3_inventory_libraries "$source_libraries_real" "$evidence_dir/libraries-source-baseline-inventory.txt"
+for angle_name in libEGL.dylib libGLESv2.dylib; do
+  if awk -F '\t' -v n="$angle_name" '$1 == n {found=1} END {exit !found}' "$evidence_dir/libraries-source-baseline-inventory.txt"; then
+    phase3_fail "ANGLE library already exists in source baseline: $angle_name"
+  fi
+done
 if [[ -L "$libraries_dir" ]]; then
   phase3_validate_libraries_directory "$libraries_dir" "$framework" >/dev/null
 elif [[ -e "$libraries_dir" ]]; then
@@ -207,12 +214,19 @@ else
   mkdir "$libraries_dir"
   phase3_validate_libraries_directory "$libraries_dir" "$framework" >/dev/null
 fi
-if [[ -d "$libraries_dir" ]]; then
-  [[ -z "$(find "$libraries_dir" -maxdepth 1 -type f -name '*.dylib' -print -quit)" ]] || phase3_fail 'refusing to replace existing dylibs in the test copy'
-fi
+phase3_inventory_libraries "$(phase3_validate_libraries_directory "$libraries_dir" "$framework")" "$evidence_dir/libraries-baseline-inventory.txt"
+cmp "$evidence_dir/libraries-source-baseline-inventory.txt" "$evidence_dir/libraries-baseline-inventory.txt" || phase3_fail 'source and copy Libraries baseline differs'
+for angle_name in libEGL.dylib libGLESv2.dylib; do
+  if awk -F '\t' -v n="$angle_name" '$1 == n {found=1} END {exit !found}' "$evidence_dir/libraries-baseline-inventory.txt"; then
+    phase3_fail "ANGLE library collision in copy baseline: $angle_name"
+  fi
+done
 install -m 0755 "$artifact_real/libEGL.dylib" "$libraries_dir/libEGL.dylib"
 install -m 0755 "$artifact_real/libGLESv2.dylib" "$libraries_dir/libGLESv2.dylib"
-phase3_require_only_angle_dylibs "$libraries_dir" "$framework"
+phase3_inventory_libraries "$(phase3_validate_libraries_directory "$libraries_dir" "$framework")" "$evidence_dir/libraries-final-inventory.txt"
+phase3_validate_post_inventory "$evidence_dir/libraries-baseline-inventory.txt" "$evidence_dir/libraries-final-inventory.txt"
+phase3_write_hash_file "$evidence_dir/libraries-baseline-inventory.txt" "$evidence_dir/libraries-baseline-inventory.sha256"
+phase3_write_hash_file "$evidence_dir/libraries-final-inventory.txt" "$evidence_dir/libraries-final-inventory.sha256"
 phase3_verify_hash "$libraries_dir/libEGL.dylib" "$PHASE3_LIBEGL_SHA256"
 phase3_verify_hash "$libraries_dir/libGLESv2.dylib" "$PHASE3_LIBGLESV2_SHA256"
 phase3_capture_signature "$evidence_dir/copy-after-dylibs" "$output_real"
@@ -237,6 +251,7 @@ done
   printf 'ARTIFACT_NAME=%s\n' "$PHASE3_ARTIFACT_NAME"
   printf 'LIBEGL_SHA256=%s\n' "$PHASE3_LIBEGL_SHA256"
   printf 'LIBGLESV2_SHA256=%s\n' "$PHASE3_LIBGLESV2_SHA256"
+  printf 'LIBRARIES_BASELINE_INVENTORY_SHA256=%s\n' "$(phase3_hash "$evidence_dir/libraries-baseline-inventory.txt")"
   printf 'COPY_POLICY=%s\n' "$PHASE3_COPY_POLICY"
   printf 'CREATED_AT_UTC=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   printf 'PREPARATION_STATE=unsigned-angle-libraries\n'

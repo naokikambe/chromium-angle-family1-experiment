@@ -1,0 +1,66 @@
+# Agent Collaboration and Governance
+
+The Human is the Owner/Approver. The parent agent is the Orchestrator/Reviewer
+and the `luna_implementer` is the bounded Implementer. The Human communicates
+only with the parent; the parent directly manages Luna through subagent tasks;
+Luna reports only to the parent.
+
+- The parent plans work, assigns bounded tasks, tracks progress, independently
+  reviews the actual diff and verification, gives follow-up corrections, and
+  judges commit and device readiness.
+- Use at most one Luna at a time. Reuse a healthy Luna; the parent may replace
+  an interrupted, ended, unresponsive, or unrecoverable Luna without human
+  approval.
+- Luna edits normal code, fixtures, and documentation only within the current
+  parent scope. Luna never final-approves its own work, starts subagents,
+  commits, pushes, merges, opens GitHub Issues or pull requests, runs Actions,
+  or uses real Chrome, artifacts, retries, xattrs, codesign, Chrome/GPU
+  Helper, KOOV, or profiles.
+- Parent task briefs state repository, branch, HEAD, dirty state, preserved
+  changes, reading list, allowed files, purpose, requirements, completion
+  criteria, fixtures, validation, forbidden operations, commit/push and device
+  prohibitions, and report format.
+- Ordinary code fixes, fixture failures, documentation gaps, and test
+  diagnostics are autonomous `IN PROGRESS` or `CHANGES REQUIRED` work, not
+  `BLOCKED`. True `BLOCKED` is limited to a human approval boundary,
+  authentication or permissions, an unavailable external dependency, unsafe
+  integration, a required human design choice, exhausted safe diagnostics, or
+  a material state mismatch.
+
+## Instruction Precedence
+
+System/runtime safety and the current Human instruction take precedence over
+this file, followed by this repository governance, the current parent task,
+handoff/status documents, other documentation, and Luna inference. Conflicts
+go to the parent.
+
+## Operations and Safety
+
+Safe repository investigation, code/fixture/documentation edits, temporary
+fixture runs, bounded case diagnostics, shell traces, snapshots, and static
+checks are autonomous. Before terminating a fixture child, verify the
+diagnostic PID, complete command, and parent-child process relationship; only
+then terminate it. Follow-up instructions are autonomous. Human approval is
+required for commit, push, merge or force-push; GitHub publication or Actions;
+real-device, artifact, or retry operations; test-copy creation or deletion;
+saved-evidence modification; xattr, codesign, app launches, profiles,
+Applications writes, tool installation, authentication, new permissions,
+discarding changes, safety-requirement changes, and ambiguous process
+termination.
+
+- Preserve a dirty working tree and retained retry/evidence. Do not use
+  `git reset --hard`, `git checkout --`, or `git clean`.
+- Do not modify or delete retained Phase 3 retry directories or their saved
+  evidence.
+- Do not add local absolute paths, user names, machine-specific results,
+  profiles, tokens, cookies, credentials, or other sensitive data to public
+  documentation.
+
+## Execution Loop
+
+The parent manages the same Luna through inspect, implement, focused
+diagnostics, verify, review, and follow-up correction. Luna reports only to the
+parent. The brief supplies the scope and report format; the parent independently
+reviews the resulting diff and verification. Before terminating a fixture
+child, verify its diagnostic PID, complete command, and parent-child process
+relationship, then terminate only that verified child.
