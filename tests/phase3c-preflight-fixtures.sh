@@ -101,12 +101,18 @@ expect_fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_di
 mkdir "$fixture/existing-output.app" "$fixture/existing-results"
 expect_fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/existing-output.app" --results-dir "$fixture/results-new"
 expect_fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/new-output.app" --results-dir "$fixture/existing-results"
+expect_fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app /Applications/phase3c-writable.app --results-dir "$fixture/applications-results"
+expect_fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/source-results-output.app" --results-dir "$source_app/preflight-results"
 ln -s "$source_app" "$fixture/source-link.app"
 expect_fail "$preflight" --source-app "$fixture/source-link.app" --artifact-dir "$artifact_dir" --output-app "$fixture/link-output.app" --results-dir "$fixture/link-results"
 expect_fail env FORCE_HASH_MISMATCH=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/hash-output.app" --results-dir "$fixture/hash-results"
 export PHASE3C_SOURCE_APP="$source_app"
 expect_fail env PHASE3C_SOURCE_PROCESS=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/process-output.app" --results-dir "$fixture/process-results"
 unset PHASE3C_SOURCE_PROCESS
+applications_source="$fixture/Applications/Google Chrome.app"
+mkdir -p "$(dirname "$applications_source")"
+cp -R "$source_app" "$applications_source"
+"$preflight" --source-app "$applications_source" --artifact-dir "$artifact_dir" --output-app "$fixture/applications-source-output.app" --results-dir "$fixture/applications-source-results" >/dev/null
 success_log="$fixture/success-preflight.log"
 if ! bash -x "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/phase3c-output.app" --results-dir "$fixture/phase3c-results" > "$success_log" 2>&1; then
   cat "$success_log" >&2

@@ -49,7 +49,6 @@ done
 source_real=$(phase3_real_directory "$source_app")
 artifact_real=$(phase3_real_directory "$artifact_dir")
 [[ -f "$source_real/Contents/Info.plist" ]] || phase3_fail 'source Info.plist is missing'
-phase3_reject_applications_path "$source_real"
 phase3_reject_applications_path "$artifact_real"
 [[ ! -e "$output_app" && ! -L "$output_app" ]] || phase3_fail 'output app already exists'
 [[ ! -e "$results_dir" && ! -L "$results_dir" ]] || phase3_fail 'results directory already exists'

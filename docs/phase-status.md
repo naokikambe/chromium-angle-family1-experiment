@@ -29,6 +29,11 @@ Phase 3C preflightは実機未実施であり、正式な受入れは固定SHA�
 retry/evidenceを変更せず、signはdry-runだけとする。retry0-3は予約済みfailure/no-op、retry4が
 次の計画pathであり、人間の承認なしに作成・署名・起動しない。
 
+初回Phase 3C CIのpath-role failureは、read-only sourceまで`/Applications`拒否していた
+synthetic fixture mismatchだった。sourceは既存・非symlinkなら許可し、writable output/resultsは
+引き続き`/Applications`、root、source/evidence、retry0-3、symlink、既存pathを拒否する。
+修正後もreal preflightは未実施であり、再承認なしに実機へ進めない。
+
 | Phase | 状態 | 記録 |
 | --- | --- | --- |
 | Phase 0 | 保留 | 基準資料の比較設計は完了。実機ログがワークスペースに未提供のため、ログ保全と比較表作成は保留。Phase 3 の実機試験前に完了させる。 |
