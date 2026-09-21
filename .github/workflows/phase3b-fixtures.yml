@@ -80,6 +80,7 @@ jobs:
           grep -F "printf '%s\\n' not-completed" "$workflow"
           grep -F 'exit "$fixture_rc"' "$workflow"
           grep -F 'fixture-exit-status.txt' "$workflow"
+          grep -F 'bash -x tests/phase3b-fixtures.sh' "$workflow"
 
       - name: Check shell syntax
         shell: bash
@@ -105,7 +106,7 @@ jobs:
           mkdir -p "$diag"
           printf '%s\n' not-completed > "$diag/fixture-exit-status.txt"
           set +e
-          tests/phase3b-fixtures.sh > "$diag/fixture-stdout.log" 2> "$diag/fixture-stderr.log"
+          bash -x tests/phase3b-fixtures.sh > "$diag/fixture-stdout.log" 2> "$diag/fixture-stderr.log"
           fixture_rc=$?
           set -e
           printf '%s\n' "$fixture_rc" > "$diag/fixture-exit-status.txt"
