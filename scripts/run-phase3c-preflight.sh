@@ -46,26 +46,31 @@ for path in "$source_app" "$artifact_dir" "$output_app" "$results_dir"; do
   esac
 done
 
+[[ "$source_app" == /* && "$artifact_dir" == /* && "$output_app" == /* && "$results_dir" == /* ]] ||
+  phase3_fail 'all preflight paths must be absolute'
+for path in "$output_app" "$results_dir"; do
+  [[ "$path" != *'/../'* && "$path" != */.. && "$path" != *'/./'* && "$path" != */. ]] ||
+    phase3_fail 'prospective retry paths may not contain dot components'
+done
 source_real=$(phase3_real_directory "$source_app")
 artifact_real=$(phase3_real_directory "$artifact_dir")
 [[ -f "$source_real/Contents/Info.plist" ]] || phase3_fail 'source Info.plist is missing'
 phase3_reject_applications_path "$artifact_real"
+retry_root=$(dirname "$output_app")
+results_root=$(dirname "$results_dir")
+[[ "$retry_root" == "$results_root" ]] || phase3_fail 'output and results must be direct children of one retry root'
+[[ "$(basename "$retry_root")" == retry4 ]] || phase3_fail 'prospective retry root must be named retry4'
+[[ ! -e "$retry_root" && ! -L "$retry_root" ]] || phase3_fail 'prospective retry root already exists'
 [[ ! -e "$output_app" && ! -L "$output_app" ]] || phase3_fail 'output app already exists'
 [[ ! -e "$results_dir" && ! -L "$results_dir" ]] || phase3_fail 'results directory already exists'
-output_parent_real=$(phase3_real_directory "$(dirname "$output_app")")
-results_parent_real=$(phase3_real_directory "$(dirname "$results_dir")")
-phase3_require_user_owned_directory "$output_parent_real"
-phase3_require_user_owned_directory "$results_parent_real"
-phase3_reject_applications_path "$output_parent_real"
-phase3_reject_applications_path "$results_parent_real"
-output_real="$output_parent_real/$(basename "$output_app")"
-results_real="$results_parent_real/$(basename "$results_dir")"
-phase3_reject_symlink_components "$output_real"
-phase3_reject_symlink_components "$results_real"
-[[ "$output_real" != "$results_real" ]] || phase3_fail 'output and results paths collide'
-[[ "$source_real" != "$output_real" && "$artifact_real" != "$output_real" ]] || phase3_fail 'output collides with an input'
-case "$results_real/" in
-  "$source_real/"*|"$artifact_real/"*) phase3_fail 'results path is inside a protected input' ;;
+retry_parent_real=$(phase3_real_directory "$(dirname "$retry_root")")
+phase3_require_user_owned_directory "$retry_parent_real"
+phase3_reject_applications_path "$retry_parent_real"
+phase3_reject_applications_path "$retry_root"
+phase3_reject_symlink_components "$retry_root"
+[[ "$source_real" != "$retry_root" && "$artifact_real" != "$retry_root" ]] || phase3_fail 'retry root collides with an input'
+case "$retry_root/" in
+  "$source_real/"*|"$artifact_real/"*) phase3_fail 'retry root is inside a protected input' ;;
 esac
 
 branch=$(git -C "$repo_root" branch --show-current)
@@ -83,15 +88,31 @@ phase3_verify_hash "$artifact_real/libGLESv2.dylib" "$PHASE3_LIBGLESV2_SHA256"
 [[ "$(<"$artifact_real/ANGLE_REVISION")" == "$PHASE3_ANGLE_REVISION" ]] || phase3_fail 'artifact ANGLE revision does not match'
 
 process_snapshot=$(mktemp "${TMPDIR:-/tmp}/phase3c-process.XXXXXX")
-trap 'rm -f "$process_snapshot"' EXIT
+inspection=$(mktemp "${TMPDIR:-/tmp}/phase3c-inspection.XXXXXX")
+trap 'rm -f "$process_snapshot" "$inspection"' EXIT
 phase3_capture_process_snapshot "$process_snapshot"
 source_process=$(phase3_snapshot_matching_processes "$process_snapshot" "$source_real/Contents/MacOS/$source_executable_name")
 [[ -z "$source_process" ]] || phase3_fail 'source Chrome process is already running'
+"$script_dir/inspect-chrome-for-dynamic-angle.sh" "$source_real" > "$inspection" 2>&1
 
+mkdir "$retry_root"
+retry_root_real=$(phase3_real_directory "$retry_root")
+[[ "$retry_root_real" == "$retry_parent_real/retry4" ]] || phase3_fail 'retry root canonical path changed'
+[[ ! -L "$retry_root" ]] || phase3_fail 'retry root became a symlink'
+phase3_require_user_owned_directory "$retry_root_real"
+phase3_reject_applications_path "$retry_root_real"
+output_real="$retry_root_real/$(basename "$output_app")"
+results_real="$retry_root_real/$(basename "$results_dir")"
+[[ "$output_real" == "$retry_root_real/$(basename "$output_app")" && "$results_real" == "$retry_root_real/$(basename "$results_dir")" ]] ||
+  phase3_fail 'post-create child paths are not direct children'
+[[ ! -e "$output_real" && ! -L "$output_real" && ! -e "$results_real" && ! -L "$results_real" ]] ||
+  phase3_fail 'post-create output or results path is not new'
+phase3_reject_symlink_components "$output_real"
+phase3_reject_symlink_components "$results_real"
 mkdir "$results_real"
 printf 'PHASE3C_STATE=preflight-started\nBRANCH=%s\nSOURCE_VERSION=%s\n' "$branch" "$source_version" > "$results_real/preflight-state.txt"
 cp "$process_snapshot" "$results_real/process-snapshot.txt"
-"$script_dir/inspect-chrome-for-dynamic-angle.sh" "$source_real" > "$results_real/source-inspection.txt" 2>&1
+cp "$inspection" "$results_real/source-inspection.txt"
 "$script_dir/prepare-chrome-angle-test-copy.sh" "$source_real" "$artifact_real" "$output_real" > "$results_real/prepare.txt" 2>&1
 phase3_validate_manifest "$output_real"
 phase3_capture_signature "$results_real/output-read-only" "$output_real"
