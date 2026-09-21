@@ -80,6 +80,15 @@ synthetic CIの初回failureを受けたものであり、real preflightの再�
 | output/results | absent direct children of that root; root is created only after all read-only gates, then results is created and prepare creates output |
 | protected paths | root, `/Applications` destinations, source/evidence, retry0-3, collisions, and post-create canonical/symlink drift are rejected |
 
+The preflight fixture directly covers absent-root success, existing or missing/
+symlinked parents, an existing root, `/Applications` and source-contained
+roots, retry0-3, parent/child mismatches, identical or existing output/results,
+lexical dot/empty components, simulated root/results mkdir failures, and
+post-create canonical/symlink races. These rejection cases verify through the
+stub log that prepare/sign were not called; the source hash and retry0-3
+absence are checked afterward. The root is created once, results once, and no
+automatic cleanup or retry is performed.
+
 manifestはschema v3を必須とし、v2は拒否する。Libraries inventoryはTSVで、各entryの名前、`file`または`symlink`、fileのSHA-256またはsymlink targetを記録する。copy前のbaseline inventoryはsource/copyで一致し、final inventoryはbaseline全entryに`libEGL.dylib`と`libGLESv2.dylib`だけを固定SHAで追加する。ANGLE名collision、未知entry、制御文字、壊れた・外部を指す`Libraries` symlinkは拒否する。sign/run/collectはmanifest、sidecar、保存済みbaseline/final inventoryを再検証する。`evidence-receipt-policy` groupはこれらの再検証、policy mismatch、strict/non-ad-hoc signature、receipt改変をまとめて確認し、full suiteもこのgroupを再利用する。retry3の保存済みcopy/evidenceは変更せず、今回もChrome、GPU Helper、profile、KOOVの起動や実機testは行っていない。
 
 ### Source metadata とclean copyのstrict gate
