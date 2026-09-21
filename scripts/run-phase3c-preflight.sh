@@ -49,9 +49,11 @@ done
 [[ "$source_app" == /* && "$artifact_dir" == /* && "$output_app" == /* && "$results_dir" == /* ]] ||
   phase3_fail 'all preflight paths must be absolute'
 for path in "$output_app" "$results_dir"; do
+  [[ "$path" != *'//'* ]] || phase3_fail 'paths may not contain empty components'
   [[ "$path" != *'/../'* && "$path" != */.. && "$path" != *'/./'* && "$path" != */. ]] ||
     phase3_fail 'prospective retry paths may not contain dot components'
 done
+[[ "$output_app" != "$results_dir" ]] || phase3_fail 'output and results paths are identical'
 source_real=$(phase3_real_directory "$source_app")
 artifact_real=$(phase3_real_directory "$artifact_dir")
 [[ -f "$source_real/Contents/Info.plist" ]] || phase3_fail 'source Info.plist is missing'
@@ -60,6 +62,7 @@ retry_root=$(dirname "$output_app")
 results_root=$(dirname "$results_dir")
 [[ "$retry_root" == "$results_root" ]] || phase3_fail 'output and results must be direct children of one retry root'
 [[ "$(basename "$retry_root")" == retry4 ]] || phase3_fail 'prospective retry root must be named retry4'
+[[ -n "$(basename "$output_app")" && -n "$(basename "$results_dir")" ]] || phase3_fail 'output and results must have non-empty child names'
 [[ ! -e "$retry_root" && ! -L "$retry_root" ]] || phase3_fail 'prospective retry root already exists'
 [[ ! -e "$output_app" && ! -L "$output_app" ]] || phase3_fail 'output app already exists'
 [[ ! -e "$results_dir" && ! -L "$results_dir" ]] || phase3_fail 'results directory already exists'
