@@ -75,6 +75,10 @@ new safe output/results paths, and collisions/retry paths. It records
 read-only inspection/signature evidence, prepares once, validates manifest and
 inventories, and invokes signing only as `--dry-run`. No real preflight has
 been executed; retry4 is the next planned path after human approval.
+The initial Phase 3C CI failure was a synthetic fixture path-role mismatch:
+read-only source validation incorrectly rejected an existing source under
+`/Applications`. That rule is corrected while writable output/results remain
+forbidden there; any real preflight requires renewed human review and approval.
 
 ## Safety Boundary
 
