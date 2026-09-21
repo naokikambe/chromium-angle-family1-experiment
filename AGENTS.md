@@ -46,6 +46,11 @@ Luna reports only to the parent.
   static checks, creates the checkpoint commit, pushes, and starts a new run.
   Do not perform pointless reruns; one rerun is allowed only for a clearly
   transient runner/service failure.
+- Phase 3C preflight is bounded and read-only with respect to source Chrome and
+  existing evidence/retries: it may prepare one explicitly new output in CI,
+  validate it, and invoke signing only with `--dry-run`. It must not sign,
+  launch, delete, replace retries, or mutate xattrs. Retry0-3 remain reserved;
+  retry4 is the next planned user-owned path.
 
 ## Instruction Precedence
 

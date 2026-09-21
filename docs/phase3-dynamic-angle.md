@@ -59,6 +59,17 @@ passed. A failure is reviewed and classified by the parent, fixed by Luna,
 then rechecked and checkpointed before a new run; only one clearly transient
 runner/service failure permits a rerun. Retry3 remains a saved failure/no-op.
 
+### Phase 3C bounded preflight
+
+`scripts/run-phase3c-preflight.sh` は `SOURCE_APP`、`ARTIFACT_DIR`、
+`OUTPUT_APP`、`RESULTS_DIR` を明示指定し、branch clean、入力の非symlink、
+Chrome version/x86_64、source process不在、固定artifact revision/SHA、
+新規かつ安全なoutput/results、collision、retry0-3拒否を検証する。CIでは
+synthetic inputに対して一度だけprepareし、schema/hash/inventoryをcommon
+validationで再検証し、read-only inspection/signature evidenceを保存する。
+sign scriptは`--dry-run`だけを呼び、署名、起動、削除、xattr変更は行わない。
+retry4が次の計画pathだが、実preflightと実機操作は人間承認まで未実施である。
+
 manifestはschema v3を必須とし、v2は拒否する。Libraries inventoryはTSVで、各entryの名前、`file`または`symlink`、fileのSHA-256またはsymlink targetを記録する。copy前のbaseline inventoryはsource/copyで一致し、final inventoryはbaseline全entryに`libEGL.dylib`と`libGLESv2.dylib`だけを固定SHAで追加する。ANGLE名collision、未知entry、制御文字、壊れた・外部を指す`Libraries` symlinkは拒否する。sign/run/collectはmanifest、sidecar、保存済みbaseline/final inventoryを再検証する。`evidence-receipt-policy` groupはこれらの再検証、policy mismatch、strict/non-ad-hoc signature、receipt改変をまとめて確認し、full suiteもこのgroupを再利用する。retry3の保存済みcopy/evidenceは変更せず、今回もChrome、GPU Helper、profile、KOOVの起動や実機testは行っていない。
 
 ### Source metadata とclean copyのstrict gate

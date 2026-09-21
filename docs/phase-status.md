@@ -23,6 +23,12 @@ CIはrunner/environment情報とfixture stdout/stderr、exit status、diagnostic
 checkpoint commit/push後に新runを開始する。明確なtransient runner/service failureの場合だけ
 1回のrerunを許可し、無目的なrerunはしない。mainと実機は承認境界であり、retry3は保存済みfailure/no-opである。
 
+Phase 3C preflightは実機未実施であり、正式な受入れは固定SHAの
+`phase3c-preflight-fixtures.yml` synthetic CIだけで行う。CI fixtureはsource/artifactを
+合成し、preflightの全gateと失敗条件を検証する。実preflightではsource Chromeや保存済み
+retry/evidenceを変更せず、signはdry-runだけとする。retry0-3は予約済みfailure/no-op、retry4が
+次の計画pathであり、人間の承認なしに作成・署名・起動しない。
+
 | Phase | 状態 | 記録 |
 | --- | --- | --- |
 | Phase 0 | 保留 | 基準資料の比較設計は完了。実機ログがワークスペースに未提供のため、ログ保全と比較表作成は保留。Phase 3 の実機試験前に完了させる。 |

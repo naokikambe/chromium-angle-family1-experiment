@@ -19,6 +19,9 @@ work is limited to implementation, review, static checks, and focused
 non-full diagnostics. Luna never commits, pushes, or runs Actions. The CI
 fixture uses synthetic data only; it does not use real Chrome, artifacts,
 retries, profiles, or devices.
+Phase 3C preflight implementation must not execute a real preflight; its
+script may prepare only synthetic CI output and must invoke signing only via
+the sign script's dry-run mode.
 
 Instruction precedence is system/runtime safety, current Human instruction,
 repository AGENTS.md, current parent task, handoff/status documents, other
