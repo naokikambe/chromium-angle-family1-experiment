@@ -6,6 +6,8 @@ readonly PHASE3_ANGLE_REVISION='72b8f72a7587ec776d7d2a57d275a6e9b1781b1d'
 readonly PHASE3_ARTIFACT_NAME='angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-35515036255'
 readonly PHASE3_LIBEGL_SHA256='f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8'
 readonly PHASE3_LIBGLESV2_SHA256='8d3d188d3d4f23cf3f96ecea209b084c6db9c6192244f879cfb6bf0fb2e02cf0'
+readonly PHASE3_TEST_COPY_MANIFEST_SCHEMA='phase3-angle-test-copy-v2'
+readonly PHASE3_COPY_POLICY='norsrc,noextattr,noacl,noqtn'
 
 phase3_fail() {
   printf '%s: %s\n' "${PHASE3_SCRIPT_NAME:-phase3}" "$1" >&2
@@ -148,7 +150,7 @@ phase3_validate_manifest() {
   manifest=$(phase3_manifest_path "$app")
   manifest_hash=$(phase3_manifest_hash_path "$app")
   phase3_verify_sidecar_hash "$manifest" "$manifest_hash"
-  [[ "$(phase3_manifest_value "$manifest" 'SCHEMA')" == 'phase3-angle-test-copy-v1' ]] ||
+  [[ "$(phase3_manifest_value "$manifest" 'SCHEMA')" == "$PHASE3_TEST_COPY_MANIFEST_SCHEMA" ]] ||
     phase3_fail 'unsupported test-copy manifest schema'
   [[ "$(phase3_manifest_value "$manifest" 'TEST_APP')" == "$app" ]] ||
     phase3_fail 'manifest test app path does not match the requested app'
@@ -162,6 +164,8 @@ phase3_validate_manifest() {
     phase3_fail 'manifest libEGL SHA-256 does not match'
   [[ "$(phase3_manifest_value "$manifest" 'LIBGLESV2_SHA256')" == "$PHASE3_LIBGLESV2_SHA256" ]] ||
     phase3_fail 'manifest libGLESv2 SHA-256 does not match'
+  [[ "$(phase3_manifest_value "$manifest" 'COPY_POLICY')" == "$PHASE3_COPY_POLICY" ]] ||
+    phase3_fail 'manifest copy policy does not match'
 
   framework="$app/Contents/Frameworks/Google Chrome Framework.framework"
   [[ -d "$framework" && ! -L "$framework" ]] || phase3_fail 'test app framework is missing or symlinked'
