@@ -37,25 +37,36 @@
 ## Current State
 
 - Working branch: `phase3-dynamic-angle-prep`.
-- Baseline commit before the current uncommitted Phase 3B Libraries work:
-  `9bd2b7c74868ae3acbec543205026baddea60c23`.
+- The Phase 3B Libraries implementation is committed on
+  `phase3-dynamic-angle-prep`; track the active checkpoint from branch HEAD.
 - Chrome target: `154.0.8037.45`; Chromium revision:
   `731082f0a26ce4b3976c3d82943092f5d13daf13`.
 - ANGLE revision: `72b8f72a7587ec776d7d2a57d275a6e9b1781b1d`.
 - depot_tools revision: `0306e4682b4ac35287c726fa35a983157a625902`.
 - Successful artifact: `angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-35515036255`.
-- Current uncommitted work changes Phase 3B Libraries validation from an
-  ANGLE-only directory assumption to a verified Chrome baseline plus exactly
-  the two ANGLE dylibs.
+- Phase 3B Libraries validation preserves the verified Chrome baseline and
+  adds exactly the two ANGLE dylibs. The manifest schema is v3.
 
 ## Outstanding Work
 
-1. Parent reviews the current Libraries inventory implementation and fixture
-   coverage.
-2. After code review approval, the implementer updates Phase 3 documentation
-   for manifest schema v3 and the baseline-plus-ANGLE inventory model.
-3. Parent reviews the documentation and requests explicit human approval
-   before any commit, push, signing, or real-device retry.
+1. Parent reviews the Libraries inventory implementation, workflow, and
+   fixture coverage.
+2. The complete synthetic fixture suite is accepted only from the pinned
+   macos-15-intel GitHub Actions workflow; local full-suite execution is not
+   evidence.
+3. Parent may checkpoint/fix-commit and push this branch, then dispatch and
+   monitor CI. Main/other branches, force/rebase/merge/tag/release, PR/issue,
+   and real-device or retry operations remain prohibited.
+
+CI retains runner/environment information, repository state, fixture
+stdout/stderr, exit status, and the diagnostics index. Formal acceptance
+requires CI job success, fixture exit `0`, passing static checks and
+`git diff --check`, no skipped required fixtures, and no unexpected
+diagnostics. A CI failure is handled by parent log/artifact review and
+classification, bounded Luna correction, parent review/static checks,
+checkpoint commit/push, and a new run; only one clearly transient
+runner/service failure may justify a rerun. Main and real-device operations
+remain approval boundaries. Retry3 is a saved failure/no-operation record.
 
 ## Safety Boundary
 

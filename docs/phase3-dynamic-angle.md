@@ -46,6 +46,19 @@ prepareはapp外部にread-only manifest v3と別SHA-256 fileを作る。v2は�
 
 ### Phase 3B manifest schema v3 のfixture確認
 
+完全なfixture acceptanceは、固定SHAのActionsを使う
+`.github/workflows/phase3b-fixtures.yml`を`macos-15-intel`で実行した結果だけを正式判定とする。
+ローカルではfull suiteを実行せず、実装・レビュー・`bash -n`・YAML parse・`git diff --check`と、
+必要な短い非全体診断だけを行う。CIはsynthetic dataだけを使い、runner情報、repo state、fixture
+stdout/stderr、exit statusを失敗時も含めて保存する。
+CI environment information and the diagnostics index are retained with each
+run. Acceptance additionally requires job success, fixture exit `0`, passing
+static checks and `git diff --check`, no skipped required fixtures, and no
+unexpected diagnostics; this document does not claim that the new CI run has
+passed. A failure is reviewed and classified by the parent, fixed by Luna,
+then rechecked and checkpointed before a new run; only one clearly transient
+runner/service failure permits a rerun. Retry3 remains a saved failure/no-op.
+
 manifestはschema v3を必須とし、v2は拒否する。Libraries inventoryはTSVで、各entryの名前、`file`または`symlink`、fileのSHA-256またはsymlink targetを記録する。copy前のbaseline inventoryはsource/copyで一致し、final inventoryはbaseline全entryに`libEGL.dylib`と`libGLESv2.dylib`だけを固定SHAで追加する。ANGLE名collision、未知entry、制御文字、壊れた・外部を指す`Libraries` symlinkは拒否する。sign/run/collectはmanifest、sidecar、保存済みbaseline/final inventoryを再検証する。`evidence-receipt-policy` groupはこれらの再検証、policy mismatch、strict/non-ad-hoc signature、receipt改変をまとめて確認し、full suiteもこのgroupを再利用する。retry3の保存済みcopy/evidenceは変更せず、今回もChrome、GPU Helper、profile、KOOVの起動や実機testは行っていない。
 
 ### Source metadata とclean copyのstrict gate
@@ -58,7 +71,7 @@ retry1では`ditto --noextattr --noqtn`後にもapp root、Contents、Resources�
 
 このpolicy後のcopyは、app全体の`--verify --deep --strict`、main executable、Framework、GPU Helperの各`--verify --strict`、Google Developer ID Authority、TeamIdentifier `EQHXZ8M8AV`、再帰xattr一覧のFinderInfo/ResourceFork不在を**すべて**満たすまでdylibを配置しない。source/copyの各主要componentは、pathを除いたAuthority/TeamIdentifier/CodeDirectory identityとSHA-256を比較して証拠化する。copy側のmetadata detritus又は署名failureは許容しない。
 
-失敗したprepareのevidence、output、sidecarは削除・上書きしない。retry1も保持する。次の実機試行は`/Users/donkee/tmp/chromium-angle-phase3b-35515036255-retry2/Google Chrome 154 ANGLE Test.app`のような未使用のuser-owned pathを明示して行う。
+失敗したprepareのevidence、output、sidecarは削除・上書きしない。retry1も保持する。次の実機試行は、既存retry/evidenceと重ならないことを確認した、明示的に選んだ未使用のuser-owned pathで行う。
 
 artifact保存期限後にも再検証できるよう、利用者はGit管理外の保全先を作り、CI完了後に記録するrun IDと2本のSHA-256を指定して次を実行し、そのディレクトリとchecksumsを保管する。
 
