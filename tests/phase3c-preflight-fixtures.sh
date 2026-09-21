@@ -98,27 +98,30 @@ printf '%s\n' '72b8f72a7587ec776d7d2a57d275a6e9b1781b1d' > "$artifact_dir/ANGLE_
 expect_fail() { if "$@" >/dev/null 2>&1; then printf 'expected failure: %s\n' "$*" >&2; exit 1; fi; }
 "$preflight" --help >/dev/null
 expect_fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/retry0/out.app" --results-dir "$fixture/results-retry0"
-mkdir "$fixture/existing-output.app" "$fixture/existing-results"
-expect_fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/existing-output.app" --results-dir "$fixture/results-new"
-expect_fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/new-output.app" --results-dir "$fixture/existing-results"
-expect_fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app /Applications/phase3c-writable.app --results-dir "$fixture/applications-results"
-expect_fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/source-results-output.app" --results-dir "$source_app/preflight-results"
+mkdir -p "$fixture/existing-output-root/retry4" "$fixture/existing-results-root/retry4"
+mkdir "$fixture/existing-output-root/retry4/existing-output.app" "$fixture/existing-results-root/retry4/existing-results"
+expect_fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/existing-output-root/retry4/existing-output.app" --results-dir "$fixture/existing-output-root/retry4/new-results"
+expect_fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/existing-results-root/retry4/new-output.app" --results-dir "$fixture/existing-results-root/retry4/existing-results"
+expect_fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app /Applications/retry4/phase3c-writable.app --results-dir /Applications/retry4/phase3c-results
+expect_fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$source_app/preflight-root/retry4/output.app" --results-dir "$source_app/preflight-root/retry4/results"
 ln -s "$source_app" "$fixture/source-link.app"
-expect_fail "$preflight" --source-app "$fixture/source-link.app" --artifact-dir "$artifact_dir" --output-app "$fixture/link-output.app" --results-dir "$fixture/link-results"
-expect_fail env FORCE_HASH_MISMATCH=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/hash-output.app" --results-dir "$fixture/hash-results"
+mkdir -p "$fixture/link-root" "$fixture/hash-root" "$fixture/process-root"
+expect_fail "$preflight" --source-app "$fixture/source-link.app" --artifact-dir "$artifact_dir" --output-app "$fixture/link-root/retry4/output.app" --results-dir "$fixture/link-root/retry4/results"
+expect_fail env FORCE_HASH_MISMATCH=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/hash-root/retry4/output.app" --results-dir "$fixture/hash-root/retry4/results"
 export PHASE3C_SOURCE_APP="$source_app"
-expect_fail env PHASE3C_SOURCE_PROCESS=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/process-output.app" --results-dir "$fixture/process-results"
+expect_fail env PHASE3C_SOURCE_PROCESS=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/process-root/retry4/output.app" --results-dir "$fixture/process-root/retry4/results"
 unset PHASE3C_SOURCE_PROCESS
 applications_source="$fixture/Applications/Google Chrome.app"
 mkdir -p "$(dirname "$applications_source")"
 cp -R "$source_app" "$applications_source"
-"$preflight" --source-app "$applications_source" --artifact-dir "$artifact_dir" --output-app "$fixture/applications-source-output.app" --results-dir "$fixture/applications-source-results" >/dev/null
+mkdir -p "$fixture/applications-source" "$fixture/phase3c"
+"$preflight" --source-app "$applications_source" --artifact-dir "$artifact_dir" --output-app "$fixture/applications-source/retry4/output.app" --results-dir "$fixture/applications-source/retry4/results" >/dev/null
 success_log="$fixture/success-preflight.log"
-if ! bash -x "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/phase3c-output.app" --results-dir "$fixture/phase3c-results" > "$success_log" 2>&1; then
+if ! bash -x "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/phase3c/retry4/output.app" --results-dir "$fixture/phase3c/retry4/results" > "$success_log" 2>&1; then
   cat "$success_log" >&2
   exit 1
 fi
-test -f "$fixture/phase3c-output.app.phase3-angle-manifest"
-test -f "$fixture/phase3c-results/sign-dry-run.txt"
-grep -F 'no xattr or codesign command was executed.' "$fixture/phase3c-results/sign-dry-run.txt" >/dev/null
+test -f "$fixture/phase3c/retry4/output.app.phase3-angle-manifest"
+test -f "$fixture/phase3c/retry4/results/sign-dry-run.txt"
+grep -F 'no xattr or codesign command was executed.' "$fixture/phase3c/retry4/results/sign-dry-run.txt" >/dev/null
 printf '%s\n' 'phase3c preflight fixture tests passed'
