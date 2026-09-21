@@ -204,7 +204,7 @@ output_after_tamper="$fixture/output after tamper/Google Chrome 154 ANGLE Test.a
 
 fixture_group=${PHASE3B_FIXTURE_GROUP:-all}
 case "$fixture_group" in
-  all|source-detritus|source-unknown|control-link) ;;
+  all|source-detritus|source-unknown|control-link|evidence-receipt-policy) ;;
   *) printf 'unknown fixture group: %s\n' "$fixture_group" >&2; exit 64 ;;
 esac
 
@@ -272,6 +272,78 @@ run_control_link_group() {
   fixture_group_end control-link
 }
 
+run_evidence_receipt_policy_group() {
+  fixture_group_start evidence-receipt-policy
+  local focused_output="$fixture/evidence focused/Google Chrome 154 ANGLE Test.app"
+  local focused_results="$fixture/evidence focused signed"
+  local focused_manifest="$focused_output.phase3-angle-manifest"
+  local focused_receipt="$focused_output.phase3-angle-signing-receipt"
+  local focused_process_snapshot="$fixture/evidence focused process-snapshot.txt"
+  local focused_libraries="$focused_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries"
+
+  mkdir -p "$(dirname "$focused_output")"
+  fixture_checkpoint evidence-before-prepare
+  "$prepare" "$source_app" "$artifact" "$focused_output"
+  fixture_checkpoint evidence-after-prepare
+  "$sign" "$focused_output" "$focused_results" --confirm-ad-hoc-signing
+  fixture_checkpoint evidence-after-sign
+
+  export PHASE3_FIXTURE_LIBRARIES="$focused_libraries"
+  cat > "$focused_process_snapshot" <<EOF
+333 /unrelated/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU) --type=gpu-process
+444 $focused_output/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU) --type=gpu-process
+EOF
+  export PHASE3_FIXTURE_PS_SNAPSHOT="$focused_process_snapshot"
+  mkdir "$fixture/evidence one-library" "$fixture/evidence both-libraries"
+  unset PHASE3_FIXTURE_LSOF_BOTH
+  fixture_checkpoint evidence-before-one-library
+  "$collect" "$focused_output" "$fixture/evidence one-library"
+  ! grep -F 'direct dynamic ANGLE load evidence' "$fixture/evidence one-library/load-evidence.txt"
+  export PHASE3_FIXTURE_LSOF_BOTH=1
+  fixture_checkpoint evidence-before-both-libraries
+  "$collect" "$focused_output" "$fixture/evidence both-libraries"
+  grep -F 'direct dynamic ANGLE load evidence: lsof confirmed both test-copy dylib absolute paths for GPU PID 444' \
+    "$fixture/evidence both-libraries/load-evidence.txt" >/dev/null
+  grep -F '444 ' "$fixture/evidence both-libraries/gpu-processes.txt" >/dev/null
+  ! grep -F '333 ' "$fixture/evidence both-libraries/gpu-processes.txt"
+  fixture_checkpoint evidence-after-both-libraries
+
+  mkdir "$fixture/evidence invalid-signature" "$fixture/evidence nonadhoc"
+  fixture_checkpoint evidence-before-invalid-signature
+  expect_fail env CODESIGN_INVALID=1 "$collect" "$focused_output" "$fixture/evidence invalid-signature"
+  fixture_checkpoint evidence-before-nonadhoc
+  expect_fail env CODESIGN_NONADHOC=1 "$collect" "$focused_output" "$fixture/evidence nonadhoc"
+  fixture_checkpoint evidence-after-signature-rejections
+
+  chmod u+w "$focused_manifest" "$focused_manifest.sha256"
+  awk 'BEGIN { FS = OFS = "=" } $1 == "COPY_POLICY" { $2 = "unexpected" } { print }' \
+    "$focused_manifest" > "$focused_manifest.new"
+  mv "$focused_manifest.new" "$focused_manifest"
+  printf '%s  %s\n' "$(shasum -a 256 "$focused_manifest" | awk '{print $1}')" "$(basename "$focused_manifest")" > "$focused_manifest.sha256"
+  chmod 0444 "$focused_manifest" "$focused_manifest.sha256"
+  mkdir "$fixture/evidence policy-mismatch"
+  fixture_checkpoint evidence-policy-mismatch
+  expect_fail "$collect" "$focused_output" "$fixture/evidence policy-mismatch"
+
+  chmod u+w "$focused_manifest" "$focused_manifest.sha256"
+  awk 'BEGIN { FS = OFS = "=" } $1 == "COPY_POLICY" { $2 = "norsrc,noextattr,noacl,noqtn" } { print }' \
+    "$focused_manifest" > "$focused_manifest.new"
+  mv "$focused_manifest.new" "$focused_manifest"
+  printf '%s  %s\n' "$(shasum -a 256 "$focused_manifest" | awk '{print $1}')" "$(basename "$focused_manifest")" > "$focused_manifest.sha256"
+  chmod 0444 "$focused_manifest" "$focused_manifest.sha256"
+
+  chmod u+w "$focused_receipt" "$focused_receipt.sha256"
+  awk 'BEGIN { FS = OFS = "=" } $1 == "PREPARE_MANIFEST_SHA256" { $2 = "0000000000000000000000000000000000000000000000000000000000000000" } { print }' \
+    "$focused_receipt" > "$focused_receipt.new"
+  mv "$focused_receipt.new" "$focused_receipt"
+  printf '%s  %s\n' "$(shasum -a 256 "$focused_receipt" | awk '{print $1}')" "$(basename "$focused_receipt")" > "$focused_receipt.sha256"
+  chmod 0444 "$focused_receipt" "$focused_receipt.sha256"
+  mkdir "$fixture/evidence tampered-receipt"
+  fixture_checkpoint evidence-tampered-receipt
+  expect_fail "$collect" "$focused_output" "$fixture/evidence tampered-receipt"
+  fixture_group_end evidence-receipt-policy
+}
+
 if [[ "$fixture_group" == source-detritus ]]; then
   run_source_detritus_group
   exit 0
@@ -282,6 +354,10 @@ if [[ "$fixture_group" == source-unknown ]]; then
 fi
 if [[ "$fixture_group" == control-link ]]; then
   run_control_link_group
+  exit 0
+fi
+if [[ "$fixture_group" == evidence-receipt-policy ]]; then
+  run_evidence_receipt_policy_group
   exit 0
 fi
 
