@@ -418,7 +418,13 @@ for library_link in other foo parent dot normalized trailing external absolute-i
   mkdir -p "$(dirname "$library_link_output")"
   expect_fail env DITTO_LIBRARY_LINK="$library_link" "$prepare" "$source_app" "$artifact" "$library_link_output"
   assert_source_unchanged
-  test ! -e "$library_link_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
+  if [[ "$library_link" == source ]]; then
+    library_link_path="$library_link_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries"
+    test -L "$library_link_path"
+    test "$(readlink -n "$library_link_path")" = '/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Libraries'
+  else
+    test ! -e "$library_link_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
+  fi
 done
 
 for baseline_mutation in missing sha link control-name control-link; do
