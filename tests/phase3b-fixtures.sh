@@ -2,11 +2,21 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
+source "$repo_root/scripts/phase3-test-copy-common.sh"
 fixture=$(mktemp -d /private/tmp/phase3b-fixture.XXXXXX)
 printf 'fixture directory retained for inspection: %s\n' "$fixture"
 stub_dir="$fixture/stubs"
 mkdir "$stub_dir" "$fixture/output with spaces"
 export PHASE3_FIXTURE_LOG="$fixture/command.log"
+
+fixture_checkpoint() {
+  local name=$1
+  printf '[fixture] checkpoint=%s\n' "$name"
+  if [[ "${PHASE3B_FIXTURE_STOP_AFTER:-}" == "$name" ]]; then
+    printf '[fixture] bounded stop after=%s\n' "$name"
+    exit 0
+  fi
+}
 
 cat > "$stub_dir/codesign" <<'EOF'
 #!/usr/bin/env bash
@@ -78,11 +88,15 @@ if [[ "${PHASE3_FIXTURE_ENFORCE_DITTO_OPTIONS:-0}" == 1 ]]; then
 fi
 cp -R "$source" "$output"
 libraries="$output/Contents/Frameworks/Google Chrome Framework.framework/Libraries"
-if [[ -d "$libraries" && ! -L "$libraries" ]]; then rmdir "$libraries"; fi
-mkdir -p "$output/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Libraries"
+target_libraries="$output/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Libraries"
+mkdir -p "$target_libraries"
+if [[ -d "$libraries" && ! -L "$libraries" && "${DITTO_LIBRARY_LINK:-valid}" != directory ]]; then
+  find "$libraries" -mindepth 1 -maxdepth 1 -exec mv {} "$target_libraries" \;
+  rmdir "$libraries"
+fi
 case "${DITTO_LIBRARY_LINK:-valid}" in
   valid) ln -s Versions/Current/Libraries "$libraries" ;;
-  directory) mkdir "$libraries" ;;
+  directory) : ;;
   other) ln -s Versions/Other/Libraries "$libraries" ;;
   foo) ln -s Foo/Libraries "$libraries" ;;
   parent) ln -s ../Framework.framework/Libraries "$libraries" ;;
@@ -94,6 +108,13 @@ case "${DITTO_LIBRARY_LINK:-valid}" in
   broken) ln -s Versions/Missing/Libraries "$libraries" ;;
   source) ln -s /Applications/Google\ Chrome.app/Contents/Frameworks/Google\ Chrome\ Framework.framework/Libraries "$libraries" ;;
   regular-file) printf 'not a directory\n' > "$libraries" ;;
+esac
+case "${DITTO_BASELINE_MUTATION:-}" in
+  missing) rm -f "$target_libraries/libaperitif.dylib" ;;
+  sha) printf 'changed\n' > "$target_libraries/libaperitif.dylib" ;;
+  link) rm -f "$target_libraries/baseline-link"; ln -s changed-target "$target_libraries/baseline-link" ;;
+  control-name) mv "$target_libraries/libaperitif.dylib" "$target_libraries/libaperitif"$'\t'"name.dylib" ;;
+  control-link) control_target=$'changed\t-target'; rm -f "$target_libraries/baseline-link"; ln -s "$control_target" "$target_libraries/baseline-link" ;;
 esac
 case "${DITTO_COPY_MUTATION:-}" in
   missing-main) mv "$output/Contents/MacOS/Google Chrome" "$output/Contents/MacOS/Google Chrome.missing" ;;
@@ -163,9 +184,15 @@ printf '#!/usr/bin/env bash\nexit 0\n' > "$source_app/Contents/MacOS/Google Chro
 printf 'fixture framework\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Google Chrome Framework"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"
 chmod +x "$source_app/Contents/MacOS/Google Chrome" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Google Chrome Framework" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"
+mkdir -p "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries"
 printf 'fixture egl\n' > "$artifact/libEGL.dylib"
 printf 'fixture gles\n' > "$artifact/libGLESv2.dylib"
 printf '%s\n' '72b8f72a7587ec776d7d2a57d275a6e9b1781b1d' > "$artifact/ANGLE_REVISION"
+for baseline_name in libaperitif.dylib libchromecompaneros.dylib liboptimization_guide_internal.dylib libvk_swiftshader.dylib libvulkan.dylib; do
+  printf 'fixture %s\n' "$baseline_name" > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/$baseline_name"
+done
+ln -s baseline-target "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/baseline-link"
+printf 'fixture baseline target\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/baseline-target"
 
 expect_fail() { if "$@" >/dev/null 2>&1; then printf 'expected failure: %q\n' "$*" >&2; exit 1; fi; }
 prepare="$repo_root/scripts/prepare-chrome-angle-test-copy.sh"
@@ -174,6 +201,89 @@ run="$repo_root/scripts/run-dynamic-angle-test.sh"
 collect="$repo_root/scripts/collect-phase3-evidence.sh"
 output="$fixture/output with spaces/Google Chrome 154 ANGLE Test.app"
 output_after_tamper="$fixture/output after tamper/Google Chrome 154 ANGLE Test.app"
+
+fixture_group=${PHASE3B_FIXTURE_GROUP:-all}
+case "$fixture_group" in
+  all|source-detritus|source-unknown|control-link) ;;
+  *) printf 'unknown fixture group: %s\n' "$fixture_group" >&2; exit 64 ;;
+esac
+
+fixture_group_start() {
+  printf '[fixture] group-start=%s\n' "$1"
+}
+
+fixture_group_end() {
+  printf '[fixture] group-end=%s\n' "$1"
+}
+
+source_snapshot="$fixture/source-snapshot"
+cp -R "$source_app" "$source_snapshot"
+assert_source_unchanged() { diff -qr "$source_app" "$source_snapshot"; }
+
+source_detritus_output="$fixture/source detritus/Google Chrome 154 ANGLE Test.app"
+source_unknown_output="$fixture/source unknown/Google Chrome 154 ANGLE Test.app"
+
+run_inventory_final_record_regression() {
+  local inventory="$fixture/inventory-final-record.tsv"
+  printf 'newline\tsymlink\ttarget\n' > "$inventory"
+  printf 'final\tfile\t0000000000000000000000000000000000000000000000000000000000000000' >> "$inventory"
+  phase3_validate_inventory_file "$inventory"
+}
+
+run_source_detritus_group() {
+  fixture_group_start source-detritus
+  mkdir -p "$(dirname "$source_detritus_output")"
+  env CODESIGN_SOURCE_STRICT=detritus "$prepare" "$source_app" "$artifact" "$source_detritus_output"
+  assert_source_unchanged
+  test -f "$source_detritus_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
+  run_inventory_final_record_regression
+  fixture_checkpoint source-detritus
+  fixture_group_end source-detritus
+}
+
+run_source_unknown_group() {
+  fixture_group_start source-unknown
+  mkdir -p "$(dirname "$source_unknown_output")"
+  fixture_checkpoint before-source-unknown
+  printf '' > "$PHASE3_FIXTURE_LOG"
+  expect_fail env CODESIGN_SOURCE_STRICT=unknown "$prepare" "$source_app" "$artifact" "$source_unknown_output"
+  assert_source_unchanged
+  test ! -e "$source_unknown_output"
+  ! grep -F 'ditto ' "$PHASE3_FIXTURE_LOG"
+  fixture_checkpoint source-unknown
+  fixture_group_end source-unknown
+}
+
+run_control_link_group() {
+  fixture_group_start control-link
+  local control_link_source="$fixture/control-link Source.app"
+  cp -R "$source_app" "$control_link_source"
+  rm "$control_link_source/Contents/Frameworks/Google Chrome Framework.framework/Libraries/baseline-link"
+  local control_target=$'changed\t-target'
+  ln -s "$control_target" "$control_link_source/Contents/Frameworks/Google Chrome Framework.framework/Libraries/baseline-link"
+  local control_link_path="$control_link_source/Contents/Frameworks/Google Chrome Framework.framework/Libraries/baseline-link"
+  test "$(readlink -n "$control_link_path" | od -An -tx1 | tr -d ' \n')" = '6368616e676564092d746172676574'
+  local control_link_output="$fixture/control-link/Google Chrome 154 ANGLE Test.app"
+  mkdir -p "$(dirname "$control_link_output")"
+  expect_fail "$prepare" "$control_link_source" "$artifact" "$control_link_output"
+  local control_link_libraries="$control_link_output/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Libraries"
+  test ! -e "$control_link_libraries/libEGL.dylib"
+  test ! -e "$control_link_libraries/libGLESv2.dylib"
+  fixture_group_end control-link
+}
+
+if [[ "$fixture_group" == source-detritus ]]; then
+  run_source_detritus_group
+  exit 0
+fi
+if [[ "$fixture_group" == source-unknown ]]; then
+  run_source_unknown_group
+  exit 0
+fi
+if [[ "$fixture_group" == control-link ]]; then
+  run_control_link_group
+  exit 0
+fi
 
 expect_fail "$prepare" "$source_app" "$artifact" "$source_app"
 expect_fail "$prepare" "$source_app" "$artifact" '/Applications/Rejected.app'
@@ -193,23 +303,8 @@ cp -R "$source_app" "$fixture/wrong-version.app"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 0.0.0.0' "$fixture/wrong-version.app/Contents/Info.plist"
 expect_fail "$prepare" "$fixture/wrong-version.app" "$artifact" "$fixture/version-mismatch.app"
 
-source_snapshot="$fixture/source-snapshot"
-cp -R "$source_app" "$source_snapshot"
-assert_source_unchanged() { diff -qr "$source_app" "$source_snapshot"; }
-
-source_detritus_output="$fixture/source detritus/Google Chrome 154 ANGLE Test.app"
-mkdir -p "$(dirname "$source_detritus_output")"
-env CODESIGN_SOURCE_STRICT=detritus "$prepare" "$source_app" "$artifact" "$source_detritus_output"
-assert_source_unchanged
-test -f "$source_detritus_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
-
-source_unknown_output="$fixture/source unknown/Google Chrome 154 ANGLE Test.app"
-mkdir -p "$(dirname "$source_unknown_output")"
-printf '' > "$PHASE3_FIXTURE_LOG"
-expect_fail env CODESIGN_SOURCE_STRICT=unknown "$prepare" "$source_app" "$artifact" "$source_unknown_output"
-assert_source_unchanged
-test ! -e "$source_unknown_output"
-! grep -F 'ditto ' "$PHASE3_FIXTURE_LOG"
+run_source_detritus_group
+run_source_unknown_group
 
 for copy_failure in app main framework gpu; do
   copy_failure_output="$fixture/copy strict ${copy_failure}/Google Chrome 154 ANGLE Test.app"
@@ -248,17 +343,52 @@ for library_link in other foo parent dot normalized trailing external absolute-i
   test ! -e "$library_link_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
 done
 
+for baseline_mutation in missing sha link control-name control-link; do
+  baseline_output="$fixture/baseline ${baseline_mutation}/Google Chrome 154 ANGLE Test.app"
+  mkdir -p "$(dirname "$baseline_output")"
+  expect_fail env DITTO_BASELINE_MUTATION="$baseline_mutation" "$prepare" "$source_app" "$artifact" "$baseline_output"
+  test ! -e "$baseline_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
+done
+
+control_name_source="$fixture/control-name Source.app"
+cp -R "$source_app" "$control_name_source"
+mv "$control_name_source/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libaperitif.dylib" \
+  "$control_name_source/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libaperitif"$'\t'"name.dylib"
+control_name_output="$fixture/control-name/Google Chrome 154 ANGLE Test.app"
+mkdir -p "$(dirname "$control_name_output")"
+expect_fail "$prepare" "$control_name_source" "$artifact" "$control_name_output"
+test ! -e "$control_name_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
+
+run_control_link_group
+
+collision_source="$fixture/ANGLE collision Source.app"
+cp -R "$source_app" "$collision_source"
+printf 'collision\n' > "$collision_source/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
+collision_output="$fixture/angle collision/Google Chrome 154 ANGLE Test.app"
+mkdir -p "$(dirname "$collision_output")"
+expect_fail "$prepare" "$collision_source" "$artifact" "$collision_output"
+grep -F 'collision' "$collision_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib" >/dev/null
+
 "$prepare" "$source_app" "$artifact" "$output"
 assert_source_unchanged
 test -f "$output.phase3-angle-manifest"
-grep -F 'SCHEMA=phase3-angle-test-copy-v2' "$output.phase3-angle-manifest" >/dev/null
+grep -F 'SCHEMA=phase3-angle-test-copy-v3' "$output.phase3-angle-manifest" >/dev/null
 grep -F 'COPY_POLICY=norsrc,noextattr,noacl,noqtn' "$output.phase3-angle-manifest" >/dev/null
 grep -F 'COPY_POLICY=norsrc,noextattr,noacl,noqtn' "$output.phase3-angle-manifest.evidence/copy-policy.txt" >/dev/null
 grep -F -- 'ditto --norsrc --noextattr --noacl --noqtn SOURCE_APP OUTPUT_APP' "$output.phase3-angle-manifest.evidence/copy-command.txt" >/dev/null
+test -f "$output.phase3-angle-manifest.evidence/libraries-baseline-inventory.txt"
+test -f "$output.phase3-angle-manifest.evidence/libraries-final-inventory.txt"
 directory_output="$fixture/regular directory/Google Chrome 154 ANGLE Test.app"
 mkdir -p "$(dirname "$directory_output")"
 env DITTO_LIBRARY_LINK=directory "$prepare" "$source_app" "$artifact" "$directory_output"
 test -f "$directory_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
+empty_source="$fixture/Empty Source.app"
+cp -R "$source_app" "$empty_source"
+find "$empty_source/Contents/Frameworks/Google Chrome Framework.framework/Libraries" -type f -delete
+empty_output="$fixture/empty baseline/Google Chrome 154 ANGLE Test.app"
+mkdir -p "$(dirname "$empty_output")"
+"$prepare" "$empty_source" "$artifact" "$empty_output"
+test -f "$empty_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
 expect_fail "$run" CASE_B "$output" "$fixture/run-unsigned"
 expect_fail "$sign" "$source_app" "$fixture/sign-original" --dry-run
 expect_fail "$sign" "$output" "$fixture/sign-no-confirm"
@@ -295,6 +425,14 @@ output_signed="$fixture/output signed/Google Chrome 154 ANGLE Test.app"
 mkdir -p "$(dirname "$output_signed")"
 "$prepare" "$source_app" "$artifact" "$output_signed"
 "$sign" "$output_signed" "$fixture/sign-confirmed" --confirm-ad-hoc-signing
+inventory="$output_signed.phase3-angle-manifest.evidence/libraries-baseline-inventory.txt"
+cp "$inventory" "$inventory.backup"
+chmod u+w "$inventory"
+printf 'tampered\n' >> "$inventory"
+expect_fail "$sign" "$output_signed" "$fixture/sign-inventory-tampered" --dry-run
+expect_fail "$run" CASE_B "$output_signed" "$fixture/run-inventory-tampered"
+expect_fail "$collect" "$output_signed" "$fixture/collect-inventory-tampered"
+mv "$inventory.backup" "$inventory"
 process_snapshot="$fixture/process-snapshot.txt"
 printf '111 fixture caller argument only: %s\n' "$output_signed" > "$process_snapshot"
 export PHASE3_FIXTURE_PS_SNAPSHOT="$process_snapshot"

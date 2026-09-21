@@ -2,6 +2,17 @@
 
 更新日: 2026-09-20
 
+## Orchestration
+
+人間がOwner/Approver、親エージェントがOrchestrator/Reviewer、Lunaが
+Implementerである。人間は親とのみ通信し、親は一度に一体だけのLunaへ
+範囲限定の指示を出し、実diffと検証を独立レビューする。commit、push、署名、
+実機・artifact・retry操作は人間の明示承認まで実行しない。通常の修正・fixture
+失敗・文書不足・診断は `IN PROGRESS` または `CHANGES REQUIRED` であり、
+`BLOCKED` は承認境界、権限、利用不能な外部依存、安全でない統合、必須の人間
+設計判断、診断枯渇、または重大な状態不一致に限る。dirty worktree、保存済み
+retryディレクトリ、evidenceは消去・reset・cleanしない。
+
 | Phase | 状態 | 記録 |
 | --- | --- | --- |
 | Phase 0 | 保留 | 基準資料の比較設計は完了。実機ログがワークスペースに未提供のため、ログ保全と比較表作成は保留。Phase 3 の実機試験前に完了させる。 |
