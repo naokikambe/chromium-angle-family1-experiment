@@ -64,7 +64,9 @@ printf '%s: Mach-O 64-bit executable x86_64\n' "$1"
 EOF
 cat > "$stub_dir/ps" <<'EOF'
 #!/usr/bin/env bash
-if [[ "${PHASE3C_SOURCE_PROCESS:-0}" == 1 ]]; then
+if [[ "${PHASE3C_SOURCE_SELF_PROCESS:-0}" == 1 ]]; then
+  printf '%s %s/Contents/MacOS/Google Chrome --type=self-fixture\n' "$PPID" "$PHASE3C_SOURCE_APP"
+elif [[ "${PHASE3C_SOURCE_PROCESS:-0}" == 1 ]]; then
   printf '777 %s/Contents/MacOS/Google Chrome --type=gpu-process\n' "$PHASE3C_SOURCE_APP"
 fi
 EOF
@@ -165,13 +167,16 @@ applications_source="$fixture/Applications/Google Chrome.app"
 mkdir -p "$(dirname "$applications_source")"
 cp -R "$source_app" "$applications_source"
 mkdir -p "$fixture/applications-source" "$fixture/phase3c"
-"$preflight" --source-app "$applications_source" --artifact-dir "$artifact_dir" --output-app "$fixture/applications-source/retry4/output.app" --results-dir "$fixture/applications-source/retry4/results" >/dev/null
+"$preflight" --source-app "$applications_source" --artifact-dir "$artifact_dir" --output-app "$fixture/applications-source-retry4/output.app" --results-dir "$fixture/applications-source-retry4/results" >/dev/null
+export PHASE3C_SOURCE_SELF_PROCESS=1
+"$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/self-process-retry4/output.app" --results-dir "$fixture/self-process-retry4/results" >/dev/null
+unset PHASE3C_SOURCE_SELF_PROCESS
 success_log="$fixture/success-preflight.log"
-if ! bash -x "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/phase3c/retry4/output.app" --results-dir "$fixture/phase3c/retry4/results" > "$success_log" 2>&1; then
+if ! bash -x "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/phase3c-preflight-retry4/output.app" --results-dir "$fixture/phase3c-preflight-retry4/results" > "$success_log" 2>&1; then
   cat "$success_log" >&2
   exit 1
 fi
-test -f "$fixture/phase3c/retry4/output.app.phase3-angle-manifest"
-test -f "$fixture/phase3c/retry4/results/sign-dry-run.txt"
-grep -F 'no xattr or codesign command was executed.' "$fixture/phase3c/retry4/results/sign-dry-run.txt" >/dev/null
+test -f "$fixture/phase3c-preflight-retry4/output.app.phase3-angle-manifest"
+test -f "$fixture/phase3c-preflight-retry4/results/sign-dry-run.txt"
+grep -F 'no xattr or codesign command was executed.' "$fixture/phase3c-preflight-retry4/results/sign-dry-run.txt" >/dev/null
 printf '%s\n' 'phase3c preflight fixture tests passed'
