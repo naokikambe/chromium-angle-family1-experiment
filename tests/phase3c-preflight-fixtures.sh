@@ -84,7 +84,7 @@ mkdir -p "$source_app/Contents/MacOS" "$source_app/Contents/Resources" \
 cat > "$source_app/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>154.0.8037.45</string><key>CFBundleExecutable</key><string>Google Chrome</string></dict></plist>
+<plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>154.0.8037.45</string><key>CFBundleVersion</key><string>8037.45</string><key>CFBundleExecutable</key><string>Google Chrome</string></dict></plist>
 EOF
 printf '#!/bin/sh\nexit 0\n' > "$source_app/Contents/MacOS/Google Chrome"
 printf 'framework\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Google Chrome Framework"
