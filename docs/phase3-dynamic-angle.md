@@ -38,11 +38,15 @@ GN、Ninja（`libEGL libGLESv2`、1314 target）、artifact検証、uploadは成
 
 `prepare-chrome-angle-test-copy.sh`はsource/outputを明示指定し、root、`/Applications`、symlink component、既存output、非所有parent、version/x86_64/SHA mismatchを拒否する。copyには`ditto --norsrc --noextattr --noacl --noqtn`を使い、resource fork/HFS metadata、extended attributes、ACL、quarantineを持ち込まない。これはtest-only copyであり、通常利用・配布を目的としない。copyのFinderInfo/ResourceFork不在、Info.plist・Resources・main/Framework/GPU Helperの必要componentと実行属性、strict signature検証成功を確認してから2本だけを配置する。sourceのmain executable、Framework、GPU Helperは前後で読み取り検証する。dylib配置によるcopyのGoogle署名無効化は記録するが、このscriptは再署名も起動も行わない。
 
-prepareはapp外部にread-only manifest v2と別SHA-256 fileを作る。v2は`COPY_POLICY=norsrc,noextattr,noacl,noqtn`を追加し、v1の未署名copyと混同しない。実際のpolicyとsanitized command templateもevidenceへ記録する。manifestにはcanonical test/source app path、source Chrome version、Chromium/ANGLE revision、artifact名、2本のSHA、作成時刻、unsigned stageを記録する。これとdylib再hash、copy policy、およびLibraries内dylibが2本だけであることをsign/run/collectが検証する。所有者がmanifestとchecksumの両方を改変した場合を防ぐ秘密鍵はないため、これは完全な耐改ざん境界ではない。安全境界は`/Applications`、source、rootを拒否し、user-owned test copyだけを署名対象とすることにある。
+prepareはapp外部にread-only manifest v3と別SHA-256 fileを作る。v2は拒否する。manifestはcopy policy、canonical paths、固定version/revision、artifact名、2本のdylib SHA、unsigned stageを記録し、Libraries inventoryはTSVでentry名、`file`または`symlink`、file SHA-256またはsymlink targetを記録する。baselineはsource/copyで一致し、finalはbaseline全entryに`libEGL.dylib`と`libGLESv2.dylib`だけを固定SHAで追加する。collision、未知entry、制御文字、壊れた・外部を指すsymlinkを拒否し、sign/run/collectはmanifest、sidecar、保存済みinventoryを再検証する。完全な耐改ざん境界ではないため、user-owned test copyだけを署名対象にする。
 
 `sign-chrome-angle-test-copy.sh`はprepared manifest、2本のhash、strict確認済みad-hoc signing receiptを必須にする。`--dry-run`は`xattr`/`codesign`を実行せず、実行には`--confirm-ad-hoc-signing`が必須である。実行時はGoogle Developer ID署名とnotarization状態を失うため、通常利用・通常Web閲覧・既存profileでの使用を禁止する。`run-dynamic-angle-test.sh`はad-hoc receipt、現在のstrict verification、`Signature=adhoc`、new `mktemp` profile、Case B/Cを確認する。Case Bにはoverrideを付けず、Case Cだけが`--disable-angle-features=requireGpuFamily2`を付ける。
 
 `collect-phase3-evidence.sh`は署名前後のsignature/entitlement record、dylib hashと署名、GPU PID/command、`lsof`または`vmmap`を保存する。`--use-dynamic-angle`は要求の証拠に過ぎず、両dylibのtest copy内絶対pathが同一GPU processで確認できた場合だけ外部ANGLEロードを確認済みとする。KOOV、Family 1改修、Case B/C実機起動はさらに後であり、今回未実施である。
+
+### Phase 3B manifest schema v3 のfixture確認
+
+manifestはschema v3を必須とし、v2は拒否する。Libraries inventoryはTSVで、各entryの名前、`file`または`symlink`、fileのSHA-256またはsymlink targetを記録する。copy前のbaseline inventoryはsource/copyで一致し、final inventoryはbaseline全entryに`libEGL.dylib`と`libGLESv2.dylib`だけを固定SHAで追加する。ANGLE名collision、未知entry、制御文字、壊れた・外部を指す`Libraries` symlinkは拒否する。sign/run/collectはmanifest、sidecar、保存済みbaseline/final inventoryを再検証する。`evidence-receipt-policy` groupはこれらの再検証、policy mismatch、strict/non-ad-hoc signature、receipt改変をまとめて確認し、full suiteもこのgroupを再利用する。retry3の保存済みcopy/evidenceは変更せず、今回もChrome、GPU Helper、profile、KOOVの起動や実機testは行っていない。
 
 ### Source metadata とclean copyのstrict gate
 
