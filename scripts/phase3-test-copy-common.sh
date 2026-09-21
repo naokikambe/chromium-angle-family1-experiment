@@ -8,6 +8,7 @@ readonly PHASE3_LIBEGL_SHA256='f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d114
 readonly PHASE3_LIBGLESV2_SHA256='8d3d188d3d4f23cf3f96ecea209b084c6db9c6192244f879cfb6bf0fb2e02cf0'
 readonly PHASE3_TEST_COPY_MANIFEST_SCHEMA='phase3-angle-test-copy-v2'
 readonly PHASE3_COPY_POLICY='norsrc,noextattr,noacl,noqtn'
+readonly PHASE3_LIBRARIES_SYMLINK_TARGET='Versions/Current/Libraries'
 
 phase3_fail() {
   printf '%s: %s\n' "${PHASE3_SCRIPT_NAME:-phase3}" "$1" >&2
@@ -124,18 +125,67 @@ phase3_manifest_value() {
   printf '%s\n' "${matches#*=}"
 }
 
+phase3_validate_libraries_directory() {
+  local libraries_dir=$1
+  local framework_dir=$2
+  local link_target
+  local libraries_real
+  local framework_real
+
+  [[ -d "$libraries_dir" ]] || phase3_fail "Libraries directory is missing: $libraries_dir"
+  framework_real=$(cd "$framework_dir" 2>/dev/null && pwd -P) ||
+    phase3_fail "Framework directory cannot be resolved: $framework_dir"
+  if [[ -L "$libraries_dir" ]]; then
+    link_target=$(readlink "$libraries_dir") || phase3_fail "Libraries symlink cannot be read: $libraries_dir"
+    [[ "$link_target" == "$PHASE3_LIBRARIES_SYMLINK_TARGET" ]] ||
+      phase3_fail "Libraries symlink target is not the canonical target: $libraries_dir"
+  elif [[ ! -d "$libraries_dir" ]]; then
+    phase3_fail "Libraries path is not a directory: $libraries_dir"
+  fi
+  libraries_real=$(cd "$libraries_dir" 2>/dev/null && pwd -P) ||
+    phase3_fail "Libraries symlink is broken: $libraries_dir"
+  case "$libraries_real/" in
+    "$framework_real/"*) ;;
+    *) phase3_fail "Libraries symlink resolves outside the test Framework: $libraries_dir" ;;
+  esac
+  printf '%s\n' "$libraries_real"
+}
+
+phase3_validate_new_libraries_path() {
+  local libraries_dir=$1
+  local framework_dir=$2
+  local parent_dir
+  local framework_real
+  local parent_real
+
+  [[ ! -e "$libraries_dir" && ! -L "$libraries_dir" ]] ||
+    phase3_fail "Libraries path is not new: $libraries_dir"
+  parent_dir=$(dirname "$libraries_dir")
+  [[ -d "$parent_dir" && ! -L "$parent_dir" ]] ||
+    phase3_fail "Libraries parent is not a regular directory: $parent_dir"
+  framework_real=$(cd "$framework_dir" 2>/dev/null && pwd -P) ||
+    phase3_fail "Framework directory cannot be resolved: $framework_dir"
+  parent_real=$(cd "$parent_dir" 2>/dev/null && pwd -P) ||
+    phase3_fail "Libraries parent cannot be resolved: $parent_dir"
+  case "$parent_real/" in
+    "$framework_real/"*) ;;
+    *) phase3_fail "New Libraries path is outside the test Framework: $libraries_dir" ;;
+  esac
+}
+
 phase3_require_only_angle_dylibs() {
   local libraries_dir=$1
+  local framework_dir=$2
   local library
+  local libraries_real
   local -a actual=()
   local -a expected=(libEGL.dylib libGLESv2.dylib)
 
-  [[ -d "$libraries_dir" && ! -L "$libraries_dir" ]] ||
-    phase3_fail "Libraries directory is missing or symlinked: $libraries_dir"
+  libraries_real=$(phase3_validate_libraries_directory "$libraries_dir" "$framework_dir")
   while IFS= read -r library; do
     actual+=("$(basename "$library")")
     [[ ! -L "$library" ]] || phase3_fail "dylib is symlinked: $library"
-  done < <(find "$libraries_dir" -maxdepth 1 -type f -name '*.dylib' -print | LC_ALL=C sort)
+  done < <(find "$libraries_real" -maxdepth 1 -type f -name '*.dylib' -print | LC_ALL=C sort)
   [[ "${actual[*]}" == "${expected[*]}" ]] ||
     phase3_fail 'Libraries directory must contain exactly libEGL.dylib and libGLESv2.dylib'
 }
@@ -170,7 +220,7 @@ phase3_validate_manifest() {
   framework="$app/Contents/Frameworks/Google Chrome Framework.framework"
   [[ -d "$framework" && ! -L "$framework" ]] || phase3_fail 'test app framework is missing or symlinked'
   libraries_dir="$(cd "$framework" && pwd -P)/Libraries"
-  phase3_require_only_angle_dylibs "$libraries_dir"
+  phase3_require_only_angle_dylibs "$libraries_dir" "$framework"
   phase3_verify_hash "$libraries_dir/libEGL.dylib" "$PHASE3_LIBEGL_SHA256"
   phase3_verify_hash "$libraries_dir/libGLESv2.dylib" "$PHASE3_LIBGLESV2_SHA256"
 }
