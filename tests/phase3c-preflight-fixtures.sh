@@ -107,7 +107,11 @@ expect_fail env FORCE_HASH_MISMATCH=1 "$preflight" --source-app "$source_app" --
 export PHASE3C_SOURCE_APP="$source_app"
 expect_fail env PHASE3C_SOURCE_PROCESS=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/process-output.app" --results-dir "$fixture/process-results"
 unset PHASE3C_SOURCE_PROCESS
-"$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/phase3c-output.app" --results-dir "$fixture/phase3c-results" >/dev/null
+success_log="$fixture/success-preflight.log"
+if ! bash -x "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/phase3c-output.app" --results-dir "$fixture/phase3c-results" > "$success_log" 2>&1; then
+  cat "$success_log" >&2
+  exit 1
+fi
 test -f "$fixture/phase3c-output.app.phase3-angle-manifest"
 test -f "$fixture/phase3c-results/sign-dry-run.txt"
 grep -F 'no xattr or codesign command was executed.' "$fixture/phase3c-results/sign-dry-run.txt" >/dev/null
