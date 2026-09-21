@@ -11,7 +11,7 @@ export PATH="$stub_dir:$PATH"
 cat > "$stub_dir/codesign" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-target=\${!#}
+target=${!#}
 case " $* " in
   *' --verify '*) exit 0 ;;
   *' -dvvv '*)
@@ -43,15 +43,15 @@ printf '%s: Mach-O 64-bit executable x86_64\n' "$1"
 EOF
 cat > "$stub_dir/ps" <<'EOF'
 #!/usr/bin/env bash
-if [[ "\${PHASE3C_SOURCE_PROCESS:-0}" == 1 ]]; then
+if [[ "${PHASE3C_SOURCE_PROCESS:-0}" == 1 ]]; then
   printf '777 %s/Contents/MacOS/Google Chrome --type=gpu-process\n' "$PHASE3C_SOURCE_APP"
 fi
 EOF
 cat > "$stub_dir/ditto" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-source="\${@: -2:1}"
-output="\${@: -1}"
+source="${@: -2:1}"
+output="${@: -1}"
 cp -R "$source" "$output"
 libraries="$output/Contents/Frameworks/Google Chrome Framework.framework/Libraries"
 target="$output/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Libraries"
@@ -68,7 +68,7 @@ set -euo pipefail
 for argument in "$@"; do
   case "$argument" in
     */libEGL.dylib) echo 'f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8  '"$argument"; exit 0 ;;
-    */libGLESv2.dylib) [[ "\${FORCE_HASH_MISMATCH:-0}" != 1 ]] && echo '8d3d188d3d4f23cf3f96ecea209b084c6db9c6192244f879cfb6bf0fb2e02cf0  '"$argument" || echo '0000000000000000000000000000000000000000000000000000000000000000  '"$argument"; exit 0 ;;
+    */libGLESv2.dylib) [[ "${FORCE_HASH_MISMATCH:-0}" != 1 ]] && echo '8d3d188d3d4f23cf3f96ecea209b084c6db9c6192244f879cfb6bf0fb2e02cf0  '"$argument" || echo '0000000000000000000000000000000000000000000000000000000000000000  '"$argument"; exit 0 ;;
   esac
 done
 exec /usr/bin/shasum "$@"
