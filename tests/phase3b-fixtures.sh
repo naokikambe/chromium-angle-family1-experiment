@@ -323,6 +323,7 @@ EOF
   chmod 0444 "$focused_manifest" "$focused_manifest.sha256"
   mkdir "$fixture/evidence policy-mismatch"
   fixture_checkpoint evidence-policy-mismatch
+  expect_fail "$run" CASE_B "$focused_output" "$fixture/evidence policy-mismatch run"
   expect_fail "$collect" "$focused_output" "$fixture/evidence policy-mismatch"
 
   chmod u+w "$focused_manifest" "$focused_manifest.sha256"
@@ -340,6 +341,7 @@ EOF
   chmod 0444 "$focused_receipt" "$focused_receipt.sha256"
   mkdir "$fixture/evidence tampered-receipt"
   fixture_checkpoint evidence-tampered-receipt
+  expect_fail "$run" CASE_B "$focused_output" "$fixture/evidence tampered-receipt run"
   expect_fail "$collect" "$focused_output" "$fixture/evidence tampered-receipt"
   fixture_group_end evidence-receipt-policy
 }
@@ -519,48 +521,5 @@ grep -F -- '--disable-angle-features=requireGpuFamily2' "$fixture/case-c/run-met
 printf '222 %s --type=gpu-process\n' "$output_signed/Contents/MacOS/Google Chrome" > "$process_snapshot"
 expect_fail "$run" CASE_B "$output_signed" "$fixture/case-already-running"
 
-framework="$output_signed/Contents/Frameworks/Google Chrome Framework.framework"
-libraries="$framework/Libraries"
-export PHASE3_FIXTURE_LIBRARIES="$libraries"
-cat > "$process_snapshot" <<EOF
-333 /unrelated/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU) --type=gpu-process
-444 $framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU) --type=gpu-process
-EOF
-mkdir "$fixture/evidence-one-library" "$fixture/evidence-both-libraries" "$fixture/evidence-invalid-signature" "$fixture/evidence-nonadhoc" "$fixture/evidence-tampered-receipt"
-unset PHASE3_FIXTURE_LSOF_BOTH
-"$collect" "$output_signed" "$fixture/evidence-one-library"
-! grep -F 'direct dynamic ANGLE load evidence' "$fixture/evidence-one-library/load-evidence.txt"
-export PHASE3_FIXTURE_LSOF_BOTH=1
-"$collect" "$output_signed" "$fixture/evidence-both-libraries"
-grep -F 'direct dynamic ANGLE load evidence: lsof confirmed both test-copy dylib absolute paths for GPU PID 444' "$fixture/evidence-both-libraries/load-evidence.txt" >/dev/null
-grep -F '444 ' "$fixture/evidence-both-libraries/gpu-processes.txt" >/dev/null
-! grep -F '333 ' "$fixture/evidence-both-libraries/gpu-processes.txt"
-expect_fail env CODESIGN_INVALID=1 "$collect" "$output_signed" "$fixture/evidence-invalid-signature"
-expect_fail env CODESIGN_NONADHOC=1 "$collect" "$output_signed" "$fixture/evidence-nonadhoc"
-
-manifest="$output_signed.phase3-angle-manifest"
-manifest_hash="$manifest.sha256"
-chmod u+w "$manifest" "$manifest_hash"
-awk 'BEGIN { FS = OFS = "=" } $1 == "COPY_POLICY" { $2 = "unexpected" } { print }' "$manifest" > "$manifest.new"
-mv "$manifest.new" "$manifest"
-printf '%s  %s\n' "$(shasum -a 256 "$manifest" | awk '{print $1}')" "$(basename "$manifest")" > "$manifest_hash"
-chmod 0444 "$manifest" "$manifest_hash"
-mkdir "$fixture/case-policy-mismatch" "$fixture/evidence-policy-mismatch"
-expect_fail "$run" CASE_B "$output_signed" "$fixture/case-policy-mismatch"
-expect_fail "$collect" "$output_signed" "$fixture/evidence-policy-mismatch"
-chmod u+w "$manifest" "$manifest_hash"
-awk 'BEGIN { FS = OFS = "=" } $1 == "COPY_POLICY" { $2 = "norsrc,noextattr,noacl,noqtn" } { print }' "$manifest" > "$manifest.new"
-mv "$manifest.new" "$manifest"
-printf '%s  %s\n' "$(shasum -a 256 "$manifest" | awk '{print $1}')" "$(basename "$manifest")" > "$manifest_hash"
-chmod 0444 "$manifest" "$manifest_hash"
-
-receipt="$output_signed.phase3-angle-signing-receipt"
-receipt_hash="$receipt.sha256"
-chmod u+w "$receipt" "$receipt_hash"
-awk 'BEGIN { FS = OFS = "=" } $1 == "PREPARE_MANIFEST_SHA256" { $2 = "0000000000000000000000000000000000000000000000000000000000000000" } { print }' "$receipt" > "$receipt.new"
-mv "$receipt.new" "$receipt"
-printf '%s  %s\n' "$(shasum -a 256 "$receipt" | awk '{print $1}')" "$(basename "$receipt")" > "$receipt_hash"
-chmod 0444 "$receipt" "$receipt_hash"
-expect_fail "$run" CASE_B "$output_signed" "$fixture/case-tampered-receipt"
-expect_fail "$collect" "$output_signed" "$fixture/evidence-tampered-receipt"
+run_evidence_receipt_policy_group
 printf 'phase3b fixture tests passed\n'
