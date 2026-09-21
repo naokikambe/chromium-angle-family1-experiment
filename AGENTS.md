@@ -27,6 +27,26 @@ Luna reports only to the parent.
   integration, a required human design choice, exhausted safe diagnostics, or
   a material state mismatch.
 
+- Phase 3B fixture acceptance is a CI decision: the complete synthetic suite
+  runs only in the pinned `.github/workflows/phase3b-fixtures.yml` workflow on
+  `macos-15-intel`. Local full-suite runs are prohibited; local work is limited
+  to implementation, review, static checks, and focused non-full diagnostics.
+- The parent may create regular checkpoint/fix commits on this branch, push
+  this branch, and dispatch/monitor the Phase 3B workflow. Main or other
+  branches, force/rebase/merge/tag/release operations, pull requests and
+  issues remain forbidden. The Human retains approval for main, real-device,
+  retry, xattr, codesign, Chrome, KOOV, profile, and artifact operations.
+- Formal Phase 3B acceptance requires a successful CI job, fixture exit status
+  `0`, passing static checks and `git diff --check`, no skipped required
+  fixtures, and no unexpected diagnostics. The 20-minute fixture step and
+  30-minute job timeout are hard limits; timeout is failure even when logs are
+  retained.
+- For a CI failure, parent reviews logs and the diagnostics artifact, classifies
+  the failure, Luna implements a bounded fix, and parent reviews it, reruns
+  static checks, creates the checkpoint commit, pushes, and starts a new run.
+  Do not perform pointless reruns; one rerun is allowed only for a clearly
+  transient runner/service failure.
+
 ## Instruction Precedence
 
 System/runtime safety and the current Human instruction take precedence over

@@ -12,7 +12,13 @@ access real artifacts or retries, create or alter a real test copy, run
 codesign or xattr, launch Chrome or GPU Helper, or access a Chrome profile.
 Do not install external tools or dependencies without the parent’s explicit
 instruction. Do not use git reset --hard, git checkout --, or git clean.
-Preserve dirty worktrees, retained retry directories, and saved evidence.
+Preserve dirty worktrees, retained retry directories, and saved evidence. Full
+Phase 3B fixture acceptance is decided only by the pinned GitHub Actions
+workflow on macos-15-intel; never run the full fixture suite locally. Local
+work is limited to implementation, review, static checks, and focused
+non-full diagnostics. Luna never commits, pushes, or runs Actions. The CI
+fixture uses synthetic data only; it does not use real Chrome, artifacts,
+retries, profiles, or devices.
 
 Instruction precedence is system/runtime safety, current Human instruction,
 repository AGENTS.md, current parent task, handoff/status documents, other
