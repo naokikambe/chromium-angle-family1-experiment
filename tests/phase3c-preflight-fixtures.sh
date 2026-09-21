@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
 preflight="$repo_root/scripts/run-phase3c-preflight.sh"
-fixture=$(mktemp -d "${TMPDIR:-/tmp}/phase3c-preflight.XXXXXX")
+fixture=$(mktemp -d /private/tmp/phase3c-preflight.XXXXXX)
 stub_dir="$fixture/stubs"
 mkdir -p "$stub_dir"
 export PATH="$stub_dir:$PATH"
