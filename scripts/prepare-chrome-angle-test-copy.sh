@@ -197,14 +197,22 @@ done
 framework="$output_real/Contents/Frameworks/Google Chrome Framework.framework"
 [[ -d "$framework" && ! -L "$framework" ]] || phase3_fail 'test copy framework is missing or symlinked'
 libraries_dir="$(cd "$framework" && pwd -P)/Libraries"
+if [[ -L "$libraries_dir" ]]; then
+  phase3_validate_libraries_directory "$libraries_dir" "$framework" >/dev/null
+elif [[ -e "$libraries_dir" ]]; then
+  [[ -d "$libraries_dir" ]] || phase3_fail 'Libraries path is not a regular directory'
+  phase3_validate_libraries_directory "$libraries_dir" "$framework" >/dev/null
+else
+  phase3_validate_new_libraries_path "$libraries_dir" "$framework"
+  mkdir "$libraries_dir"
+  phase3_validate_libraries_directory "$libraries_dir" "$framework" >/dev/null
+fi
 if [[ -d "$libraries_dir" ]]; then
   [[ -z "$(find "$libraries_dir" -maxdepth 1 -type f -name '*.dylib' -print -quit)" ]] || phase3_fail 'refusing to replace existing dylibs in the test copy'
-else
-  mkdir "$libraries_dir"
 fi
 install -m 0755 "$artifact_real/libEGL.dylib" "$libraries_dir/libEGL.dylib"
 install -m 0755 "$artifact_real/libGLESv2.dylib" "$libraries_dir/libGLESv2.dylib"
-phase3_require_only_angle_dylibs "$libraries_dir"
+phase3_require_only_angle_dylibs "$libraries_dir" "$framework"
 phase3_verify_hash "$libraries_dir/libEGL.dylib" "$PHASE3_LIBEGL_SHA256"
 phase3_verify_hash "$libraries_dir/libGLESv2.dylib" "$PHASE3_LIBGLESV2_SHA256"
 phase3_capture_signature "$evidence_dir/copy-after-dylibs" "$output_real"

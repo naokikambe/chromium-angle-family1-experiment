@@ -77,6 +77,24 @@ if [[ "${PHASE3_FIXTURE_ENFORCE_DITTO_OPTIONS:-0}" == 1 ]]; then
   done
 fi
 cp -R "$source" "$output"
+libraries="$output/Contents/Frameworks/Google Chrome Framework.framework/Libraries"
+if [[ -d "$libraries" && ! -L "$libraries" ]]; then rmdir "$libraries"; fi
+mkdir -p "$output/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Libraries"
+case "${DITTO_LIBRARY_LINK:-valid}" in
+  valid) ln -s Versions/Current/Libraries "$libraries" ;;
+  directory) mkdir "$libraries" ;;
+  other) ln -s Versions/Other/Libraries "$libraries" ;;
+  foo) ln -s Foo/Libraries "$libraries" ;;
+  parent) ln -s ../Framework.framework/Libraries "$libraries" ;;
+  dot) ln -s ./Versions/Current/Libraries "$libraries" ;;
+  normalized) ln -s Versions/Current/../Current/Libraries "$libraries" ;;
+  trailing) ln -s Versions/Current/Libraries/ "$libraries" ;;
+  external) ln -s /Applications "$libraries" ;;
+  absolute-internal) ln -s "$output/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Libraries" "$libraries" ;;
+  broken) ln -s Versions/Missing/Libraries "$libraries" ;;
+  source) ln -s /Applications/Google\ Chrome.app/Contents/Frameworks/Google\ Chrome\ Framework.framework/Libraries "$libraries" ;;
+  regular-file) printf 'not a directory\n' > "$libraries" ;;
+esac
 case "${DITTO_COPY_MUTATION:-}" in
   missing-main) mv "$output/Contents/MacOS/Google Chrome" "$output/Contents/MacOS/Google Chrome.missing" ;;
   nonexec-main) chmod -x "$output/Contents/MacOS/Google Chrome" ;;
@@ -222,6 +240,14 @@ for copy_mutation in missing-main nonexec-main; do
   test ! -e "$copy_mutation_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
 done
 
+for library_link in other foo parent dot normalized trailing external absolute-internal broken source regular-file; do
+  library_link_output="$fixture/library link ${library_link}/Google Chrome 154 ANGLE Test.app"
+  mkdir -p "$(dirname "$library_link_output")"
+  expect_fail env DITTO_LIBRARY_LINK="$library_link" "$prepare" "$source_app" "$artifact" "$library_link_output"
+  assert_source_unchanged
+  test ! -e "$library_link_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
+done
+
 "$prepare" "$source_app" "$artifact" "$output"
 assert_source_unchanged
 test -f "$output.phase3-angle-manifest"
@@ -229,6 +255,10 @@ grep -F 'SCHEMA=phase3-angle-test-copy-v2' "$output.phase3-angle-manifest" >/dev
 grep -F 'COPY_POLICY=norsrc,noextattr,noacl,noqtn' "$output.phase3-angle-manifest" >/dev/null
 grep -F 'COPY_POLICY=norsrc,noextattr,noacl,noqtn' "$output.phase3-angle-manifest.evidence/copy-policy.txt" >/dev/null
 grep -F -- 'ditto --norsrc --noextattr --noacl --noqtn SOURCE_APP OUTPUT_APP' "$output.phase3-angle-manifest.evidence/copy-command.txt" >/dev/null
+directory_output="$fixture/regular directory/Google Chrome 154 ANGLE Test.app"
+mkdir -p "$(dirname "$directory_output")"
+env DITTO_LIBRARY_LINK=directory "$prepare" "$source_app" "$artifact" "$directory_output"
+test -f "$directory_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
 expect_fail "$run" CASE_B "$output" "$fixture/run-unsigned"
 expect_fail "$sign" "$source_app" "$fixture/sign-original" --dry-run
 expect_fail "$sign" "$output" "$fixture/sign-no-confirm"
