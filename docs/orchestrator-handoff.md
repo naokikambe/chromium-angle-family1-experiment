@@ -68,6 +68,14 @@ checkpoint commit/push, and a new run; only one clearly transient
 runner/service failure may justify a rerun. Main and real-device operations
 remain approval boundaries. Retry3 is a saved failure/no-operation record.
 
+Phase 3C adds a bounded preflight script and synthetic CI fixture. It gates a
+clean expected branch, non-symlink user-owned inputs, Chrome version and
+x86_64 source, source-process absence, pinned artifact revision and hashes,
+new safe output/results paths, and collisions/retry paths. It records
+read-only inspection/signature evidence, prepares once, validates manifest and
+inventories, and invokes signing only as `--dry-run`. No real preflight has
+been executed; retry4 is the next planned path after human approval.
+
 ## Safety Boundary
 
 - Never alter source Chrome, retained retry directories, saved evidence, or

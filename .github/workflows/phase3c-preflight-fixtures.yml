@@ -1,0 +1,109 @@
+name: Phase 3C synthetic preflight fixtures
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [phase3-dynamic-angle-prep]
+    paths:
+      - scripts/run-phase3c-preflight.sh
+      - scripts/phase3-test-copy-common.sh
+      - scripts/prepare-chrome-angle-test-copy.sh
+      - scripts/sign-chrome-angle-test-copy.sh
+      - scripts/inspect-chrome-for-dynamic-angle.sh
+      - tests/phase3c-preflight-fixtures.sh
+      - docs/phase3-dynamic-angle.md
+      - AGENTS.md
+      - .codex/**
+      - .github/workflows/phase3c-preflight-fixtures.yml
+
+concurrency:
+  group: phase3c-preflight-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Record runner and repository state
+        shell: bash
+        run: |
+          set -euo pipefail
+          diag="$RUNNER_TEMP/phase3c-preflight-diagnostics"
+          mkdir -p "$diag"
+          { uname -a; uname -m; sw_vers; bash --version | head -1; xcode-select -p; git --version; printf 'ImageOS=%s\nImageVersion=%s\nrun_id=%s\nsha=%s\n' "${ImageOS:-}" "${ImageVersion:-}" "$GITHUB_RUN_ID" "$GITHUB_SHA"; } > "$diag/runner.txt"
+          { git branch --show-current; git rev-parse HEAD; git status --short; git log --oneline -5; } > "$diag/repository.txt"
+
+      - name: Static workflow self-audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow=.github/workflows/phase3c-preflight-fixtures.yml
+          test "${GITHUB_REF_NAME:-}" = phase3-dynamic-angle-prep
+          grep -F 'workflow_dispatch:' "$workflow"
+          grep -F '  push:' "$workflow"
+          ! grep -E 'pull_request(_target)?|secrets\.|id-token:|contents: write|continue-on-error|git (push|reset|checkout|clean)|force-push|/Applications/|retry[0-3]|codesign --force|xattr -cr|open -a' "$workflow"
+          grep -F 'runs-on: macos-15-intel' "$workflow"
+          grep -F 'contents: read' "$workflow"
+          grep -F 'timeout-minutes: 30' "$workflow"
+          grep -F 'timeout-minutes: 20' "$workflow"
+          grep -F 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' "$workflow"
+          grep -F 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' "$workflow"
+          grep -F 'persist-credentials: false' "$workflow"
+          grep -F 'if: always()' "$workflow"
+          grep -F 'fixture-exit-status.txt' "$workflow"
+          grep -F 'bash -x tests/phase3c-preflight-fixtures.sh' "$workflow"
+
+      - name: Check shell syntax
+        shell: bash
+        run: find . -type f -name '*.sh' -not -path './.git/*' -print0 | xargs -0 -n1 bash -n
+
+      - name: Parse all YAML
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' yaml_file; do ruby -e 'require "yaml"; YAML.load_file(ARGV.fetch(0))' "$yaml_file"; done < <(find . -type f \( -name '*.yml' -o -name '*.yaml' \) -not -path './.git/*' -print0 | LC_ALL=C sort -z)
+
+      - name: Run synthetic preflight fixture suite
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -uo pipefail
+          diag="$RUNNER_TEMP/phase3c-preflight-diagnostics"
+          mkdir -p "$diag"
+          printf '%s\n' not-completed > "$diag/fixture-exit-status.txt"
+          set +e
+          bash -x tests/phase3c-preflight-fixtures.sh > "$diag/fixture-stdout.log" 2> "$diag/fixture-stderr.log"
+          fixture_rc=$?
+          set -e
+          printf '%s\n' "$fixture_rc" > "$diag/fixture-exit-status.txt"
+          exit "$fixture_rc"
+
+      - name: Check repository diff formatting
+        if: always()
+        run: git diff --check
+
+      - name: Collect diagnostics
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          diag="$RUNNER_TEMP/phase3c-preflight-diagnostics"
+          find "$diag" -maxdepth 1 -type f -print | sort > "$diag/index.txt"
+
+      - name: Upload synthetic diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase3c-preflight-synthetic-diagnostics-${{ github.run_id }}
+          path: ${{ runner.temp }}/phase3c-preflight-diagnostics
+          if-no-files-found: error
+          retention-days: 14
