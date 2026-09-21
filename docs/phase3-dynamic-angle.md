@@ -36,9 +36,9 @@ GN、Ninja（`libEGL libGLESv2`、1314 target）、artifact検証、uploadは成
 
 固定ANGLE [`update_chrome_angle.py` 35–43行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/scripts/update_chrome_angle.py#35)はmacOSのCanary Framework `Libraries`を対象に2本のdylibとcomponent build用optional dylibを定義し、[`114–118行`](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/scripts/update_chrome_angle.py#114)で`xattr -cr`と`codesign --force --sign - --deep`を実行する。Phase 3Bのsign scriptは署名方式を変えず、この方式を**user-owned test copyだけ**に採用する。`--preserve-metadata`などは追加しない。Library Validationやentitlementsへの効果は推測せず、署名前後のdetails、CodeDirectory flags、TeamIdentifier、Authority、Runtime、entitlementsを保存して比較する。
 
-`prepare-chrome-angle-test-copy.sh`はsource/outputを明示指定し、root、`/Applications`、symlink component、既存output、非所有parent、version/x86_64/SHA mismatchを拒否する。`ditto --help`で確認した`--noextattr --noqtn`を使い、copyのFinderInfo/ResourceFork不在とstrict signature検証成功を確認してから2本だけを配置する。sourceのmain executable、Framework、GPU Helperは前後で読み取り検証する。dylib配置によるcopyのGoogle署名無効化は記録するが、このscriptは再署名も起動も行わない。
+`prepare-chrome-angle-test-copy.sh`はsource/outputを明示指定し、root、`/Applications`、symlink component、既存output、非所有parent、version/x86_64/SHA mismatchを拒否する。copyには`ditto --norsrc --noextattr --noacl --noqtn`を使い、resource fork/HFS metadata、extended attributes、ACL、quarantineを持ち込まない。これはtest-only copyであり、通常利用・配布を目的としない。copyのFinderInfo/ResourceFork不在、Info.plist・Resources・main/Framework/GPU Helperの必要componentと実行属性、strict signature検証成功を確認してから2本だけを配置する。sourceのmain executable、Framework、GPU Helperは前後で読み取り検証する。dylib配置によるcopyのGoogle署名無効化は記録するが、このscriptは再署名も起動も行わない。
 
-prepareはapp外部にread-only manifestと別SHA-256 fileを作る。manifestにはcanonical test/source app path、source Chrome version、Chromium/ANGLE revision、artifact名、2本のSHA、作成時刻、unsigned stageを記録する。これとdylib再hashおよびLibraries内dylibが2本だけであることをsign/run/collectが検証する。所有者がmanifestとchecksumの両方を改変した場合を防ぐ秘密鍵はないため、これは完全な耐改ざん境界ではない。安全境界は`/Applications`、source、rootを拒否し、user-owned test copyだけを署名対象とすることにある。
+prepareはapp外部にread-only manifest v2と別SHA-256 fileを作る。v2は`COPY_POLICY=norsrc,noextattr,noacl,noqtn`を追加し、v1の未署名copyと混同しない。実際のpolicyとsanitized command templateもevidenceへ記録する。manifestにはcanonical test/source app path、source Chrome version、Chromium/ANGLE revision、artifact名、2本のSHA、作成時刻、unsigned stageを記録する。これとdylib再hash、copy policy、およびLibraries内dylibが2本だけであることをsign/run/collectが検証する。所有者がmanifestとchecksumの両方を改変した場合を防ぐ秘密鍵はないため、これは完全な耐改ざん境界ではない。安全境界は`/Applications`、source、rootを拒否し、user-owned test copyだけを署名対象とすることにある。
 
 `sign-chrome-angle-test-copy.sh`はprepared manifest、2本のhash、strict確認済みad-hoc signing receiptを必須にする。`--dry-run`は`xattr`/`codesign`を実行せず、実行には`--confirm-ad-hoc-signing`が必須である。実行時はGoogle Developer ID署名とnotarization状態を失うため、通常利用・通常Web閲覧・既存profileでの使用を禁止する。`run-dynamic-angle-test.sh`はad-hoc receipt、現在のstrict verification、`Signature=adhoc`、new `mktemp` profile、Case B/Cを確認する。Case Bにはoverrideを付けず、Case Cだけが`--disable-angle-features=requireGpuFamily2`を付ける。
 
@@ -50,9 +50,11 @@ Phase 3B prepareの実機初回試行ではartifact検証まで成功したが�
 
 prepare scriptはsource app/main executable/Framework/GPU Helperごとに、strict verificationのstdout/stderr、exit status、`codesign -dvvv`、entitlements、read-only xattr一覧、実行ファイルSHA-256を保存する。strict failureはこの既知message**だけ**をwarningとしてStage 2へ進め、ほかの署名エラーはfatalである。`--ignore-resources`は使用せず、source strict結果を成功へ書き換えない。
 
-`ditto --noextattr --noqtn`後のcopyは、app全体の`--verify --deep --strict`、main executable、Framework、GPU Helperの各`--verify --strict`、Google Developer ID Authority、TeamIdentifier `EQHXZ8M8AV`、再帰xattr一覧のFinderInfo/ResourceFork不在を**すべて**満たすまでdylibを配置しない。source/copyの各主要componentは、pathを除いたAuthority/TeamIdentifier/CodeDirectory identityとSHA-256を比較して証拠化する。copy側のmetadata detritus又は署名failureは許容しない。
+retry1では`ditto --noextattr --noqtn`後にもapp root、Contents、Resources、各`.lproj`等にFinderInfoが残り、Stage 2で停止した。dylib、manifest、receiptは生成されていない。次のcopyは`ditto --norsrc --noextattr --noacl --noqtn`を使用する。`--norsrc`はresource forkとHFS metadataを除外し、併記した`--noextattr`、`--noacl`、`--noqtn`はextended attributes、ACL、quarantineを再有効化しない意図を明示する。
 
-失敗したprepareのevidence、output、sidecarは削除・上書きしない。次の実機試行は、既存の`/Users/donkee/tmp/chromium-angle-phase3b-35515036255`ではなく、例えば`/Users/donkee/tmp/chromium-angle-phase3b-35515036255-retry1`のような未使用のuser-owned rootとtest app pathを明示して行う。
+このpolicy後のcopyは、app全体の`--verify --deep --strict`、main executable、Framework、GPU Helperの各`--verify --strict`、Google Developer ID Authority、TeamIdentifier `EQHXZ8M8AV`、再帰xattr一覧のFinderInfo/ResourceFork不在を**すべて**満たすまでdylibを配置しない。source/copyの各主要componentは、pathを除いたAuthority/TeamIdentifier/CodeDirectory identityとSHA-256を比較して証拠化する。copy側のmetadata detritus又は署名failureは許容しない。
+
+失敗したprepareのevidence、output、sidecarは削除・上書きしない。retry1も保持する。次の実機試行は`/Users/donkee/tmp/chromium-angle-phase3b-35515036255-retry2/Google Chrome 154 ANGLE Test.app`のような未使用のuser-owned pathを明示して行う。
 
 artifact保存期限後にも再検証できるよう、利用者はGit管理外の保全先を作り、CI完了後に記録するrun IDと2本のSHA-256を指定して次を実行し、そのディレクトリとchecksumsを保管する。
 

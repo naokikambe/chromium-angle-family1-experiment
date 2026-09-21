@@ -68,7 +68,19 @@ printf 'ditto %q\n' "$*" >> "$PHASE3_FIXTURE_LOG"
 args=("$@")
 source=${args[$(( ${#args[@]} - 2 ))]}
 output=${args[$(( ${#args[@]} - 1 ))]}
+if [[ "${PHASE3_FIXTURE_ENFORCE_DITTO_OPTIONS:-0}" == 1 ]]; then
+  for required in --norsrc --noextattr --noacl --noqtn; do
+    [[ " ${args[*]} " == *" $required "* ]] || { echo "missing required ditto option: $required" >&2; exit 1; }
+  done
+  for argument in "${args[@]}"; do
+    case "$argument" in --rsrc|--extattr|--acl) echo "forbidden ditto option: $argument" >&2; exit 1 ;; esac
+  done
+fi
 cp -R "$source" "$output"
+case "${DITTO_COPY_MUTATION:-}" in
+  missing-main) mv "$output/Contents/MacOS/Google Chrome" "$output/Contents/MacOS/Google Chrome.missing" ;;
+  nonexec-main) chmod -x "$output/Contents/MacOS/Google Chrome" ;;
+esac
 EOF
 cat > "$stub_dir/lipo" <<'EOF'
 #!/usr/bin/env bash
@@ -119,10 +131,11 @@ exit 0
 EOF
 chmod +x "$stub_dir"/*
 export PATH="$stub_dir:$PATH"
+export PHASE3_FIXTURE_ENFORCE_DITTO_OPTIONS=1
 
 source_app="$fixture/Chrome Source.app"
 artifact="$fixture/artifact"
-mkdir -p "$source_app/Contents/MacOS" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS" "$artifact"
+mkdir -p "$source_app/Contents/MacOS" "$source_app/Contents/Resources" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS" "$artifact"
 cat > "$source_app/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -201,15 +214,40 @@ expect_fail env XATTR_COPY_DETRITUS=1 "$prepare" "$source_app" "$artifact" "$cop
 assert_source_unchanged
 test ! -e "$copy_xattr_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
 
+for copy_mutation in missing-main nonexec-main; do
+  copy_mutation_output="$fixture/copy mutation ${copy_mutation}/Google Chrome 154 ANGLE Test.app"
+  mkdir -p "$(dirname "$copy_mutation_output")"
+  expect_fail env DITTO_COPY_MUTATION="$copy_mutation" "$prepare" "$source_app" "$artifact" "$copy_mutation_output"
+  assert_source_unchanged
+  test ! -e "$copy_mutation_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
+done
+
 "$prepare" "$source_app" "$artifact" "$output"
 assert_source_unchanged
 test -f "$output.phase3-angle-manifest"
+grep -F 'SCHEMA=phase3-angle-test-copy-v2' "$output.phase3-angle-manifest" >/dev/null
+grep -F 'COPY_POLICY=norsrc,noextattr,noacl,noqtn' "$output.phase3-angle-manifest" >/dev/null
+grep -F 'COPY_POLICY=norsrc,noextattr,noacl,noqtn' "$output.phase3-angle-manifest.evidence/copy-policy.txt" >/dev/null
+grep -F -- 'ditto --norsrc --noextattr --noacl --noqtn SOURCE_APP OUTPUT_APP' "$output.phase3-angle-manifest.evidence/copy-command.txt" >/dev/null
 expect_fail "$run" CASE_B "$output" "$fixture/run-unsigned"
 expect_fail "$sign" "$source_app" "$fixture/sign-original" --dry-run
 expect_fail "$sign" "$output" "$fixture/sign-no-confirm"
 printf '' > "$PHASE3_FIXTURE_LOG"
 "$sign" "$output" "$fixture/sign-dry-run" --dry-run
 test ! -s "$PHASE3_FIXTURE_LOG"
+manifest="$output.phase3-angle-manifest"
+manifest_hash="$manifest.sha256"
+chmod u+w "$manifest" "$manifest_hash"
+awk 'BEGIN { FS = OFS = "=" } $1 == "COPY_POLICY" { $2 = "unexpected" } { print }' "$manifest" > "$manifest.new"
+mv "$manifest.new" "$manifest"
+printf '%s  %s\n' "$(shasum -a 256 "$manifest" | awk '{print $1}')" "$(basename "$manifest")" > "$manifest_hash"
+chmod 0444 "$manifest" "$manifest_hash"
+expect_fail "$sign" "$output" "$fixture/sign-policy-mismatch" --dry-run
+chmod u+w "$manifest" "$manifest_hash"
+awk 'BEGIN { FS = OFS = "=" } $1 == "COPY_POLICY" { $2 = "norsrc,noextattr,noacl,noqtn" } { print }' "$manifest" > "$manifest.new"
+mv "$manifest.new" "$manifest"
+printf '%s  %s\n' "$(shasum -a 256 "$manifest" | awk '{print $1}')" "$(basename "$manifest")" > "$manifest_hash"
+chmod 0444 "$manifest" "$manifest_hash"
 
 mkdir -p "$(dirname "$output_after_tamper")"
 "$prepare" "$source_app" "$artifact" "$output_after_tamper"
@@ -255,6 +293,22 @@ grep -F '444 ' "$fixture/evidence-both-libraries/gpu-processes.txt" >/dev/null
 ! grep -F '333 ' "$fixture/evidence-both-libraries/gpu-processes.txt"
 expect_fail env CODESIGN_INVALID=1 "$collect" "$output_signed" "$fixture/evidence-invalid-signature"
 expect_fail env CODESIGN_NONADHOC=1 "$collect" "$output_signed" "$fixture/evidence-nonadhoc"
+
+manifest="$output_signed.phase3-angle-manifest"
+manifest_hash="$manifest.sha256"
+chmod u+w "$manifest" "$manifest_hash"
+awk 'BEGIN { FS = OFS = "=" } $1 == "COPY_POLICY" { $2 = "unexpected" } { print }' "$manifest" > "$manifest.new"
+mv "$manifest.new" "$manifest"
+printf '%s  %s\n' "$(shasum -a 256 "$manifest" | awk '{print $1}')" "$(basename "$manifest")" > "$manifest_hash"
+chmod 0444 "$manifest" "$manifest_hash"
+mkdir "$fixture/case-policy-mismatch" "$fixture/evidence-policy-mismatch"
+expect_fail "$run" CASE_B "$output_signed" "$fixture/case-policy-mismatch"
+expect_fail "$collect" "$output_signed" "$fixture/evidence-policy-mismatch"
+chmod u+w "$manifest" "$manifest_hash"
+awk 'BEGIN { FS = OFS = "=" } $1 == "COPY_POLICY" { $2 = "norsrc,noextattr,noacl,noqtn" } { print }' "$manifest" > "$manifest.new"
+mv "$manifest.new" "$manifest"
+printf '%s  %s\n' "$(shasum -a 256 "$manifest" | awk '{print $1}')" "$(basename "$manifest")" > "$manifest_hash"
+chmod 0444 "$manifest" "$manifest_hash"
 
 receipt="$output_signed.phase3-angle-signing-receipt"
 receipt_hash="$receipt.sha256"

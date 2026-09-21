@@ -111,12 +111,15 @@ compare_component_identity_and_hash() {
 }
 
 verify_clean_copy_components() {
-  local app=$1 evidence_dir=$2 framework main_executable gpu_helper executable_name
+  local app=$1 evidence_dir=$2 framework framework_executable main_executable gpu_helper executable_name
   executable_name=$(phase3_plist_value CFBundleExecutable "$app/Contents/Info.plist") || phase3_fail 'cannot read test copy executable name'
   main_executable="$app/Contents/MacOS/$executable_name"
   framework="$app/Contents/Frameworks/Google Chrome Framework.framework"
+  [[ -d "$framework" && ! -L "$framework" ]] || phase3_fail 'test copy framework is missing or symlinked'
+  framework_executable=$(find "$framework" -type f -name 'Google Chrome Framework' -print -quit)
   gpu_helper=$(find "$framework" -type f -path '*/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)' -print -quit)
-  [[ -x "$main_executable" && -d "$framework" && -n "$gpu_helper" ]] || phase3_fail 'test copy components are missing'
+  [[ -f "$app/Contents/Info.plist" && -d "$app/Contents/Resources" && -x "$main_executable" && -f "$framework_executable" && -x "$gpu_helper" ]] ||
+    phase3_fail 'test copy required files, directories, or executable attributes are missing'
   verify_copy_component "$evidence_dir/copy-before-dylibs-app" "$app" codesign --verify --deep --strict "$app"
   verify_copy_component "$evidence_dir/copy-before-dylibs-main" "$main_executable" codesign --verify --strict "$main_executable"
   verify_copy_component "$evidence_dir/copy-before-dylibs-framework" "$framework" codesign --verify --strict "$framework"
@@ -170,9 +173,11 @@ mkdir "$evidence_dir"
 verify_source_components "$source_real" "$evidence_dir" source-before
 capture_xattrs "$evidence_dir/source-xattrs-before-recursive.txt" "$source_real" true
 
-# Stage 2: ditto --help on the target macOS host documents --noextattr and
-# --noqtn. Strict verification must pass before either unsigned dylib is placed.
-ditto --noextattr --noqtn "$source_real" "$output_real"
+# Stage 2: --norsrc excludes resource forks and HFS metadata; the explicit
+# no* options document that extended attributes, ACLs, and quarantine are not copied.
+printf 'COPY_POLICY=%s\n' "$PHASE3_COPY_POLICY" > "$evidence_dir/copy-policy.txt"
+printf '%s\n' 'ditto --norsrc --noextattr --noacl --noqtn SOURCE_APP OUTPUT_APP' > "$evidence_dir/copy-command.txt"
+ditto --norsrc --noextattr --noacl --noqtn "$source_real" "$output_real"
 [[ -d "$output_real/Contents" && ! -L "$output_real" ]] || phase3_fail 'ditto did not create a regular app bundle'
 capture_xattrs "$evidence_dir/copy-xattrs-before-dylibs-recursive.txt" "$output_real" true
 if rg -F 'com.apple.FinderInfo' "$evidence_dir/copy-xattrs-before-dylibs-recursive.txt" >/dev/null || rg -F 'com.apple.ResourceFork' "$evidence_dir/copy-xattrs-before-dylibs-recursive.txt" >/dev/null; then
@@ -214,7 +219,7 @@ for component in app main framework gpu-helper; do
 done
 
 {
-  printf 'SCHEMA=phase3-angle-test-copy-v1\n'
+  printf 'SCHEMA=%s\n' "$PHASE3_TEST_COPY_MANIFEST_SCHEMA"
   printf 'TEST_APP=%s\n' "$output_real"
   printf 'SOURCE_APP=%s\n' "$source_real"
   printf 'SOURCE_CHROME_VERSION=%s\n' "$source_version"
@@ -224,6 +229,7 @@ done
   printf 'ARTIFACT_NAME=%s\n' "$PHASE3_ARTIFACT_NAME"
   printf 'LIBEGL_SHA256=%s\n' "$PHASE3_LIBEGL_SHA256"
   printf 'LIBGLESV2_SHA256=%s\n' "$PHASE3_LIBGLESV2_SHA256"
+  printf 'COPY_POLICY=%s\n' "$PHASE3_COPY_POLICY"
   printf 'CREATED_AT_UTC=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   printf 'PREPARATION_STATE=unsigned-angle-libraries\n'
 } > "$manifest"
@@ -231,5 +237,6 @@ phase3_write_hash_file "$manifest" "$manifest_hash"
 
 printf 'prepared unsigned test copy: %s\n' "$output_real"
 printf 'manifest: %s\n' "$manifest"
-printf 'source app extended attributes were not changed; ditto did not carry extended attributes into the copy.\n'
+printf 'source extended attributes, ACLs, and HFS metadata were not changed; the test copy used %s.\n' "$PHASE3_COPY_POLICY"
+printf 'the test copy is not for normal use or distribution.\n'
 printf 'no xattr -cr or re-signing was performed on the copy; post-dylib signing remains a separate reviewed step.\n'
