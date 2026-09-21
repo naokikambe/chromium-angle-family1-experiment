@@ -65,7 +65,9 @@ jobs:
           grep -F 'contents: read' "$workflow"
           grep -F 'timeout-minutes: 30' "$workflow"
           grep -F 'timeout-minutes: 20' "$workflow"
-          grep -F 'phase3b-fixtures-${{ github.ref }}' "$workflow"
+          github_ref_expr='$'
+          github_ref_expr="${github_ref_expr}{{ github.ref }}"
+          grep -F "phase3b-fixtures-$github_ref_expr" "$workflow"
           grep -F 'branches: [phase3-dynamic-angle-prep]' "$workflow"
           grep -F 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' "$workflow"
           grep -F 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' "$workflow"
