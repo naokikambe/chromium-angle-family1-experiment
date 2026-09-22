@@ -665,6 +665,6 @@ run_evidence_receipt_policy_group
 sign_script="$repo_root/scripts/sign-chrome-angle-test-copy.sh"
 grep -F 'phase3_sign_versioned_framework' "$sign_script" >/dev/null
 grep -F 'framework-version' "$sign_script" >/dev/null
-grep -F 'find -P "\$versions_dir" -mindepth 1 -maxdepth 1 -type d -print0' "$sign_script" >/dev/null
+grep -F 'find -P "$versions_dir" -mindepth 1 -maxdepth 1 -type d -print0' "$sign_script" >/dev/null
 ! grep -F "codesign --force --sign - --deep" "$sign_script" >/dev/null
 printf 'phase3b fixture tests passed\n'
