@@ -24,7 +24,19 @@ set -euo pipefail
 printf 'codesign %q\n' "$*" >> "$PHASE3_FIXTURE_LOG"
 target=${!#}
 if [[ " $* " == *' --force '* ]]; then
-  if [[ -d "$target" ]]; then
+  bundle_version=''
+  for argument in "$@"; do
+    case "$argument" in
+      --bundle-version=*) bundle_version=${argument#--bundle-version=} ;;
+    esac
+  done
+  if [[ -n "$bundle_version" && "$target" == *.framework ]]; then
+    touch "$target/Versions/$bundle_version/.fixture-ad-hoc"
+  elif [[ "$target" == *.framework ]]; then
+    current_version=$(readlink "$target/Versions/Current")
+    touch "$target/Versions/$current_version/.fixture-ad-hoc"
+    touch "$target/.fixture-ad-hoc"
+  elif [[ -d "$target" ]]; then
     touch "$target/.fixture-ad-hoc"
   fi
   exit 0
@@ -648,6 +660,8 @@ output_signed="$fixture/output signed/Google Chrome 154 ANGLE Test.app"
 mkdir -p "$(dirname "$output_signed")"
 "$prepare" "$source_app" "$artifact" "$output_signed"
 "$sign" "$output_signed" "$fixture/sign-confirmed" --confirm-ad-hoc-signing
+grep -F -- '--bundle-version=154.0.8037.17' "$PHASE3_FIXTURE_LOG" >/dev/null
+grep -F -- '--bundle-version=154.0.8037.45' "$PHASE3_FIXTURE_LOG" >/dev/null
 inventory="$output_signed.phase3-angle-manifest.evidence/libraries-copy-baseline.txt"
 cp "$inventory" "$inventory.backup"
 chmod u+w "$inventory"
@@ -669,8 +683,10 @@ expect_fail "$run" CASE_B "$output_signed" "$fixture/case-already-running"
 run_evidence_receipt_policy_group
 sign_script="$repo_root/scripts/sign-chrome-angle-test-copy.sh"
 grep -F 'phase3_sign_versioned_framework' "$sign_script" >/dev/null
-grep -F 'framework-version' "$sign_script" >/dev/null
+grep -F 'phase3_sign_framework_bundle_version' "$sign_script" >/dev/null
+grep -F '"--bundle-version=$version_name" "$framework"' "$sign_script" >/dev/null
 grep -F 'phase3_sign_target "$codesign_executable" "$framework"' "$sign_script" >/dev/null
 grep -F 'find -P "$versions_dir" -mindepth 1 -maxdepth 1 -type d -print0' "$sign_script" >/dev/null
+! grep -F 'phase3_sign_target "$codesign_executable" "$version_dir" framework-version' "$sign_script" >/dev/null
 ! grep -F "codesign --force --sign - --deep" "$sign_script" >/dev/null
 printf 'phase3b fixture tests passed\n'

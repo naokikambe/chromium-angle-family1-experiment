@@ -85,8 +85,8 @@ done
 for path in "$source_app" "$artifact_dir" "$output_app" "$results_dir"; do
   [[ "$path" != *$'\n'* && "$path" != *$'\r'* ]] || phase3_fail 'paths may not contain newline or carriage return'
   case "$path" in
-    */retry0|*/retry0/*|*/retry1|*/retry1/*|*/retry2|*/retry2/*|*/retry3|*/retry3/*|*/retry4|*/retry4/*|*/retry5|*/retry5/*|*/retry6|*/retry6/*|*/retry7|*/retry7/*|*/retry8|*/retry8/*|*/retry9|*/retry9/*)
-      phase3_fail 'retry0-retry9 paths are reserved; retry10 is the next approved root' ;;
+    */retry0|*/retry0/*|*/retry1|*/retry1/*|*/retry2|*/retry2/*|*/retry3|*/retry3/*|*/retry4|*/retry4/*|*/retry5|*/retry5/*|*/retry6|*/retry6/*|*/retry7|*/retry7/*|*/retry8|*/retry8/*|*/retry9|*/retry9/*|*/retry10|*/retry10/*)
+      phase3_fail 'retry0-retry10 paths are reserved; retry11 is the next approved root' ;;
   esac
 done
 
@@ -106,10 +106,10 @@ retry_root=$(dirname "$output_app")
 results_root=$(dirname "$results_dir")
 [[ "$retry_root" == "$results_root" ]] || phase3_fail 'output and results must be direct children of one retry root'
 retry_root_name=$(basename "$retry_root")
-[[ "$retry_root_name" == retry10 || "$retry_root_name" == *-retry10 ]] ||
-  phase3_fail 'prospective retry root must end in retry10'
+[[ "$retry_root_name" == retry11 || "$retry_root_name" == *-retry11 ]] ||
+  phase3_fail 'prospective retry root must end in retry11'
 case "$retry_root_name" in
-  retry[0-9]|*-retry[0-9]) phase3_fail 'retry0-retry9 roots are reserved' ;;
+  retry[0-9]|*-retry[0-9]|retry10|*-retry10) phase3_fail 'retry0-retry10 roots are reserved' ;;
 esac
 [[ -n "$(basename "$output_app")" && -n "$(basename "$results_dir")" ]] || phase3_fail 'output and results must have non-empty child names'
 [[ ! -e "$retry_root" && ! -L "$retry_root" ]] || phase3_fail 'prospective retry root already exists'

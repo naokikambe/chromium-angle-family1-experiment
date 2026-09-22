@@ -17,11 +17,11 @@ cat > "$stub_dir/mkdir" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 target="${@: -1}"
-if [[ "${PHASE3C_FIXTURE_FAIL_ROOT_MKDIR:-0}" == 1 && "$(basename "$target")" == retry10 && "$#" == 1 ]]; then
+if [[ "${PHASE3C_FIXTURE_FAIL_ROOT_MKDIR:-0}" == 1 && "$(basename "$target")" == retry11 && "$#" == 1 ]]; then
   exit 1
 fi
 /bin/mkdir "$@"
-if [[ "${PHASE3C_FIXTURE_POST_CREATE_SYMLINK_SWAP:-0}" == 1 && "$(basename "$target")" == retry10 && "$#" == 1 ]]; then
+if [[ "${PHASE3C_FIXTURE_POST_CREATE_SYMLINK_SWAP:-0}" == 1 && "$(basename "$target")" == retry11 && "$#" == 1 ]]; then
   /bin/rmdir "$target"
   /bin/ln -s "$(dirname "$target")" "$target"
 fi
@@ -240,50 +240,50 @@ expect_fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_di
 expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/retry4/out.app" --results-dir "$fixture/results-retry4"
 expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/retry6/output.app" --results-dir "$fixture/retry6/results"
 expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/retry8/output.app" --results-dir "$fixture/retry8/results"
-mkdir -p "$fixture/existing-output-root/retry10" "$fixture/existing-results-root/retry10"
-mkdir "$fixture/existing-output-root/retry10/existing-output.app" "$fixture/existing-results-root/retry10/existing-results"
-mkdir -p "$fixture/existing-root/retry10"
-expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/existing-root/retry10/output.app" --results-dir "$fixture/existing-root/retry10/results"
-expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/existing-output-root/retry10/existing-output.app" --results-dir "$fixture/existing-output-root/retry10/new-results"
-expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/existing-results-root/retry10/new-output.app" --results-dir "$fixture/existing-results-root/retry10/existing-results"
-expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app /Applications/retry10/phase3c-writable.app --results-dir /Applications/retry10/phase3c-results
-expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$source_app/preflight-root/retry10/output.app" --results-dir "$source_app/preflight-root/retry10/results"
+mkdir -p "$fixture/existing-output-root/retry11" "$fixture/existing-results-root/retry11"
+mkdir "$fixture/existing-output-root/retry11/existing-output.app" "$fixture/existing-results-root/retry11/existing-results"
+mkdir -p "$fixture/existing-root/retry11"
+expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/existing-root/retry11/output.app" --results-dir "$fixture/existing-root/retry11/results"
+expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/existing-output-root/retry11/existing-output.app" --results-dir "$fixture/existing-output-root/retry11/new-results"
+expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/existing-results-root/retry11/new-output.app" --results-dir "$fixture/existing-results-root/retry11/existing-results"
+expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app /Applications/retry11/phase3c-writable.app --results-dir /Applications/retry11/phase3c-results
+expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$source_app/preflight-root/retry11/output.app" --results-dir "$source_app/preflight-root/retry11/results"
 ln -s "$source_app" "$fixture/source-link.app"
 mkdir -p "$fixture/link-root" "$fixture/hash-root" "$fixture/process-root"
-expect_rejected_without_prepare "$preflight" --source-app "$fixture/source-link.app" --artifact-dir "$artifact_dir" --output-app "$fixture/link-root/retry10/output.app" --results-dir "$fixture/link-root/retry10/results"
-expect_rejected_without_prepare env FORCE_HASH_MISMATCH=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/hash-root/retry10/output.app" --results-dir "$fixture/hash-root/retry10/results"
+expect_rejected_without_prepare "$preflight" --source-app "$fixture/source-link.app" --artifact-dir "$artifact_dir" --output-app "$fixture/link-root/retry11/output.app" --results-dir "$fixture/link-root/retry11/results"
+expect_rejected_without_prepare env FORCE_HASH_MISMATCH=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/hash-root/retry11/output.app" --results-dir "$fixture/hash-root/retry11/results"
 export PHASE3C_SOURCE_APP="$source_app"
-expect_rejected_without_prepare env PHASE3C_SOURCE_PROCESS=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/process-root/retry10/output.app" --results-dir "$fixture/process-root/retry10/results"
+expect_rejected_without_prepare env PHASE3C_SOURCE_PROCESS=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/process-root/retry11/output.app" --results-dir "$fixture/process-root/retry11/results"
 unset PHASE3C_SOURCE_PROCESS
 mkdir -p "$fixture/lifecycle-parent" "$fixture/mismatch-a" "$fixture/mismatch-b" "$fixture/symlink-parent-target" "$fixture/root-mkdir-parent" "$fixture/results-mkdir-parent" "$fixture/swap-parent"
 ln -s "$fixture/symlink-parent-target" "$fixture/symlink-parent"
-expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/missing-parent/retry10/output.app" --results-dir "$fixture/missing-parent/retry10/results"
-expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/symlink-parent/retry10/output.app" --results-dir "$fixture/symlink-parent/retry10/results"
-expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/mismatch-a/retry10/output.app" --results-dir "$fixture/mismatch-b/retry10/results"
-expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/lifecycle-parent/retry10/nested/output.app" --results-dir "$fixture/lifecycle-parent/retry10/results"
-expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/lifecycle-parent/retry10/output.app" --results-dir "$fixture/lifecycle-parent/retry10/output.app"
-expect_rejected_without_prepare env PHASE3C_FIXTURE_FAIL_ROOT_MKDIR=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/root-mkdir-parent/retry10/output.app" --results-dir "$fixture/root-mkdir-parent/retry10/results"
-test ! -e "$fixture/root-mkdir-parent/retry10"
-expect_rejected_without_prepare env PHASE3C_FIXTURE_FAIL_RESULTS_MKDIR=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/results-mkdir-parent/retry10/output.app" --results-dir "$fixture/results-mkdir-parent/retry10/results"
-test ! -e "$fixture/results-mkdir-parent/retry10/results"
-expect_rejected_without_prepare env PHASE3C_FIXTURE_POST_CREATE_SYMLINK_SWAP=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/swap-parent/retry10/output.app" --results-dir "$fixture/swap-parent/retry10/results"
-test ! -e "$fixture/swap-parent/retry10/results"
-expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/lifecycle-parent/retry10/../output.app" --results-dir "$fixture/lifecycle-parent/retry10/results"
-expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/lifecycle-parent//retry10/output.app" --results-dir "$fixture/lifecycle-parent//retry10/results"
-for retry_name in retry0 retry1 retry2 retry3 retry4 retry5 retry6 retry7 retry8 retry9; do
+expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/missing-parent/retry11/output.app" --results-dir "$fixture/missing-parent/retry11/results"
+expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/symlink-parent/retry11/output.app" --results-dir "$fixture/symlink-parent/retry11/results"
+expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/mismatch-a/retry11/output.app" --results-dir "$fixture/mismatch-b/retry11/results"
+expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/lifecycle-parent/retry11/nested/output.app" --results-dir "$fixture/lifecycle-parent/retry11/results"
+expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/lifecycle-parent/retry11/output.app" --results-dir "$fixture/lifecycle-parent/retry11/output.app"
+expect_rejected_without_prepare env PHASE3C_FIXTURE_FAIL_ROOT_MKDIR=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/root-mkdir-parent/retry11/output.app" --results-dir "$fixture/root-mkdir-parent/retry11/results"
+test ! -e "$fixture/root-mkdir-parent/retry11"
+expect_rejected_without_prepare env PHASE3C_FIXTURE_FAIL_RESULTS_MKDIR=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/results-mkdir-parent/retry11/output.app" --results-dir "$fixture/results-mkdir-parent/retry11/results"
+test ! -e "$fixture/results-mkdir-parent/retry11/results"
+expect_rejected_without_prepare env PHASE3C_FIXTURE_POST_CREATE_SYMLINK_SWAP=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/swap-parent/retry11/output.app" --results-dir "$fixture/swap-parent/retry11/results"
+test ! -e "$fixture/swap-parent/retry11/results"
+expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/lifecycle-parent/retry11/../output.app" --results-dir "$fixture/lifecycle-parent/retry11/results"
+expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/lifecycle-parent//retry11/output.app" --results-dir "$fixture/lifecycle-parent//retry11/results"
+for retry_name in retry0 retry1 retry2 retry3 retry4 retry5 retry6 retry7 retry8 retry9 retry10; do
   expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/$retry_name/output.app" --results-dir "$fixture/$retry_name/results"
   test ! -e "$fixture/$retry_name"
 done
 test "$(shasum -a 256 "$source_app/Contents/MacOS/Google Chrome" | awk '{print $1}')" = "$source_main_hash"
 mkdir -p "$fixture/post-create-failure-parent"
-failure_output="$fixture/post-create-failure-parent/retry10/output.app"
-failure_results="$fixture/post-create-failure-parent/retry10/results"
+failure_output="$fixture/post-create-failure-parent/retry11/output.app"
+failure_results="$fixture/post-create-failure-parent/retry11/results"
 expect_fail env PHASE3C_FIXTURE_FAIL_DITTO=1 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$failure_output" --results-dir "$failure_results"
 test -f "$failure_results/preflight-final-result.txt"
 grep -F 'FINAL_STATE=failed' "$failure_results/preflight-final-result.txt" >/dev/null
 grep -F 'FINAL_EXIT_STATUS=23' "$failure_results/preflight-final-result.txt" >/dev/null
-copy_failure_output="$fixture/copy-before-failure-parent/retry10/output.app"
-copy_failure_results="$fixture/copy-before-failure-parent/retry10/results"
+copy_failure_output="$fixture/copy-before-failure-parent/retry11/output.app"
+copy_failure_results="$fixture/copy-before-failure-parent/retry11/results"
 mkdir -p "$fixture/copy-before-failure-parent"
 expect_fail env PHASE3C_INJECT_MODE=copy-fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$copy_failure_output" --results-dir "$copy_failure_results"
 copy_failure_evidence="$copy_failure_output.phase3-angle-manifest.evidence"
@@ -296,8 +296,8 @@ test ! -e "$copy_failure_output/Contents/Frameworks/Google Chrome Framework.fram
 test ! -e "$copy_failure_results/sign-dry-run.txt"
 grep -F 'FINAL_EXIT_STATUS=1' "$copy_failure_results/preflight-final-result.txt" >/dev/null
 grep -F $'prepare\tfail\t1' "$copy_failure_results/preflight-step-journal.tsv" >/dev/null
-sign_failure_output="$fixture/sign-dry-run-failure-parent/retry10/output.app"
-sign_failure_results="$fixture/sign-dry-run-failure-parent/retry10/results"
+sign_failure_output="$fixture/sign-dry-run-failure-parent/retry11/output.app"
+sign_failure_results="$fixture/sign-dry-run-failure-parent/retry11/results"
 mkdir -p "$fixture/sign-dry-run-failure-parent"
 expect_fail env PHASE3C_SIGN_MODE=fail "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$sign_failure_output" --results-dir "$sign_failure_results"
 grep -F 'synthetic-sign-stdout' "$sign_failure_results/sign-dry-run-stdout.txt" >/dev/null
@@ -309,25 +309,25 @@ applications_source="$fixture/Applications/Google Chrome.app"
 mkdir -p "$(dirname "$applications_source")"
 cp -R "$source_app" "$applications_source"
 mkdir -p "$fixture/applications-source" "$fixture/phase3c"
-"$preflight" --source-app "$applications_source" --artifact-dir "$artifact_dir" --output-app "$fixture/applications-source-retry10/output.app" --results-dir "$fixture/applications-source-retry10/results" >/dev/null
+"$preflight" --source-app "$applications_source" --artifact-dir "$artifact_dir" --output-app "$fixture/applications-source-retry11/output.app" --results-dir "$fixture/applications-source-retry11/results" >/dev/null
 export PHASE3C_SOURCE_SELF_PROCESS=1
-"$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/self-process-retry10/output.app" --results-dir "$fixture/self-process-retry10/results" >/dev/null
+"$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/self-process-retry11/output.app" --results-dir "$fixture/self-process-retry11/results" >/dev/null
 unset PHASE3C_SOURCE_SELF_PROCESS
 success_log="$fixture/success-preflight.log"
-if ! bash -x "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/phase3c-preflight-retry10/output.app" --results-dir "$fixture/phase3c-preflight-retry10/results" > "$success_log" 2>&1; then
+if ! bash -x "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/phase3c-preflight-retry11/output.app" --results-dir "$fixture/phase3c-preflight-retry11/results" > "$success_log" 2>&1; then
   cat "$success_log" >&2
   exit 1
 fi
-test -f "$fixture/phase3c-preflight-retry10/output.app.phase3-angle-manifest"
-grep -F 'SCHEMA=phase3-angle-test-copy-v4' "$fixture/phase3c-preflight-retry10/output.app.phase3-angle-manifest" >/dev/null
-grep -F $'IwaKeyDistribution\tdir\t-' "$fixture/phase3c-preflight-retry10/output.app.phase3-angle-manifest.evidence/libraries-source-baseline.txt" >/dev/null
-test -f "$fixture/phase3c-preflight-retry10/output.app.phase3-angle-manifest.evidence/libraries-source-baseline.sha256"
-test -f "$fixture/phase3c-preflight-retry10/output.app.phase3-angle-manifest.evidence/libraries-copy-baseline.sha256"
-test -f "$fixture/phase3c-preflight-retry10/output.app.phase3-angle-manifest.evidence/libraries-post-install.sha256"
-test -f "$fixture/phase3c-preflight-retry10/results/sign-dry-run.txt"
-grep -F 'synthetic sign dry-run success' "$fixture/phase3c-preflight-retry10/results/sign-dry-run.txt" >/dev/null
-journal="$fixture/phase3c-preflight-retry10/results/preflight-step-journal.tsv"
-result="$fixture/phase3c-preflight-retry10/results/preflight-final-result.txt"
+test -f "$fixture/phase3c-preflight-retry11/output.app.phase3-angle-manifest"
+grep -F 'SCHEMA=phase3-angle-test-copy-v4' "$fixture/phase3c-preflight-retry11/output.app.phase3-angle-manifest" >/dev/null
+grep -F $'IwaKeyDistribution\tdir\t-' "$fixture/phase3c-preflight-retry11/output.app.phase3-angle-manifest.evidence/libraries-source-baseline.txt" >/dev/null
+test -f "$fixture/phase3c-preflight-retry11/output.app.phase3-angle-manifest.evidence/libraries-source-baseline.sha256"
+test -f "$fixture/phase3c-preflight-retry11/output.app.phase3-angle-manifest.evidence/libraries-copy-baseline.sha256"
+test -f "$fixture/phase3c-preflight-retry11/output.app.phase3-angle-manifest.evidence/libraries-post-install.sha256"
+test -f "$fixture/phase3c-preflight-retry11/results/sign-dry-run.txt"
+grep -F 'synthetic sign dry-run success' "$fixture/phase3c-preflight-retry11/results/sign-dry-run.txt" >/dev/null
+journal="$fixture/phase3c-preflight-retry11/results/preflight-step-journal.tsv"
+result="$fixture/phase3c-preflight-retry11/results/preflight-final-result.txt"
 test -f "$journal"
 test -f "$result"
 grep -F 'INJECTED_INSPECT ' "$inspect_log" >/dev/null
@@ -348,9 +348,11 @@ grep -F $'final-result\tfail\t23' "$failure_journal" >/dev/null
 sign_script="$repo_root/scripts/sign-chrome-angle-test-copy.sh"
 grep -F 'phase3_sign_versioned_framework' "$sign_script" >/dev/null
 grep -F 'phase3_sign_framework_version' "$sign_script" >/dev/null
+grep -F 'phase3_sign_framework_bundle_version' "$sign_script" >/dev/null
 grep -F 'phase3_sign_target' "$sign_script" >/dev/null
-grep -F 'framework-version' "$sign_script" >/dev/null
+grep -F '"--bundle-version=$version_name" "$framework"' "$sign_script" >/dev/null
 grep -F 'phase3_sign_target "$codesign_executable" "$framework"' "$sign_script" >/dev/null
+! grep -F 'phase3_sign_target "$codesign_executable" "$version_dir" framework-version' "$sign_script" >/dev/null
 ! grep -F 'sign_command=("$codesign_executable" --force --sign - --deep "$test_app_real")' "$sign_script" >/dev/null
 grep -F "SIGNING_METHOD=ad-hoc-versioned-framework" "$sign_script" >/dev/null
 printf '%s\n' 'phase3c preflight fixture tests passed'
