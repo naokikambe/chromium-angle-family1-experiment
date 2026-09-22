@@ -23,7 +23,12 @@ cat > "$stub_dir/codesign" <<'EOF'
 set -euo pipefail
 printf 'codesign %q\n' "$*" >> "$PHASE3_FIXTURE_LOG"
 target=${!#}
-if [[ " $* " == *' --force '* ]]; then touch "$target/.fixture-ad-hoc"; exit 0; fi
+if [[ " $* " == *' --force '* ]]; then
+  if [[ -d "$target" ]]; then
+    touch "$target/.fixture-ad-hoc"
+  fi
+  exit 0
+fi
 if [[ " $* " == *' --verify '* ]]; then
   [[ "${CODESIGN_INVALID:-0}" != 1 ]] || exit 1
   if [[ "$target" == *'Chrome Source.app'* ]]; then
