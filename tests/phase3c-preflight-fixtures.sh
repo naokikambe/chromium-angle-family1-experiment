@@ -350,7 +350,7 @@ grep -F 'phase3_sign_versioned_framework' "$sign_script" >/dev/null
 grep -F 'phase3_sign_framework_version' "$sign_script" >/dev/null
 grep -F 'phase3_sign_target' "$sign_script" >/dev/null
 grep -F 'framework-version' "$sign_script" >/dev/null
-! grep -F 'phase3_sign_target "$codesign_executable" "$framework"' "$sign_script" >/dev/null
+grep -F 'phase3_sign_target "$codesign_executable" "$framework"' "$sign_script" >/dev/null
 ! grep -F 'sign_command=("$codesign_executable" --force --sign - --deep "$test_app_real")' "$sign_script" >/dev/null
 grep -F "SIGNING_METHOD=ad-hoc-versioned-framework" "$sign_script" >/dev/null
 printf '%s\n' 'phase3c preflight fixture tests passed'
