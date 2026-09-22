@@ -30,7 +30,7 @@ GN、Ninja（`libEGL libGLESv2`、1314 target）、artifact検証、uploadは成
 
 両dylibのinstall nameはそれぞれ`./libEGL.dylib`、`./libGLESv2.dylib`であり、`otool -L`先頭の同名項目は自己IDとして依存判定から除外した。残る依存は`/System/Library`または`/usr/lib`のみであり、非system依存、runner固有絶対path、未解決依存は検出されなかった。これはartifactの形式検証結果であり、未署名dylibをChromeが実機でloadできることを意味しない。Chrome app、xattr、署名、プロファイル、KOOVはこのrunおよびartifact検証で操作していない。
 
-## Phase 3B のtest copyと署名境界（実機preflightはretry4-6で停止、実署名・Chrome/KOOV・retry7再試行未実施）
+## Phase 3B のtest copyと署名境界（実機preflightはretry4-7で停止、実署名・Chrome/KOOV・retry8再試行未実施）
 
 `scripts/download-angle-artifact.sh`はrun `35515036255`のartifactだけを取得し、`libEGL.dylib`の`f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`と`libGLESv2.dylib`の`8d3d188d3d4f23cf3f96ecea209b084c6db9c6192244f879cfb6bf0fb2e02cf0`を固定して検証する。artifactにはANGLE revision、build environment、GN args、2本のdylib、形式/署名/`otool` report、root `LICENSE`、`licenses/LICENSE`がある。dylibはthin x86_64 Mach-Oで未署名、自己install name以外の依存はsystem libraryだけである。
 
@@ -44,7 +44,7 @@ prepareはapp外部にread-only manifest v4と別SHA-256 fileを作る。v2/v3�
 
 `collect-phase3-evidence.sh`は署名前後のsignature/entitlement record、dylib hashと署名、GPU PID/command、`lsof`または`vmmap`を保存する。`--use-dynamic-angle`は要求の証拠に過ぎず、両dylibのtest copy内絶対pathが同一GPU processで確認できた場合だけ外部ANGLEロードを確認済みとする。KOOV、Family 1改修、Case B/C実機起動はさらに後であり、今回未実施である。
 
-### Phase 3B manifest schema v4 のfixture確認（実機preflightはretry4-6で停止、実署名・Chrome/KOOV・retry7再試行未実施）
+### Phase 3B manifest schema v4 のfixture確認（実機preflightはretry4-7で停止、実署名・Chrome/KOOV・retry8再試行未実施）
 
 完全なfixture acceptanceは、固定SHAのActionsを使う
 `.github/workflows/phase3b-fixtures.yml`を`macos-15-intel`で実行した結果だけを正式判定とする。
