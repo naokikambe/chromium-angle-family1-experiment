@@ -30,8 +30,8 @@ summarize_signature() {
   local entitlements
   local team_identifier
 
-  details=$(codesign -dvvv "$target" 2>&1 || true)
-  entitlements=$(codesign -d --entitlements :- "$target" 2>&1 || true)
+  details=$(/usr/bin/codesign -dvvv "$target" 2>&1 || true)
+  entitlements=$(/usr/bin/codesign -d --entitlements :- "$target" 2>&1 || true)
   team_identifier=$(printf '%s\n' "$details" | sed -n 's/^TeamIdentifier=//p' | head -n 1)
   printf '%s TeamIdentifier: %s\n' "$label" "${team_identifier:-unavailable}"
   if printf '%s\n' "$details" | grep -Eq 'flags=.*runtime'; then
@@ -51,9 +51,10 @@ if [[ $# -ne 1 ]]; then
   exit 64
 fi
 
-for command in file lipo codesign; do
+for command in file lipo; do
   command -v "$command" >/dev/null 2>&1 || fail "required command is unavailable: $command"
 done
+[[ -x /usr/bin/codesign ]] || fail 'required production codesign executable is unavailable: /usr/bin/codesign'
 
 chrome_app=$1
 [[ -d "$chrome_app" ]] || fail "Chrome app does not exist: $chrome_app"
@@ -90,11 +91,11 @@ if ! lipo -info "$main_executable" 2>&1 | grep -Eq '(^|[[:space:]])x86_64($|[[:s
 fi
 file "$main_executable"
 
-report_command 'App signature verification' codesign --verify --deep --strict "$chrome_app"
-report_command 'App signature details' codesign -dvvv "$chrome_app"
-report_command 'App entitlements' codesign -d --entitlements :- "$chrome_app"
-report_command 'Main executable signature details' codesign -dvvv "$main_executable"
-report_command 'Framework signature details' codesign -dvvv "$framework_real"
+report_command 'App signature verification' /usr/bin/codesign --verify --deep --strict "$chrome_app"
+report_command 'App signature details' /usr/bin/codesign -dvvv "$chrome_app"
+report_command 'App entitlements' /usr/bin/codesign -d --entitlements :- "$chrome_app"
+report_command 'Main executable signature details' /usr/bin/codesign -dvvv "$main_executable"
+report_command 'Framework signature details' /usr/bin/codesign -dvvv "$framework_real"
 summarize_signature 'App' "$chrome_app"
 summarize_signature 'Main executable' "$main_executable"
 summarize_signature 'Framework' "$framework_real"
@@ -102,8 +103,8 @@ summarize_signature 'Framework' "$framework_real"
 gpu_helper=$(find "$framework_real" -type f -path '*/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)' -print -quit)
 if [[ -n "$gpu_helper" ]]; then
   printf 'GPU Helper: %s\n' "$gpu_helper"
-  report_command 'GPU Helper signature details' codesign -dvvv "$gpu_helper"
-  report_command 'GPU Helper entitlements' codesign -d --entitlements :- "$gpu_helper"
+  report_command 'GPU Helper signature details' /usr/bin/codesign -dvvv "$gpu_helper"
+  report_command 'GPU Helper entitlements' /usr/bin/codesign -d --entitlements :- "$gpu_helper"
   summarize_signature 'GPU Helper' "$gpu_helper"
 else
   printf 'warning: GPU Helper executable was not found under the framework\n' >&2
@@ -113,7 +114,7 @@ for library in libEGL.dylib libGLESv2.dylib; do
   library_path="$libraries_dir/$library"
   if [[ -e "$library_path" ]]; then
     printf 'existing %s: %s\n' "$library" "$library_path"
-    report_command "$library signature details" codesign -dvvv "$library_path"
+    report_command "$library signature details" /usr/bin/codesign -dvvv "$library_path"
   else
     printf 'existing %s: absent\n' "$library"
   fi

@@ -3,9 +3,10 @@ set -euo pipefail
 
 PHASE3_SCRIPT_NAME='run-phase3c-preflight'
 readonly PHASE3_SCRIPT_NAME
-script_dir=$(cd "$(dirname "$0")" && pwd -P)
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 repo_root=$(cd "$script_dir/.." && pwd -P)
 source "$script_dir/phase3-test-copy-common.sh"
+source "$script_dir/prepare-chrome-angle-test-copy.sh"
 
 usage() {
   cat <<'EOF'
@@ -16,6 +17,14 @@ It never signs, launches, deletes, or replaces an existing retry/evidence direct
 EOF
 }
 
+phase3_preflight_main() {
+local codesign_executable=$1
+local sign_dry_run_script=$2
+local inspect_script=$3
+shift 3
+[[ -x "$codesign_executable" ]] || phase3_fail "required codesign executable is unavailable: $codesign_executable"
+[[ -x "$sign_dry_run_script" ]] || phase3_fail "required sign dry-run script is unavailable: $sign_dry_run_script"
+[[ -x "$inspect_script" ]] || phase3_fail "required inspect script is unavailable: $inspect_script"
 source_app=''; artifact_dir=''; output_app=''; results_dir=''
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -34,15 +43,50 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -n "$source_app" && -n "$artifact_dir" && -n "$output_app" && -n "$results_dir" ]] || { usage >&2; exit 64; }
 
+results_real=''
+journal_path=''
+result_path=''
+last_completed_step='none'
+failed_step=''
+phase3_journal() {
+  local step=$1 state=$2 status=$3
+  [[ -n "$journal_path" ]] || return 0
+  printf '%s\t%s\t%s\t%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$step" "$state" "$status" >> "$journal_path" || true
+  [[ "$state" == pass ]] && last_completed_step=$step
+  [[ "$state" == fail ]] && failed_step=$step
+  return 0
+}
+phase3_finalize() {
+  local status=$1
+  if [[ -n "$result_path" && ! -e "$result_path" && ! -L "$result_path" ]]; then
+    [[ "$status" -eq 0 ]] && final_state=completed-dry-run || final_state=failed
+    [[ -n "$failed_step" || "$status" -eq 0 ]] || failed_step=${current_step:-unknown}
+    {
+      printf 'PHASE3C_PREFLIGHT_SCHEMA=1\nFINAL_STATE=%s\nFINAL_EXIT_STATUS=%s\nLAST_COMPLETED_STEP=%s\n' "$final_state" "$status" "$last_completed_step"
+      [[ -n "$failed_step" ]] && printf 'FAILED_STEP=%s\n' "$failed_step"
+      printf 'REAL_SIGNING_PERFORMED=false\nCHROME_LAUNCHED=false\nKOOV_LAUNCHED=false\n'
+    } > "$result_path" || true
+  fi
+  if [[ "$status" -ne 0 && -n "$journal_path" ]]; then
+    phase3_journal "${current_step:-unknown}" fail "$status"
+  fi
+  [[ -n "$journal_path" ]] && phase3_journal final-result "$([[ "$status" -eq 0 ]] && printf pass || printf fail)" "$status"
+  return "$status"
+}
+trap 'phase3_finalize "$?"' EXIT
+
 phase3_reject_root
-for command in git ps shasum awk grep lipo find file codesign xattr ditto stat install cmp; do
+PHASE3_CODESIGN_EXECUTABLE="$codesign_executable"
+current_step=readonly-gates
+for command in git ps shasum awk grep lipo find file xattr ditto stat install cmp date; do
   command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"
 done
+[[ -x /usr/bin/codesign ]] || phase3_fail 'required production codesign executable is unavailable: /usr/bin/codesign'
 for path in "$source_app" "$artifact_dir" "$output_app" "$results_dir"; do
   [[ "$path" != *$'\n'* && "$path" != *$'\r'* ]] || phase3_fail 'paths may not contain newline or carriage return'
   case "$path" in
-    */retry0|*/retry0/*|*/retry1|*/retry1/*|*/retry2|*/retry2/*|*/retry3|*/retry3/*|*/retry4|*/retry4/*)
-      phase3_fail 'retry0-retry4 paths are reserved; retry5 is the next approved root' ;;
+    */retry0|*/retry0/*|*/retry1|*/retry1/*|*/retry2|*/retry2/*|*/retry3|*/retry3/*|*/retry4|*/retry4/*|*/retry5|*/retry5/*)
+      phase3_fail 'retry0-retry5 paths are reserved; retry6 is the next approved root' ;;
   esac
 done
 
@@ -62,10 +106,10 @@ retry_root=$(dirname "$output_app")
 results_root=$(dirname "$results_dir")
 [[ "$retry_root" == "$results_root" ]] || phase3_fail 'output and results must be direct children of one retry root'
 retry_root_name=$(basename "$retry_root")
-[[ "$retry_root_name" == retry5 || "$retry_root_name" == *-retry5 ]] ||
-  phase3_fail 'prospective retry root must end in retry5'
+[[ "$retry_root_name" == retry6 || "$retry_root_name" == *-retry6 ]] ||
+  phase3_fail 'prospective retry root must end in retry6'
 case "$retry_root_name" in
-  retry[0-4]|*-retry[0-4]) phase3_fail 'retry0-retry4 roots are reserved' ;;
+  retry[0-5]|*-retry[0-5]) phase3_fail 'retry0-retry5 roots are reserved' ;;
 esac
 [[ -n "$(basename "$output_app")" && -n "$(basename "$results_dir")" ]] || phase3_fail 'output and results must have non-empty child names'
 [[ ! -e "$retry_root" && ! -L "$retry_root" ]] || phase3_fail 'prospective retry root already exists'
@@ -94,17 +138,22 @@ phase3_verify_hash "$artifact_real/libEGL.dylib" "$PHASE3_LIBEGL_SHA256"
 phase3_verify_hash "$artifact_real/libGLESv2.dylib" "$PHASE3_LIBGLESV2_SHA256"
 [[ -f "$artifact_real/ANGLE_REVISION" && ! -L "$artifact_real/ANGLE_REVISION" ]] || phase3_fail 'artifact ANGLE_REVISION is missing'
 [[ "$(<"$artifact_real/ANGLE_REVISION")" == "$PHASE3_ANGLE_REVISION" ]] || phase3_fail 'artifact ANGLE revision does not match'
+phase3_journal readonly-gates pass 0
 
 process_snapshot=$(mktemp "${TMPDIR:-/tmp}/phase3c-process.XXXXXX")
 inspection=$(mktemp "${TMPDIR:-/tmp}/phase3c-inspection.XXXXXX")
-trap 'rm -f "$process_snapshot" "$inspection"' EXIT
+trap 'status=$?; rm -f "$process_snapshot" "$inspection"; phase3_finalize "$status"' EXIT
 phase3_capture_process_snapshot "$process_snapshot"
 source_process=$(phase3_snapshot_matching_processes "$process_snapshot" "$source_real/Contents/MacOS/$source_executable_name" |
   awk -v self_pid="$$" '$1 != self_pid')
 [[ -z "$source_process" ]] || phase3_fail 'source Chrome process is already running'
-"$script_dir/inspect-chrome-for-dynamic-angle.sh" "$source_real" > "$inspection" 2>&1
+current_step=source-inspection
+"$inspect_script" "$source_real" > "$inspection" 2>&1
+phase3_journal source-inspection pass 0
 
+current_step=retry-root-created
 mkdir "$retry_root"
+phase3_journal retry-root-created pass 0
 retry_root_real=$(phase3_real_directory "$retry_root")
 [[ "$retry_root_real" == "$retry_parent_real/$retry_root_name" ]] || phase3_fail 'retry root canonical path changed'
 [[ ! -L "$retry_root" ]] || phase3_fail 'retry root became a symlink'
@@ -119,14 +168,36 @@ results_real="$retry_root_real/$(basename "$results_dir")"
 phase3_reject_symlink_components "$output_real"
 phase3_reject_symlink_components "$results_real"
 mkdir "$results_real"
+results_real=$(phase3_real_directory "$results_real")
+journal_path="$results_real/preflight-step-journal.tsv"
+result_path="$results_real/preflight-final-result.txt"
+phase3_journal readonly-gates pass 0
+phase3_journal source-inspection pass 0
+phase3_journal retry-root-created pass 0
+phase3_journal preflight-start start 0
+current_step=results-create
+phase3_journal results-create pass 0
 printf 'PHASE3C_STATE=preflight-started\nBRANCH=%s\nSOURCE_VERSION=%s\n' "$branch" "$source_version" > "$results_real/preflight-state.txt"
 cp "$process_snapshot" "$results_real/process-snapshot.txt"
 cp "$inspection" "$results_real/source-inspection.txt"
-"$script_dir/prepare-chrome-angle-test-copy.sh" "$source_real" "$artifact_real" "$output_real" > "$results_real/prepare.txt" 2>&1
+current_step=prepare
+phase3_journal prepare start 0
+phase3_prepare_main "$source_real" "$artifact_real" "$output_real" "$codesign_executable" > "$results_real/prepare.txt" 2>&1
+phase3_journal prepare pass 0
+current_step=manifest-validation
 phase3_validate_manifest "$output_real"
+phase3_journal manifest-validation pass 0
 phase3_capture_signature "$results_real/output-read-only" "$output_real"
 sign_dry_run_dir="$results_real/sign-dry-run"
-"$script_dir/sign-chrome-angle-test-copy.sh" "$output_real" "$sign_dry_run_dir" --dry-run > "$results_real/sign-dry-run.txt" 2>&1
+current_step=sign-dry-run
+"$sign_dry_run_script" "$output_real" "$sign_dry_run_dir" --dry-run > "$results_real/sign-dry-run-stdout.txt" 2> "$results_real/sign-dry-run-stderr.txt"
+cat "$results_real/sign-dry-run-stdout.txt" "$results_real/sign-dry-run-stderr.txt" > "$results_real/sign-dry-run.txt"
+phase3_journal sign-dry-run pass 0
 printf 'PHASE3C_STATE=prepared-unsigned-sign-dry-run\n' > "$results_real/preflight-state.txt"
 printf 'NEXT_APPROVED_COMMAND=sign-chrome-angle-test-copy.sh %q %q --confirm-ad-hoc-signing\n' "$output_real" "$results_real/sign-results" > "$results_real/next-step.txt"
 printf 'Phase 3C preflight passed gates; no signing, launch, deletion, retry operation, or xattr mutation was performed.\n'
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  phase3_preflight_main /usr/bin/codesign "$script_dir/sign-chrome-angle-test-copy.sh" "$script_dir/inspect-chrome-for-dynamic-angle.sh" "$@"
+fi

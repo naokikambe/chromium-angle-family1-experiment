@@ -77,8 +77,12 @@ read-only inspection/signature evidence, prepares once, validates manifest and
 inventories, and invokes signing only as `--dry-run`. The one retry4 preflight
 stopped during prepare because its directory entry could not be represented by
 the then-current inventory schema; no ANGLE dylib or manifest was completed and
-sign dry-run was not reached. Retry4 is retained and not reused; retry5 is the
-next planned path. Real signing, Chrome, and KOOV were not performed.
+sign dry-run was not reached. Retry4 is retained and not reused; retry6 is the
+next planned path. Real signing, Chrome, and KOOV were not performed. The
+retained retry5 reporting discrepancy is labeled `inconsistent-reporting-preserved`;
+its saved evidence records successful copy-before components, unsigned preparation,
+manifest v4/inventories, and sign dry-run. It is evidence only, not a signing or
+reuse authorization.
 The initial Phase 3C CI failure was a synthetic fixture path-role mismatch:
 read-only source validation incorrectly rejected an existing source under
 `/Applications`. That rule is corrected while writable output/results remain

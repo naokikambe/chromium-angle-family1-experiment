@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PHASE3_SCRIPT_NAME='prepare-chrome-angle-test-copy'
-readonly PHASE3_SCRIPT_NAME
-source "$(cd "$(dirname "$0")" && pwd -P)/phase3-test-copy-common.sh"
+if [[ -z "${PHASE3_SCRIPT_NAME+x}" ]]; then
+  PHASE3_SCRIPT_NAME='prepare-chrome-angle-test-copy'
+  readonly PHASE3_SCRIPT_NAME
+fi
+if ! declare -F phase3_hash >/dev/null 2>&1; then
+  source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/phase3-test-copy-common.sh"
+fi
 
-usage() {
+phase3_prepare_usage() {
   printf 'usage: %s SOURCE_CHROME_APP ARTIFACT_DIRECTORY OUTPUT_CHROME_APP\n' "$0" >&2
   exit 64
 }
@@ -25,14 +29,15 @@ capture_xattrs() {
 readonly SOURCE_METADATA_DETRITUS='resource fork, Finder information, or similar detritus not allowed'
 readonly EXPECTED_TEAM_IDENTIFIER='EQHXZ8M8AV'
 readonly EXPECTED_GOOGLE_AUTHORITY='Authority=Developer ID Application: Google LLC (EQHXZ8M8AV)'
+PHASE3_CODESIGN_EXECUTABLE='/usr/bin/codesign'
 
 capture_component_evidence() {
   local prefix=$1
   local target=$2
   local executable
 
-  codesign -dvvv "$target" > "${prefix}-details.txt" 2>&1 || true
-  codesign -d --entitlements :- "$target" > "${prefix}-entitlements.txt" 2>&1 || true
+  phase3_run_codesign "$PHASE3_CODESIGN_EXECUTABLE" -dvvv "$target" > "${prefix}-details.txt" 2>&1 || true
+  phase3_run_codesign "$PHASE3_CODESIGN_EXECUTABLE" -d --entitlements :- "$target" > "${prefix}-entitlements.txt" 2>&1 || true
   capture_xattrs "${prefix}-xattrs.txt" "$target"
   executable=$(awk -F= '/^Executable=/{print substr($0, index($0, "=") + 1); exit}' "${prefix}-details.txt")
   [[ -f "$executable" && ! -L "$executable" ]] || phase3_fail "cannot identify a regular executable for evidence: $target"
@@ -41,29 +46,59 @@ capture_component_evidence() {
 }
 
 strict_output_is_metadata_detritus_only() {
-  local output=$1
-  awk -v message="$SOURCE_METADATA_DETRITUS" '
-    NF { seen = 1; if (index($0, message) == 0) invalid = 1 }
-    END { exit(seen && !invalid ? 0 : 1) }
-  ' "$output"
+  local output
+  local seen=0
+  local invalid=0
+  for output in "$@"; do
+    while IFS= read -r line; do
+      [[ -n "$line" ]] || continue
+      seen=1
+      [[ "$line" == *"$SOURCE_METADATA_DETRITUS"* ]] || invalid=1
+    done < "$output"
+  done
+  [[ "$seen" -eq 1 && "$invalid" -eq 0 ]]
+}
+
+render_codesign_command() {
+  local executable=$1
+  shift
+  local rendered arg
+  printf -v rendered '%q' "$executable"
+  for arg in "$@"; do
+    printf -v arg '%q' "$arg"
+    rendered+=" $arg"
+  done
+  printf '%s' "$rendered"
 }
 
 verify_source_component() {
   local prefix=$1
   local target=$2
-  local status
+  local label=$3
+  local status started ended command_rendered phase line
 
   capture_component_evidence "$prefix" "$target"
+  case "$label" in
+    source-before) phase=source-before-copy ;;
+    source-after-copy) phase=source-after-copy ;;
+    source-after-dylibs) phase=source-after-dylibs ;;
+    *) phase=$label ;;
+  esac
+  started=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+  command_rendered=$(render_codesign_command "$PHASE3_CODESIGN_EXECUTABLE" --verify --strict "$target")
   set +e
-  codesign --verify --strict "$target" > "${prefix}-strict-verify.txt" 2>&1
+  phase3_run_codesign "$PHASE3_CODESIGN_EXECUTABLE" --verify --strict "$target" > "${prefix}-strict-verify-stdout.txt" 2> "${prefix}-strict-verify-stderr.txt"
   status=$?
   set -e
+  ended=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
   printf '%s\n' "$status" > "${prefix}-strict-verify-status.txt"
+    printf 'schema=phase3-component-verification-v1\ncomponent=%s\ntarget=%s\ncommand=%s\ncodesign_executable=%s\nstart_utc=%s\nend_utc=%s\nraw_exit_status=%s\ncwd=%s\nPATH=%s\nphase=%s\n' \
+      "${prefix##*/}" "$target" "$command_rendered" "$PHASE3_CODESIGN_EXECUTABLE" "$started" "$ended" "$status" "$PWD" "$PATH" "$phase" > "${prefix}-strict-verify-metadata.txt"
   if [[ "$status" -eq 0 ]]; then
     printf 'passed\n' > "${prefix}-strict-classification.txt"
     return
   fi
-  if strict_output_is_metadata_detritus_only "${prefix}-strict-verify.txt"; then
+  if strict_output_is_metadata_detritus_only "${prefix}-strict-verify-stdout.txt" "${prefix}-strict-verify-stderr.txt"; then
     printf 'warning: source-side metadata detritus only\n' > "${prefix}-strict-classification.txt"
     return
   fi
@@ -78,20 +113,31 @@ verify_source_components() {
   framework="$app/Contents/Frameworks/Google Chrome Framework.framework"
   gpu_helper=$(find "$framework" -type f -path '*/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)' -print -quit)
   [[ -x "$main_executable" && -d "$framework" && -n "$gpu_helper" ]] || phase3_fail 'source Chrome components are missing'
-  verify_source_component "$evidence_dir/${label}-app" "$app"
-  verify_source_component "$evidence_dir/${label}-main" "$main_executable"
-  verify_source_component "$evidence_dir/${label}-framework" "$framework"
-  verify_source_component "$evidence_dir/${label}-gpu-helper" "$gpu_helper"
+  verify_source_component "$evidence_dir/${label}-app" "$app" "$label"
+  verify_source_component "$evidence_dir/${label}-main" "$main_executable" "$label"
+  verify_source_component "$evidence_dir/${label}-framework" "$framework" "$label"
+  verify_source_component "$evidence_dir/${label}-gpu-helper" "$gpu_helper" "$label"
 }
 
 verify_copy_component() {
   local prefix=$1
   local target=$2
-  shift 2
+  local status started ended command_rendered
+  local -a command=("$PHASE3_CODESIGN_EXECUTABLE" --verify --strict "$target")
+  [[ "${prefix##*/}" == *-app ]] && command=("$PHASE3_CODESIGN_EXECUTABLE" --verify --deep --strict "$target")
 
   capture_component_evidence "$prefix" "$target"
-  "$@" > "${prefix}-strict-verify.txt" 2>&1 || phase3_fail "test copy strict verification failed for $target"
-  printf '0\n' > "${prefix}-strict-verify-status.txt"
+  started=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+  command_rendered=$(render_codesign_command "${command[@]}")
+  set +e
+  phase3_run_codesign "${command[@]}" > "${prefix}-strict-verify-stdout.txt" 2> "${prefix}-strict-verify-stderr.txt"
+  status=$?
+  set -e
+  ended=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+  printf '%s\n' "$status" > "${prefix}-strict-verify-status.txt"
+  printf 'schema=phase3-component-verification-v1\ncomponent=%s\ntarget=%s\ncommand=%s\ncodesign_executable=%s\nstart_utc=%s\nend_utc=%s\nraw_exit_status=%s\ncwd=%s\nPATH=%s\nphase=copy-before-dylibs\n' \
+    "${prefix##*/}" "$target" "$command_rendered" "$PHASE3_CODESIGN_EXECUTABLE" "$started" "$ended" "$status" "$PWD" "$PATH" > "${prefix}-strict-verify-metadata.txt"
+  [[ "$status" -eq 0 ]] || phase3_fail "test copy strict verification failed for $target"
   grep -F "TeamIdentifier=$EXPECTED_TEAM_IDENTIFIER" "${prefix}-details.txt" >/dev/null ||
     phase3_fail "test copy TeamIdentifier mismatch for $target"
   grep -F "$EXPECTED_GOOGLE_AUTHORITY" "${prefix}-details.txt" >/dev/null ||
@@ -120,16 +166,20 @@ verify_clean_copy_components() {
   gpu_helper=$(find "$framework" -type f -path '*/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)' -print -quit)
   [[ -f "$app/Contents/Info.plist" && -d "$app/Contents/Resources" && -x "$main_executable" && -f "$framework_executable" && -x "$gpu_helper" ]] ||
     phase3_fail 'test copy required files, directories, or executable attributes are missing'
-  verify_copy_component "$evidence_dir/copy-before-dylibs-app" "$app" codesign --verify --deep --strict "$app"
-  verify_copy_component "$evidence_dir/copy-before-dylibs-main" "$main_executable" codesign --verify --strict "$main_executable"
-  verify_copy_component "$evidence_dir/copy-before-dylibs-framework" "$framework" codesign --verify --strict "$framework"
-  verify_copy_component "$evidence_dir/copy-before-dylibs-gpu-helper" "$gpu_helper" codesign --verify --strict "$gpu_helper"
+  verify_copy_component "$evidence_dir/copy-before-dylibs-app" "$app"
+  verify_copy_component "$evidence_dir/copy-before-dylibs-main" "$main_executable"
+  verify_copy_component "$evidence_dir/copy-before-dylibs-framework" "$framework"
+  verify_copy_component "$evidence_dir/copy-before-dylibs-gpu-helper" "$gpu_helper"
 }
 
-[[ $# -eq 3 ]] || usage
+phase3_prepare_main() {
+  local codesign_executable=$4
+  [[ $# -eq 4 ]] || phase3_prepare_usage
+  [[ -x "$codesign_executable" ]] || phase3_fail "required codesign executable is unavailable: $codesign_executable"
+  PHASE3_CODESIGN_EXECUTABLE="$codesign_executable"
 phase3_reject_root
 
-for command in ditto shasum lipo codesign xattr stat find install cmp; do
+for command in ditto shasum lipo xattr stat find install cmp date; do
   command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"
 done
 
@@ -234,11 +284,31 @@ phase3_validate_post_inventory "$evidence_dir/libraries-copy-baseline.txt" "$evi
 phase3_verify_hash "$libraries_dir/libEGL.dylib" "$PHASE3_LIBEGL_SHA256"
 phase3_verify_hash "$libraries_dir/libGLESv2.dylib" "$PHASE3_LIBGLESV2_SHA256"
 phase3_capture_signature "$evidence_dir/copy-after-dylibs" "$output_real"
-if codesign --verify --deep --strict "$output_real" > "$evidence_dir/copy-after-dylibs-strict-required.txt" 2>&1; then
+post_started=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+if phase3_run_codesign "$PHASE3_CODESIGN_EXECUTABLE" --verify --deep --strict "$output_real" > "$evidence_dir/copy-after-dylibs-strict-verify-stdout.txt" 2> "$evidence_dir/copy-after-dylibs-strict-verify-stderr.txt"; then
+  post_status=0
   printf 'warning: copied app remained strictly signed after unsigned dylib placement; review before signing.\n' >&2
 else
-  printf 'expected: unsigned ANGLE dylibs invalidated the copied Google signature; no signing was performed.\n' >&2
+  post_status=$?
+  post_output="$evidence_dir/copy-after-dylibs-strict-verify-stderr.txt"
+  post_framework="$output_real/Contents/Frameworks/Google Chrome Framework.framework"
+  if awk -v app="$output_real" -v framework="$post_framework" '
+    NR == 1 && $0 == app ": a sealed resource is missing or invalid" { first=1; next }
+    NR == 2 && $0 == "In subcomponent: " framework { second=1; next }
+    NF { invalid=1 }
+    END { exit !(first && second && !invalid) }
+  ' "$post_output"; then
+    post_expected=1
+    printf 'expected: unsigned ANGLE dylibs invalidated the copied Google signature; no signing was performed.\n' >&2
+  else
+    post_expected=0
+  fi
 fi
+post_ended=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+printf '%s\n' "$post_status" > "$evidence_dir/copy-after-dylibs-strict-verify-status.txt"
+printf 'schema=phase3-component-verification-v1\ncomponent=app\ntarget=%s\ncommand=%s --verify --deep --strict %s\ncodesign_executable=%s\nstart_utc=%s\nend_utc=%s\nraw_exit_status=%s\ncwd=%s\nPATH=%s\nphase=copy-after-dylibs-before-resigning\n' \
+  "$output_real" "$PHASE3_CODESIGN_EXECUTABLE" "$output_real" "$PHASE3_CODESIGN_EXECUTABLE" "$post_started" "$post_ended" "$post_status" "$PWD" "$PATH" > "$evidence_dir/copy-after-dylibs-strict-required-metadata.txt"
+[[ "${post_expected:-1}" -eq 1 ]] || phase3_fail 'unexpected post-dylib strict verification failure'
 verify_source_components "$source_real" "$evidence_dir" source-after-dylibs
 for component in app main framework gpu-helper; do
   compare_component_identity_and_hash "$evidence_dir/source-before-${component}" "$evidence_dir/source-after-dylibs-${component}"
@@ -269,3 +339,9 @@ printf 'manifest: %s\n' "$manifest"
 printf 'source extended attributes, ACLs, and HFS metadata were not changed; the test copy used %s.\n' "$PHASE3_COPY_POLICY"
 printf 'the test copy is not for normal use or distribution.\n'
 printf 'no xattr -cr or re-signing was performed on the copy; post-dylib signing remains a separate reviewed step.\n'
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  [[ $# -eq 3 ]] || phase3_prepare_usage
+  phase3_prepare_main "$@" /usr/bin/codesign
+fi

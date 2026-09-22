@@ -27,12 +27,14 @@ Phase 3Cのretry4 preflightは一回実行され、directory entryを当時のsc
 ANGLE配置、manifest完成、sign dry-run到達はなく、retry4は保持して再利用しない。正式な受入れは固定SHAの
 `phase3c-preflight-fixtures.yml` synthetic CIだけで行う。CI fixtureはsource/artifactを
 合成し、preflightの全gateと失敗条件を検証する。実preflightではsource Chromeや保存済み
-retry/evidenceを変更せず、signはdry-runだけとする。実署名、Chrome、KOOVは未実施。retry0-4は予約済みfailure/no-op、
-retry5が次の計画pathであり、人間の承認なしに作成・署名・起動しない。
+retry/evidenceを変更せず、signはdry-runだけとする。実署名、Chrome、KOOVは未実施。retry0-5は予約済みfailure/no-op、
+retry6が次の計画pathであり、人間の承認なしに作成・署名・起動しない。
+retry5の報告不整合は`inconsistent-reporting-preserved`として保存記録のみ扱い、copy-before全component成功、unsigned prepared/manifest-v4/inventory/sign dry-runのevidenceを保持する。retry5は署名・再利用しない。
+results作成後のpreflightは内部journalとfinal resultを保存し、root作成前のread-only失敗ではそれらを作成しない。
 
 初回Phase 3C CIのpath-role failureは、read-only sourceまで`/Applications`拒否していた
 synthetic fixture mismatchだった。sourceは既存・非symlinkなら許可し、writable output/resultsは
-引き続き`/Applications`、root、source/evidence、retry0-4、symlink、既存pathを拒否する。
+引き続き`/Applications`、root、source/evidence、retry0-5、symlink、既存pathを拒否する。
 この修正はretry4を再実行せず、再承認なしに実機へ進めない。
 
 | Phase | 状態 | 記録 |
@@ -41,5 +43,5 @@ synthetic fixture mismatchだった。sourceは既存・非symlinkなら許可�
 | Phase 1 | 完了 | Chromium `62d2fcb41a84e4dcefd8c4da7dfa534e6c482854`、ANGLE `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`、dynamic ANGLE の探索位置と主要 dylib を固定ソースで確認済み。Feature override が後続の条件付き既定値で上書きされない根拠を `docs/baseline.md` に追記した。 |
 | Phase 2 | Phase 2B 完了 | 初回run `35495704110` と失敗follow-up run `35497602637` の記録は保持する。2回目のfollow-up run [`35501697418`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/35501697418) は固定ANGLE checkout、`gclient sync`、GN、Ninja、artifact検証、uploadに成功した。artifactはx86_64の`libEGL.dylib`と`libGLESv2.dylib`のみを含み、各自己install name以外に非system依存はなく、署名は未署名（Phase 2では許容）である。Phase 2B時点では未実行だった固定depot_tools `0306e4682b4ac35287c726fa35a983157a625902` のbootstrap付き構成は、Phase 3A run `35515036255`で初めて実行・検証された。 |
 | Phase 3A | 完了 | `.45` artifact `angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-35515036255`を固定SHA・形式・依存・署名状態まで検証済み。実機Chromeは未操作。 |
-| Phase 3B | prepare設計修正済み・CI fixture acceptance待ち・実機試験未実施 | manifest schema v4はChrome Libraries baselineを再帰的に保持し、top-levelの`libEGL.dylib`と`libGLESv2.dylib`だけを追加する。完全なsynthetic fixture suiteの正式判定は`.github/workflows/phase3b-fixtures.yml`の`macos-15-intel` CIだけで行う。ローカルfull fixtureは実行しない。retry4は表現できないdirectory entryで停止した保存済みfailureとして保持し、再利用せず次はretry5を人間承認対象とする。元Chromeのxattr、実署名、実機起動は行わない。 |
+| Phase 3B | prepare設計修正済み・CI fixture acceptance待ち・実機試験未実施 | manifest schema v4はChrome Libraries baselineを再帰的に保持し、top-levelの`libEGL.dylib`と`libGLESv2.dylib`だけを追加する。完全なsynthetic fixture suiteの正式判定は`.github/workflows/phase3b-fixtures.yml`の`macos-15-intel` CIだけで行う。ローカルfull fixtureは実行しない。retry4は表現できないdirectory entryで停止した保存済みfailureとして保持し、再利用せず次はretry6を人間承認対象とする。元Chromeのxattr、実署名、実機起動は行わない。 |
 | Phase 3B 以降 | 未着手・Phase 0完了待ち | Chrome実load、署名・Library Validation判断、実機起動、KOOV 試験、Family 1 向け変更、診断ログ追加はいずれも実施していない。Case Bの外部standard ANGLE直接ロード証拠とPhase 0の基準ログ保全・比較表作成、Chrome実loadの人間レビューが完了するまで先へ進めない。 |

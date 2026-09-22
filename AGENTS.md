@@ -51,7 +51,7 @@ Luna reports only to the parent.
   validate it, and invoke signing only with `--dry-run`. It must not sign,
   launch, delete, replace retries, or mutate xattrs. Retry0-3 remain reserved;
   retry4 is a retained failure/no-operation record and must not be reused;
-  retry5 is the next planned user-owned path after approval.
+  retry6 is the next planned user-owned path after approval.
 
 ## Instruction Precedence
 
