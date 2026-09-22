@@ -45,7 +45,8 @@
 - depot_tools revision: `0306e4682b4ac35287c726fa35a983157a625902`.
 - Successful artifact: `angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-35515036255`.
 - Phase 3B Libraries validation preserves the verified Chrome baseline and
-  adds exactly the two ANGLE dylibs. The manifest schema is v3.
+  adds exactly the two top-level ANGLE dylibs. The manifest schema is v4 and
+  recursively records directories, files, and symlinks without following them.
 
 ## Outstanding Work
 
@@ -73,8 +74,11 @@ clean expected branch, non-symlink user-owned inputs, Chrome version and
 x86_64 source, source-process absence, pinned artifact revision and hashes,
 new safe output/results paths, and collisions/retry paths. It records
 read-only inspection/signature evidence, prepares once, validates manifest and
-inventories, and invokes signing only as `--dry-run`. No real preflight has
-been executed; retry4 is the next planned path after human approval.
+inventories, and invokes signing only as `--dry-run`. The one retry4 preflight
+stopped during prepare because its directory entry could not be represented by
+the then-current inventory schema; no ANGLE dylib or manifest was completed and
+sign dry-run was not reached. Retry4 is retained and not reused; retry5 is the
+next planned path. Real signing, Chrome, and KOOV were not performed.
 The initial Phase 3C CI failure was a synthetic fixture path-role mismatch:
 read-only source validation incorrectly rejected an existing source under
 `/Applications`. That rule is corrected while writable output/results remain
