@@ -204,6 +204,10 @@ printf '#!/usr/bin/env bash\nexit 0\n' > "$source_app/Contents/MacOS/Google Chro
 printf 'fixture framework\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Google Chrome Framework"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"
 chmod +x "$source_app/Contents/MacOS/Google Chrome" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Google Chrome Framework" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"
+google_update_agent="$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/GoogleUpdater.app/Contents/Helpers/GoogleSoftwareUpdate.bundle/Contents/Resources/GoogleSoftwareUpdateAgent.app"
+mkdir -p "$google_update_agent/Contents/MacOS"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$google_update_agent/Contents/MacOS/GoogleSoftwareUpdateAgent"
+chmod +x "$google_update_agent/Contents/MacOS/GoogleSoftwareUpdateAgent"
 mkdir -p "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries"
 printf 'fixture egl\n' > "$artifact/libEGL.dylib"
 printf 'fixture gles\n' > "$artifact/libGLESv2.dylib"
@@ -632,4 +636,9 @@ printf '222 %s --type=gpu-process\n' "$output_signed/Contents/MacOS/Google Chrom
 expect_fail "$run" CASE_B "$output_signed" "$fixture/case-already-running"
 
 run_evidence_receipt_policy_group
+sign_script="$repo_root/scripts/sign-chrome-angle-test-copy.sh"
+grep -F "find -P \"\$framework\" -type d" "$sign_script" >/dev/null
+grep -F ".bundle" "$sign_script" >/dev/null
+grep -F "codesign nested Mach-O files" "$sign_script" >/dev/null
+! grep -F "codesign --force --sign - --deep" "$sign_script" >/dev/null
 printf 'phase3b fixture tests passed\n'

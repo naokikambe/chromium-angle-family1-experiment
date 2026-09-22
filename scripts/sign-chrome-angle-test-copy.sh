@@ -41,8 +41,8 @@ phase3_sign_nested_components() {
   local bundle
   local -a bundles=()
 
-  # Sign Mach-O files from the inside out. Do not rely on --deep for
-  # Chrome's versioned Framework bundle.
+  # Sign Mach-O objects and nested .app/.bundle containers from the inside out.
+  # Do not rely on app-level --deep for Chrome's versioned Framework bundle.
   while IFS= read -r -d '' target; do
     if file -b "$target" | grep -F 'Mach-O' >/dev/null; then
       phase3_sign_target "$codesign_executable" "$target"
@@ -52,7 +52,8 @@ phase3_sign_nested_components() {
   while IFS= read -r bundle; do
     [[ -n "$bundle" ]] || continue
     bundles+=("$bundle")
-  done < <(find -P "$framework" -type d -name '*.app' -print |
+  done < <(find -P "$framework" -type d \
+    \( -name '*.app' -o -name '*.bundle' \) -print |
     awk '{ print length, $0 }' | sort -rn | cut -d' ' -f2-)
 
   for bundle in "${bundles[@]}"; do
@@ -103,7 +104,8 @@ receipt_hash=$(phase3_receipt_hash_path "$test_app_real")
 if [[ "$dry_run" == true ]]; then
   printf 'dry-run: would clear xattrs and ad-hoc sign only this prepared test copy:\n'
   printf '  xattr -cr %q\n' "$test_app_real"
-  printf '  codesign --force --sign - --deep %q\n' "$test_app_real"
+  printf '  codesign nested Mach-O files and .app/.bundle containers with ad-hoc identity\n'
+  printf '  then codesign the Framework, main executable, and app\n'
   printf 'no xattr or codesign command was executed.\n'
   exit 0
 fi
