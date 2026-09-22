@@ -269,7 +269,7 @@ expect_rejected_without_prepare env PHASE3C_FIXTURE_POST_CREATE_SYMLINK_SWAP=1 "
 test ! -e "$fixture/swap-parent/retry8/results"
 expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/lifecycle-parent/retry8/../output.app" --results-dir "$fixture/lifecycle-parent/retry8/results"
 expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/lifecycle-parent//retry8/output.app" --results-dir "$fixture/lifecycle-parent//retry8/results"
-for retry_name in retry0 retry1 retry2 retry3; do
+for retry_name in retry0 retry1 retry2 retry3 retry4 retry5 retry6 retry7; do
   expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/$retry_name/output.app" --results-dir "$fixture/$retry_name/results"
   test ! -e "$fixture/$retry_name"
 done
