@@ -52,9 +52,10 @@ if [[ "$dry_run" == true ]]; then
 fi
 
 [[ "$confirmed" == true ]] || phase3_fail 'refusing ad-hoc signing without --confirm-ad-hoc-signing'
-for command in codesign xattr shasum find; do
+for command in xattr shasum find; do
   command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"
 done
+[[ -x /usr/bin/codesign ]] || phase3_fail 'required production codesign executable is unavailable: /usr/bin/codesign'
 [[ ! -e "$receipt" && ! -e "$receipt_hash" ]] || phase3_fail 'refusing to replace an existing signing receipt'
 
 printf '%s\n' 'WARNING: this will remove extended attributes and replace Google Developer ID/notarized signatures with ad-hoc signatures on the test copy only.' >&2
@@ -89,10 +90,10 @@ phase3_capture_signature "$results_real/libGLESv2-before" "$framework/Libraries/
 
 # Matches the fixed ANGLE update_chrome_angle.py signing mode. No metadata
 # preservation flags are added; their effect on Library Validation is not assumed.
-sign_command=(codesign --force --sign - --deep "$test_app_real")
+sign_command=(/usr/bin/codesign --force --sign - --deep "$test_app_real")
 xattr -cr "$test_app_real"
 "${sign_command[@]}"
-codesign --verify --deep --strict "$test_app_real" || phase3_fail 'ad-hoc signed test copy failed strict verification'
+phase3_run_codesign /usr/bin/codesign --verify --deep --strict "$test_app_real" || phase3_fail 'ad-hoc signed test copy failed strict verification'
 
 phase3_capture_signature "$results_real/test-app-after" "$test_app_real"
 phase3_capture_signature "$results_real/main-after" "$main_executable"

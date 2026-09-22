@@ -217,7 +217,15 @@ ln -s cycle-b "$source_app/Contents/Frameworks/Google Chrome Framework.framework
 ln -s cycle-a "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/nested/cycle-b"
 
 expect_fail() { if "$@" >/dev/null 2>&1; then printf 'expected failure: %q\n' "$*" >&2; exit 1; fi; }
-prepare="$repo_root/scripts/prepare-chrome-angle-test-copy.sh"
+production_prepare="$repo_root/scripts/prepare-chrome-angle-test-copy.sh"
+prepare="$fixture/prepare-wrapper"
+cat > "$prepare" <<EOF
+#!/usr/bin/env bash
+source "$production_prepare"
+phase3_prepare_main "\$@" "$stub_dir/codesign"
+EOF
+chmod +x "$prepare"
+grep -F 'phase3_prepare_main "$@" /usr/bin/codesign' "$production_prepare" >/dev/null
 sign="$repo_root/scripts/sign-chrome-angle-test-copy.sh"
 run="$repo_root/scripts/run-dynamic-angle-test.sh"
 collect="$repo_root/scripts/collect-phase3-evidence.sh"

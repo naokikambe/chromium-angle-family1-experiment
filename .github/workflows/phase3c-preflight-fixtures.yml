@@ -50,7 +50,33 @@ jobs:
           test "${GITHUB_REF_NAME:-}" = phase3-dynamic-angle-prep
           grep -F 'workflow_dispatch:' "$workflow"
           grep -F '  push:' "$workflow"
-          ! grep -E 'pull_request(_target)?|secrets\.|id-token:|contents: write|continue-on-error|git (push|reset|checkout|clean)|force-push|/Applications/|retry[0-3]|codesign --force|xattr -cr|open -a' "$workflow"
+          prohibited=(
+            "pull""_request"
+            "pull""_request""_target"
+            "secrets""."
+            "id-""token:"
+            "contents:"" write"
+            "continue""-on-error"
+            "git ""push"
+            "git ""reset"
+            "git ""checkout"
+            "git ""clean"
+            "force""-push"
+            "/""Applications""/"
+            "retry""0"
+            "retry""1"
+            "retry""2"
+            "retry""3"
+            "codesign ""--force"
+            "xattr ""-cr"
+            "open ""-a"
+          )
+          for forbidden in "${prohibited[@]}"; do
+            if grep -F "$forbidden" "$workflow" >/dev/null; then
+              printf 'workflow self-audit rejected prohibited pattern: %s\n' "$forbidden" >&2
+              exit 1
+            fi
+          done
           grep -F 'runs-on: macos-15-intel' "$workflow"
           grep -F 'contents: read' "$workflow"
           grep -F 'timeout-minutes: 30' "$workflow"
