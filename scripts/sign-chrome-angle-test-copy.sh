@@ -17,6 +17,52 @@ phase3_sign_capture_signature() {
   phase3_run_codesign "$executable" --verify --deep --strict "$target" > "${destination_prefix}-strict-verify.txt" 2>&1 || true
 }
 
+phase3_sign_target() {
+  local codesign_executable=$1
+  local target=$2
+  local preserve_metadata=false
+  if "$codesign_executable" -d --entitlements :- "$target" >/dev/null 2>&1; then
+    preserve_metadata=true
+  fi
+  if [[ "$preserve_metadata" == true ]]; then
+    "$codesign_executable" --force --sign - --timestamp=none \
+      --preserve-metadata=entitlements,flags "$target"
+  else
+    "$codesign_executable" --force --sign - --timestamp=none "$target"
+  fi
+}
+
+phase3_sign_nested_components() {
+  local codesign_executable=$1
+  local test_app_real=$2
+  local framework=$3
+  local main_executable=$4
+  local target
+  local bundle
+  local -a bundles=()
+
+  # Sign Mach-O files from the inside out. Do not rely on --deep for
+  # Chrome's versioned Framework bundle.
+  while IFS= read -r -d '' target; do
+    if file -b "$target" | grep -F 'Mach-O' >/dev/null; then
+      phase3_sign_target "$codesign_executable" "$target"
+    fi
+  done < <(find -P "$framework" -type f -print0)
+
+  while IFS= read -r bundle; do
+    [[ -n "$bundle" ]] || continue
+    bundles+=("$bundle")
+  done < <(find -P "$framework" -type d -name '*.app' -print |
+    awk '{ print length, $0 }' | sort -rn | cut -d' ' -f2-)
+
+  for bundle in "${bundles[@]}"; do
+    phase3_sign_target "$codesign_executable" "$bundle"
+  done
+
+  phase3_sign_target "$codesign_executable" "$framework"
+  phase3_sign_target "$codesign_executable" "$main_executable"
+  phase3_sign_target "$codesign_executable" "$test_app_real"
+}
 phase3_sign_main() {
 local codesign_executable=$1
 shift
@@ -63,7 +109,7 @@ if [[ "$dry_run" == true ]]; then
 fi
 
 [[ "$confirmed" == true ]] || phase3_fail 'refusing ad-hoc signing without --confirm-ad-hoc-signing'
-for command in xattr shasum find; do
+for command in xattr shasum find file awk sort cut; do
   command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"
 done
 [[ -x "$codesign_executable" ]] || phase3_fail "required codesign executable is unavailable: $codesign_executable"
@@ -99,11 +145,10 @@ phase3_sign_capture_signature "$codesign_executable" "$results_real/gpu-helper-b
 phase3_sign_capture_signature "$codesign_executable" "$results_real/libEGL-before" "$framework/Libraries/libEGL.dylib"
 phase3_sign_capture_signature "$codesign_executable" "$results_real/libGLESv2-before" "$framework/Libraries/libGLESv2.dylib"
 
-# Matches the fixed ANGLE update_chrome_angle.py signing mode. No metadata
-# preservation flags are added; their effect on Library Validation is not assumed.
-sign_command=("$codesign_executable" --force --sign - --deep "$test_app_real")
+# Sign nested Mach-O objects explicitly. The Chrome Framework is a versioned
+# bundle; app-level codesign --deep fails after ANGLE dylibs are added.
 xattr -cr "$test_app_real"
-"${sign_command[@]}"
+phase3_sign_nested_components "$codesign_executable" "$test_app_real" "$framework" "$main_executable"
 phase3_run_codesign "$codesign_executable" --verify --deep --strict "$test_app_real" || phase3_fail 'ad-hoc signed test copy failed strict verification'
 
 phase3_sign_capture_signature "$codesign_executable" "$results_real/test-app-after" "$test_app_real"
@@ -123,7 +168,7 @@ grep -F 'Signature=adhoc' "$results_real/test-app-after-details.txt" >/dev/null 
   printf 'SCHEMA=phase3-angle-signing-receipt-v1\n'
   printf 'TEST_APP=%s\n' "$test_app_real"
   printf 'PREPARE_MANIFEST_SHA256=%s\n' "$(phase3_hash "$manifest")"
-  printf 'SIGNING_METHOD=ad-hoc-deep\n'
+  printf 'SIGNING_METHOD=ad-hoc-nested\n'
   printf 'SIGNED_AT_UTC=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   printf 'STRICT_VERIFICATION=passed\n'
   printf 'RESULTS_DIRECTORY=%s\n' "$results_real"

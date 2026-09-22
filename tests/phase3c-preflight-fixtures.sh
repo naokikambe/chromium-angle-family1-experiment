@@ -339,4 +339,15 @@ awk -F '\t' 'BEGIN { ok = 0 } $2 == "readonly-gates" && $3 == "pass" { ok = ok <
 failure_journal="$failure_results/preflight-step-journal.tsv"
 grep -F $'prepare\tfail\t23' "$failure_journal" >/dev/null
 grep -F $'final-result\tfail\t23' "$failure_journal" >/dev/null
+# Static regression checks for the real signing script. The synthetic
+# preflight does not perform codesign, so these checks ensure the
+# versioned Framework workaround remains present and app-level --deep
+# signing is not reintroduced.
+sign_script="$repo_root/scripts/sign-chrome-angle-test-copy.sh"
+grep -F 'phase3_sign_nested_components' "$sign_script" >/dev/null
+grep -F 'phase3_sign_target' "$sign_script" >/dev/null
+grep -F 'for bundle in "${bundles[@]}"; do' "$sign_script" >/dev/null
+! grep -F 'for bundle in "\${bundles[@]}"; do' "$sign_script" >/dev/null
+! grep -F 'sign_command=("$codesign_executable" --force --sign - --deep "$test_app_real")' "$sign_script" >/dev/null
+grep -F "SIGNING_METHOD=ad-hoc-nested" "$sign_script" >/dev/null
 printf '%s\n' 'phase3c preflight fixture tests passed'
