@@ -24,12 +24,6 @@ phase3_sign_target() {
   local preserve_metadata=false
 
   case "$target_kind" in
-    framework-version)
-      # A versioned framework must be signed by concrete version, not through
-      # its Framework root. Do not carry an app's entitlements into a framework.
-      "$codesign_executable" --force --sign - --timestamp=none "$target"
-      return
-      ;;
     code)
       ;;
     *)
@@ -48,10 +42,26 @@ phase3_sign_target() {
   fi
 }
 
+phase3_sign_framework_bundle_version() {
+  local codesign_executable=$1
+  local framework=$2
+  local version_name=$3
+
+  # Additional versions of a versioned framework must be selected through the
+  # Framework bundle. Signing Versions/<name> directly does not create the
+  # version signature that an embedding app verifies.
+  "$codesign_executable" --force --sign - --timestamp=none \
+    "--bundle-version=$version_name" "$framework"
+}
+
 phase3_sign_framework_version() {
   local codesign_executable=$1
-  local version_dir=$2
+  local framework=$2
+  local version_dir=$3
+  local version_name
   local target
+
+  version_name=$(basename "$version_dir")
 
   # Sign nested code inside one concrete Framework version from the inside out.
   while IFS= read -r -d '' target; do
@@ -66,7 +76,7 @@ phase3_sign_framework_version() {
   done < <(find -P "$version_dir" -depth -type d \
     \( -name '*.app' -o -name '*.bundle' \) -print0)
 
-  phase3_sign_target "$codesign_executable" "$version_dir" framework-version
+  phase3_sign_framework_bundle_version "$codesign_executable" "$framework" "$version_name"
 }
 
 phase3_sign_versioned_framework() {
@@ -83,7 +93,7 @@ phase3_sign_versioned_framework() {
   while IFS= read -r -d '' version_dir; do
     version_count=$((version_count + 1))
     printf '%s\n' "$version_dir" >> "$results_dir/framework-versions.txt"
-    phase3_sign_framework_version "$codesign_executable" "$version_dir"
+    phase3_sign_framework_version "$codesign_executable" "$framework" "$version_dir"
     if ! phase3_run_codesign "$codesign_executable" --verify --deep --strict "$version_dir" \
       > "$results_dir/framework-version-${version_count}-strict-verify.txt" 2>&1; then
       cat "$results_dir/framework-version-${version_count}-strict-verify.txt" >&2 || true
@@ -100,8 +110,8 @@ phase3_sign_nested_components() {
   local main_executable=$4
   local results_dir=$5
 
-  # Sign every concrete version first, then the Framework root. The root
-  # signature covers the Framework bundle's symlinked Current layout.
+  # Sign every concrete version through the Framework bundle, then sign its
+  # Current version once more through the Framework root before signing app.
   phase3_sign_versioned_framework "$codesign_executable" "$framework" "$results_dir"
   phase3_sign_target "$codesign_executable" "$framework"
   phase3_sign_target "$codesign_executable" "$main_executable"
@@ -148,7 +158,7 @@ if [[ "$dry_run" == true ]]; then
   printf 'dry-run: would clear xattrs and ad-hoc sign only this prepared test copy:\n'
   printf '  xattr -cr %q\n' "$test_app_real"
   printf '  codesign nested Mach-O files and .app/.bundle containers inside each concrete Framework version\n'
-  printf '  then codesign every Framework version, the main executable, and the app\n'
+  printf '  then codesign each Framework version via --bundle-version, the Current Framework, the main executable, and the app\n'
   printf 'no xattr or codesign command was executed.\n'
   exit 0
 fi
@@ -190,8 +200,8 @@ phase3_sign_capture_signature "$codesign_executable" "$results_real/gpu-helper-b
 phase3_sign_capture_signature "$codesign_executable" "$results_real/libEGL-before" "$framework/Libraries/libEGL.dylib"
 phase3_sign_capture_signature "$codesign_executable" "$results_real/libGLESv2-before" "$framework/Libraries/libGLESv2.dylib"
 
-# Sign every concrete Framework version explicitly. App-level --deep signing
-# is not used, and signing the Framework root would omit non-Current versions.
+# Sign every concrete Framework version through its Framework bundle. App-level
+# --deep signing is not used; the final Framework-root signing covers Current.
 xattr -cr "$test_app_real"
 phase3_sign_nested_components "$codesign_executable" "$test_app_real" "$framework" "$main_executable" "$results_real"
 phase3_run_codesign "$codesign_executable" --verify --deep --strict "$test_app_real" || phase3_fail 'ad-hoc signed test copy failed strict verification'
