@@ -323,12 +323,13 @@ test -f "$fixture/phase3c-preflight-retry6/output.app.phase3-angle-manifest.evid
 test -f "$fixture/phase3c-preflight-retry6/output.app.phase3-angle-manifest.evidence/libraries-copy-baseline.sha256"
 test -f "$fixture/phase3c-preflight-retry6/output.app.phase3-angle-manifest.evidence/libraries-post-install.sha256"
 test -f "$fixture/phase3c-preflight-retry6/results/sign-dry-run.txt"
-grep -F 'no xattr or codesign command was executed.' "$fixture/phase3c-preflight-retry6/results/sign-dry-run.txt" >/dev/null
+grep -F 'synthetic sign dry-run success' "$fixture/phase3c-preflight-retry6/results/sign-dry-run.txt" >/dev/null
 journal="$fixture/phase3c-preflight-retry6/results/preflight-step-journal.tsv"
 result="$fixture/phase3c-preflight-retry6/results/preflight-final-result.txt"
 test -f "$journal"
 test -f "$result"
 grep -F 'INJECTED_INSPECT ' "$inspect_log" >/dev/null
+grep -F 'INJECTED_SIGN_DRY_RUN ' "$fixture_log" >/dev/null
 grep -F $'prepare\tstart\t0' "$journal" >/dev/null
 grep -F $'prepare\tpass\t0' "$journal" >/dev/null
 grep -F $'sign-dry-run\tpass\t0' "$journal" >/dev/null
