@@ -45,10 +45,20 @@ if [[ " $* " == *' --verify '* ]]; then
       gpu) [[ "$target" == *'Google Chrome Helper (GPU)' ]] && { printf 'fixture copy GPU Helper strict failure\n' >&2; exit 1; } ;;
     esac
   fi
-  if [[ "$target" == *'ANGLE Test.app'* && -f "$target/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib" && ! -e "$target/.fixture-ad-hoc" ]]; then
-    printf '%s: a sealed resource is missing or invalid\n' "$target" >&2
-    printf 'In subcomponent: %s\n' "$target/Contents/Frameworks/Google Chrome Framework.framework" >&2
-    exit 1
+  if [[ "$target" == *'ANGLE Test.app'* && -f "$target/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib" ]]; then
+    framework="$target/Contents/Frameworks/Google Chrome Framework.framework"
+    for version in 154.0.8037.17 154.0.8037.45; do
+      if [[ ! -e "$framework/Versions/$version/.fixture-ad-hoc" ]]; then
+        printf '%s: a sealed resource is missing or invalid\n' "$target" >&2
+        printf 'In subcomponent: %s/Versions/%s\n' "$framework" "$version" >&2
+        exit 1
+      fi
+    done
+    if [[ ! -e "$target/.fixture-ad-hoc" ]]; then
+      printf '%s: a sealed resource is missing or invalid\n' "$target" >&2
+      printf 'In subcomponent: %s\n' "$framework" >&2
+      exit 1
+    fi
   fi
   exit 0
 fi
@@ -194,17 +204,23 @@ export PHASE3_FIXTURE_ENFORCE_DITTO_OPTIONS=1
 
 source_app="$fixture/Chrome Source.app"
 artifact="$fixture/artifact"
-mkdir -p "$source_app/Contents/MacOS" "$source_app/Contents/Resources" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS" "$artifact"
+framework="$source_app/Contents/Frameworks/Google Chrome Framework.framework"
+versions="$framework/Versions"
+legacy_version="$versions/154.0.8037.17"
+current_version="$versions/154.0.8037.45"
+mkdir -p "$source_app/Contents/MacOS" "$source_app/Contents/Resources" "$legacy_version" "$current_version/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS" "$artifact"
+ln -s 154.0.8037.45 "$versions/Current"
 cat > "$source_app/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>154.0.8037.45</string><key>CFBundleExecutable</key><string>Google Chrome</string></dict></plist>
 EOF
 printf '#!/usr/bin/env bash\nexit 0\n' > "$source_app/Contents/MacOS/Google Chrome"
-printf 'fixture framework\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Google Chrome Framework"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"
-chmod +x "$source_app/Contents/MacOS/Google Chrome" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Google Chrome Framework" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"
-google_update_agent="$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/GoogleUpdater.app/Contents/Helpers/GoogleSoftwareUpdate.bundle/Contents/Resources/GoogleSoftwareUpdateAgent.app"
+printf 'fixture legacy framework\n' > "$legacy_version/Google Chrome Framework"
+printf 'fixture current framework\n' > "$current_version/Google Chrome Framework"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$current_version/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"
+chmod +x "$source_app/Contents/MacOS/Google Chrome" "$legacy_version/Google Chrome Framework" "$current_version/Google Chrome Framework" "$current_version/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"
+google_update_agent="$current_version/Helpers/GoogleUpdater.app/Contents/Helpers/GoogleSoftwareUpdate.bundle/Contents/Resources/GoogleSoftwareUpdateAgent.app"
 mkdir -p "$google_update_agent/Contents/MacOS"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$google_update_agent/Contents/MacOS/GoogleSoftwareUpdateAgent"
 chmod +x "$google_update_agent/Contents/MacOS/GoogleSoftwareUpdateAgent"
@@ -355,6 +371,10 @@ run_evidence_receipt_policy_group() {
   "$prepare" "$source_app" "$artifact" "$focused_output"
   fixture_checkpoint evidence-after-prepare
   "$sign" "$focused_output" "$focused_results" --confirm-ad-hoc-signing
+  test -e "$focused_output/Contents/Frameworks/Google Chrome Framework.framework/Versions/154.0.8037.17/.fixture-ad-hoc"
+  test -e "$focused_output/Contents/Frameworks/Google Chrome Framework.framework/Versions/154.0.8037.45/.fixture-ad-hoc"
+  grep -F 'Versions/154.0.8037.17' "$PHASE3_FIXTURE_LOG" >/dev/null
+  grep -F 'Versions/154.0.8037.45' "$PHASE3_FIXTURE_LOG" >/dev/null
   fixture_checkpoint evidence-after-sign
 
   export PHASE3_FIXTURE_LIBRARIES="$focused_libraries"
@@ -637,8 +657,8 @@ expect_fail "$run" CASE_B "$output_signed" "$fixture/case-already-running"
 
 run_evidence_receipt_policy_group
 sign_script="$repo_root/scripts/sign-chrome-angle-test-copy.sh"
-grep -F "find -P \"\$framework\" -type d" "$sign_script" >/dev/null
-grep -F ".bundle" "$sign_script" >/dev/null
-grep -F "codesign nested Mach-O files" "$sign_script" >/dev/null
+grep -F 'phase3_sign_versioned_framework' "$sign_script" >/dev/null
+grep -F 'framework-version' "$sign_script" >/dev/null
+grep -F 'find -P "\$versions_dir" -mindepth 1 -maxdepth 1 -type d -print0' "$sign_script" >/dev/null
 ! grep -F "codesign --force --sign - --deep" "$sign_script" >/dev/null
 printf 'phase3b fixture tests passed\n'

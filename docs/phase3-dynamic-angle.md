@@ -30,11 +30,11 @@ GN、Ninja（`libEGL libGLESv2`、1314 target）、artifact検証、uploadは成
 
 両dylibのinstall nameはそれぞれ`./libEGL.dylib`、`./libGLESv2.dylib`であり、`otool -L`先頭の同名項目は自己IDとして依存判定から除外した。残る依存は`/System/Library`または`/usr/lib`のみであり、非system依存、runner固有絶対path、未解決依存は検出されなかった。これはartifactの形式検証結果であり、未署名dylibをChromeが実機でloadできることを意味しない。Chrome app、xattr、署名、プロファイル、KOOVはこのrunおよびartifact検証で操作していない。
 
-## Phase 3B のtest copyと署名境界（実機preflightはretry4-7で停止、実署名・Chrome/KOOV・retry8再試行未実施）
+## Phase 3B のtest copyと署名境界（retry4-8は保存済み失敗、retry9は未実施）
 
 `scripts/download-angle-artifact.sh`はrun `35515036255`のartifactだけを取得し、`libEGL.dylib`の`f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`と`libGLESv2.dylib`の`8d3d188d3d4f23cf3f96ecea209b084c6db9c6192244f879cfb6bf0fb2e02cf0`を固定して検証する。artifactにはANGLE revision、build environment、GN args、2本のdylib、形式/署名/`otool` report、root `LICENSE`、`licenses/LICENSE`がある。dylibはthin x86_64 Mach-Oで未署名、自己install name以外の依存はsystem libraryだけである。
 
-固定ANGLE [`update_chrome_angle.py` 35–43行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/scripts/update_chrome_angle.py#35)はmacOSのCanary Framework `Libraries`を対象に2本のdylibとcomponent build用optional dylibを定義し、[`114–118行`](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/scripts/update_chrome_angle.py#114)で`xattr -cr`と`codesign --force --sign - --deep`を実行する。Phase 3Bのsign scriptは署名方式を変えず、この方式を**user-owned test copyだけ**に採用する。`--preserve-metadata`などは追加しない。Library Validationやentitlementsへの効果は推測せず、署名前後のdetails、CodeDirectory flags、TeamIdentifier、Authority、Runtime、entitlementsを保存して比較する。
+固定ANGLE [`update_chrome_angle.py` 35–43行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/scripts/update_chrome_angle.py#35)はmacOSのCanary Framework `Libraries`を対象に2本のdylibとcomponent build用optional dylibを定義し、[`114–118行`](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/scripts/update_chrome_angle.py#114)で`xattr -cr`と`codesign --force --sign - --deep`を実行する。Phase 3Bのtest copyでは、`--deep`での署名は使わない。ChromeのFrameworkは複数の具体versionを持つため、各`Versions/<version>`配下を内側から署名・strict検証し、最後にmain executableとappを署名する。Framework rootへの一括署名は行わない。これは[Appleのversioned framework手順](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/Procedures/Procedures.html)に合わせるものであり、Library Validationやentitlementsへの効果は推測せず、署名前後のdetails、CodeDirectory flags、TeamIdentifier、Authority、Runtime、entitlementsを保存して比較する。
 
 `prepare-chrome-angle-test-copy.sh`はsource/outputを明示指定し、root、`/Applications`、symlink component、既存output、非所有parent、version/x86_64/SHA mismatchを拒否する。copyには`ditto --norsrc --noextattr --noacl --noqtn`を使い、resource fork/HFS metadata、extended attributes、ACL、quarantineを持ち込まない。これはtest-only copyであり、通常利用・配布を目的としない。copyのFinderInfo/ResourceFork不在、Info.plist・Resources・main/Framework/GPU Helperの必要componentと実行属性、strict signature検証成功を確認してから2本だけを配置する。sourceのmain executable、Framework、GPU Helperは前後で読み取り検証する。dylib配置によるcopyのGoogle署名無効化は記録するが、このscriptは再署名も起動も行わない。
 
@@ -44,7 +44,7 @@ prepareはapp外部にread-only manifest v4と別SHA-256 fileを作る。v2/v3�
 
 `collect-phase3-evidence.sh`は署名前後のsignature/entitlement record、dylib hashと署名、GPU PID/command、`lsof`または`vmmap`を保存する。`--use-dynamic-angle`は要求の証拠に過ぎず、両dylibのtest copy内絶対pathが同一GPU processで確認できた場合だけ外部ANGLEロードを確認済みとする。KOOV、Family 1改修、Case B/C実機起動はさらに後であり、今回未実施である。
 
-### Phase 3B manifest schema v4 のfixture確認（実機preflightはretry4-7で停止、実署名・Chrome/KOOV・retry8再試行未実施）
+### Phase 3B manifest schema v4 のfixture確認（retry4-8は保存済み失敗、retry9は未実施）
 
 完全なfixture acceptanceは、固定SHAのActionsを使う
 `.github/workflows/phase3b-fixtures.yml`を`macos-15-intel`で実行した結果だけを正式判定とする。
@@ -64,22 +64,22 @@ runner/service failure permits a rerun. Retry3 remains a saved failure/no-op.
 `scripts/run-phase3c-preflight.sh` は `SOURCE_APP`、`ARTIFACT_DIR`、
 `OUTPUT_APP`、`RESULTS_DIR` を明示指定し、branch clean、入力の非symlink、
 Chrome version/x86_64、source process不在、固定artifact revision/SHA、
-新規かつ安全なoutput/results、collision、retry0-6拒否を検証する。CIでは
+新規かつ安全なoutput/results、collision、retry0-8拒否を検証する。CIでは
 synthetic inputに対して一度だけprepareし、schema/hash/inventoryをcommon
 validationで再検証し、read-only inspection/signature evidenceを保存する。
 sign scriptは`--dry-run`だけを呼び、署名、起動、削除、xattr変更は行わない。
 results directory作成後は、その内部にappend-onlyのstep journalとauthoritative final resultを保存する。read-only gateまたはroot作成前の失敗ではresultsを安全に作成できないため、journal/resultがないこと自体をその境界として扱う。
-retry4はdirectory entryを表現できないためprepare中に停止した保存済みfailureであり、再利用しない。retry5の報告不整合は`inconsistent-reporting-preserved`として記録だけを保持し、copy-before全component成功、unsigned prepared/manifest-v4/inventory/sign dry-runのevidenceを保存する。retry5を署名・再利用せず、retry7再試行とreal signing/launchは未実施である。
+retry4はdirectory entryを表現できないためprepare中に停止した保存済みfailureであり、再利用しない。retry5の報告不整合は`inconsistent-reporting-preserved`として記録だけを保持する。retry7はnested bundle未署名、retry8はversioned Framework root署名の不整合で停止した保存済みfailureであり、いずれも再利用しない。retry9より前に、CIで複数Framework versionを再現して署名順を検証する。
 read-only sourceの既存`/Applications`配置は検証対象として許可するが、
 writable output/resultsの`/Applications`配置は拒否する。このpath-role修正は
-synthetic CIの初回failureを受けたものであり、retry7の再試行には改めて承認が必要である。
+synthetic CIの初回failureを受けたものであり、retry9の実機試行には改めて承認が必要である。
 
 | path role | lifecycle rule |
 | --- | --- |
 | existing source/artifact | regular non-symlink input; source may be an existing absolute app under `/Applications` |
-| prospective retry root | absent `retry7` or labeled `*-retry7`, one lexical level below an existing regular non-symlink parent; no `..` or symlink components; retry0-6 reserved |
+| prospective retry root | absent `retry9` or labeled `*-retry9`, one lexical level below an existing regular non-symlink parent; no `..` or symlink components; retry0-8 reserved |
 | output/results | absent direct children of that root; root is created only after all read-only gates, then results is created and prepare creates output |
-| protected paths | root, `/Applications` destinations, source/evidence, retry0-6, collisions, and post-create canonical/symlink drift are rejected |
+| protected paths | root, `/Applications` destinations, source/evidence, retry0-8, collisions, and post-create canonical/symlink drift are rejected |
 
 The preflight fixture directly covers absent-root success, existing or missing/
 symlinked parents, an existing root, `/Applications` and source-contained
@@ -91,12 +91,12 @@ absence are checked afterward. The root is created once, results once, and no
 automatic cleanup or retry is performed.
 The third CI stop was caused by requiring the root basename to be exactly
 `retry4`; the retained retry4 failure is not reused. Approved labeled roots
-such as `phase3c-preflight-retry7` are now accepted, while retry0-6 labels
+such as `phase3c-preflight-retry9` are accepted, while retry0-8 labels
 remain reserved. The process snapshot keeps
 the fixed snapshot method but excludes the current preflight PID before
 matching the source executable; a different matching PID remains a rejection.
 
-manifestはschema v4を必須とし、v2/v3は拒否する。Libraries inventoryは再帰TSVで、rootを除く相対pathごとに`dir`、`file`、`symlink`を記録し、source baseline、copy baseline、post-installの各inventoryとSHA sidecarを保存する。特殊entry、制御文字、symlink cycleを追跡せずに拒否する。copy前のbaseline inventoryはsource/copyで一致し、post-installはbaseline全entryにtop-levelの`libEGL.dylib`と`libGLESv2.dylib`だけを固定SHAで追加する。ANGLE名collision、未知entry、型変更、hash/sidecar/manifest改変、壊れた・外部を指す`Libraries` symlinkは拒否する。sign/run/collectは3 inventory、3 sidecar、3 manifest hashを再検証する。`evidence-receipt-policy` groupはこれらの再検証、policy mismatch、strict/non-ad-hoc signature、receipt改変をまとめて確認し、full suiteもこのgroupを再利用する。retry4は表現できないdirectory entryで停止した保存済みfailureとして再利用せず保持し、次の承認対象はretry7である。今回もChrome、GPU Helper、profile、KOOVの起動や実機test、実署名は行っていない。
+manifestはschema v4を必須とし、v2/v3は拒否する。Libraries inventoryは再帰TSVで、rootを除く相対pathごとに`dir`、`file`、`symlink`を記録し、source baseline、copy baseline、post-installの各inventoryとSHA sidecarを保存する。特殊entry、制御文字、symlink cycleを追跡せずに拒否する。copy前のbaseline inventoryはsource/copyで一致し、post-installはbaseline全entryにtop-levelの`libEGL.dylib`と`libGLESv2.dylib`だけを固定SHAで追加する。ANGLE名collision、未知entry、型変更、hash/sidecar/manifest改変、壊れた・外部を指す`Libraries` symlinkは拒否する。sign/run/collectは3 inventory、3 sidecar、3 manifest hashを再検証する。`evidence-receipt-policy` groupはこれらの再検証、policy mismatch、strict/non-ad-hoc signature、receipt改変をまとめて確認し、full suiteもこのgroupを再利用する。retry4-8は保存済みfailureとして再利用せず保持し、次の承認対象はretry9である。今回もChrome、GPU Helper、profile、KOOVの起動や実機test、実署名は行っていない。
 
 ### Source metadata とclean copyのstrict gate
 
