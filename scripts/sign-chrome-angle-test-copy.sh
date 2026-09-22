@@ -100,9 +100,10 @@ phase3_sign_nested_components() {
   local main_executable=$4
   local results_dir=$5
 
-  # Apple requires versioned frameworks to be signed one concrete version at a
-  # time. Signing only the Framework root covers Current, not old versions.
+  # Sign every concrete version first, then the Framework root. The root
+  # signature covers the Framework bundle's symlinked Current layout.
   phase3_sign_versioned_framework "$codesign_executable" "$framework" "$results_dir"
+  phase3_sign_target "$codesign_executable" "$framework"
   phase3_sign_target "$codesign_executable" "$main_executable"
   phase3_sign_target "$codesign_executable" "$test_app_real"
 }
