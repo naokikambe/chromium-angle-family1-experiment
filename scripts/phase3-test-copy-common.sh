@@ -362,6 +362,7 @@ phase3_validate_manifest() {
 
 phase3_validate_signed_test_copy() {
   local app=$1
+  local codesign_executable=${2:-/usr/bin/codesign}
   local manifest
   local receipt
   local manifest_sha256
@@ -381,8 +382,8 @@ phase3_validate_signed_test_copy() {
   manifest_sha256=$(phase3_hash "$manifest")
   [[ "$(phase3_manifest_value "$receipt" 'PREPARE_MANIFEST_SHA256')" == "$manifest_sha256" ]] ||
     phase3_fail 'signing receipt does not match the current preparation manifest'
-  phase3_run_codesign /usr/bin/codesign --verify --deep --strict "$app" || phase3_fail 'test copy strict signature verification failed'
-  phase3_run_codesign /usr/bin/codesign -dvvv "$app" 2>&1 | grep -F 'Signature=adhoc' >/dev/null ||
+  phase3_run_codesign "$codesign_executable" --verify --deep --strict "$app" || phase3_fail 'test copy strict signature verification failed'
+  phase3_run_codesign "$codesign_executable" -dvvv "$app" 2>&1 | grep -F 'Signature=adhoc' >/dev/null ||
     phase3_fail 'test copy is not currently ad-hoc signed'
 }
 
@@ -412,7 +413,8 @@ phase3_snapshot_matching_processes() {
 phase3_capture_signature() {
   local destination_prefix=$1
   local target=$2
-  phase3_run_codesign /usr/bin/codesign -dvvv "$target" > "${destination_prefix}-details.txt" 2>&1 || true
-  phase3_run_codesign /usr/bin/codesign -d --entitlements :- "$target" > "${destination_prefix}-entitlements.txt" 2>&1 || true
-  phase3_run_codesign /usr/bin/codesign --verify --deep --strict "$target" > "${destination_prefix}-strict-verify.txt" 2>&1 || true
+  local codesign_executable=${3:-/usr/bin/codesign}
+  phase3_run_codesign "$codesign_executable" -dvvv "$target" > "${destination_prefix}-details.txt" 2>&1 || true
+  phase3_run_codesign "$codesign_executable" -d --entitlements :- "$target" > "${destination_prefix}-entitlements.txt" 2>&1 || true
+  phase3_run_codesign "$codesign_executable" --verify --deep --strict "$target" > "${destination_prefix}-strict-verify.txt" 2>&1 || true
 }

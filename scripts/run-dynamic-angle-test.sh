@@ -3,15 +3,19 @@ set -euo pipefail
 
 PHASE3_SCRIPT_NAME='run-dynamic-angle-test'
 readonly PHASE3_SCRIPT_NAME
-source "$(cd "$(dirname "$0")" && pwd -P)/phase3-test-copy-common.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/phase3-test-copy-common.sh"
 
+phase3_run_main() {
+local codesign_executable=$1
+shift
+[[ -x "$codesign_executable" ]] || phase3_fail "required codesign executable is unavailable: $codesign_executable"
 [[ $# -eq 3 ]] || { printf 'usage: %s CASE_B|CASE_C TEST_CHROME_APP RESULTS_DIRECTORY\n' "$0" >&2; exit 64; }
 phase3_reject_root
 test_case=$1
 test_app=$2
 results_dir=$3
 case "$test_case" in CASE_B|CASE_C) ;; *) phase3_fail 'case must be CASE_B or CASE_C' ;; esac
-for command in lipo codesign shasum ps awk; do command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"; done
+for command in lipo shasum ps awk; do command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"; done
 [[ -d "$test_app" ]] || phase3_fail "test app does not exist: $test_app"
 [[ ! -e "$results_dir" && ! -L "$results_dir" ]] || phase3_fail "refusing existing results: $results_dir"
 test_app_real=$(phase3_real_directory "$test_app")
@@ -20,7 +24,7 @@ results_parent_real=$(phase3_real_directory "$(dirname "$results_dir")")
 phase3_require_user_owned_directory "$results_parent_real"
 results_real="$results_parent_real/$(basename "$results_dir")"
 phase3_reject_symlink_components "$results_real"
-phase3_validate_signed_test_copy "$test_app_real"
+phase3_validate_signed_test_copy "$test_app_real" "$codesign_executable"
 
 info_plist="$test_app_real/Contents/Info.plist"
 chrome_version=$(phase3_plist_value CFBundleShortVersionString "$info_plist") || phase3_fail 'cannot read Chrome version'
@@ -76,3 +80,8 @@ printf '%s\n' 'This test copy is ad-hoc signed and is not for normal browsing or
 browser_pid=$!
 printf '%s\n' "$browser_pid" > "$results_real/browser.pid"
 printf 'Chrome launched as PID %s. Independent profile retained at: %s\n' "$browser_pid" "$profile_dir"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  phase3_run_main /usr/bin/codesign "$@"
+fi

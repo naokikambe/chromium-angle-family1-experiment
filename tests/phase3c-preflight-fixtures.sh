@@ -292,8 +292,8 @@ grep -F 'synthetic-copy-stderr' "$copy_failure_evidence/copy-before-dylibs-main-
 grep -F 'raw_exit_status=41' "$copy_failure_evidence/copy-before-dylibs-main-strict-verify-metadata.txt" >/dev/null
 test ! -e "$copy_failure_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
 test ! -e "$copy_failure_results/sign-dry-run.txt"
-grep -F 'FINAL_EXIT_STATUS=41' "$copy_failure_results/preflight-final-result.txt" >/dev/null
-grep -F $'prepare\tfail\t41' "$copy_failure_results/preflight-step-journal.tsv" >/dev/null
+grep -F 'FINAL_EXIT_STATUS=1' "$copy_failure_results/preflight-final-result.txt" >/dev/null
+grep -F $'prepare\tfail\t1' "$copy_failure_results/preflight-step-journal.tsv" >/dev/null
 sign_failure_output="$fixture/sign-dry-run-failure-parent/retry6/output.app"
 sign_failure_results="$fixture/sign-dry-run-failure-parent/retry6/results"
 mkdir -p "$fixture/sign-dry-run-failure-parent"

@@ -3,7 +3,7 @@ set -euo pipefail
 
 PHASE3_SCRIPT_NAME='collect-phase3-evidence'
 readonly PHASE3_SCRIPT_NAME
-source "$(cd "$(dirname "$0")" && pwd -P)/phase3-test-copy-common.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/phase3-test-copy-common.sh"
 
 capture() {
   local destination=$1
@@ -11,17 +11,21 @@ capture() {
   if "$@" > "$destination" 2>&1; then printf 'status: success\n' >> "$destination"; else printf 'status: failed (%s)\n' "$?" >> "$destination"; fi
 }
 
+phase3_collect_main() {
+local codesign_executable=$1
+shift
+[[ -x "$codesign_executable" ]] || phase3_fail "required codesign executable is unavailable: $codesign_executable"
 [[ $# -eq 2 ]] || { printf 'usage: %s TEST_CHROME_APP RESULTS_DIRECTORY\n' "$0" >&2; exit 64; }
 phase3_reject_root
 test_app=$1
 results_dir=$2
-for command in codesign file otool shasum ps awk find; do command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"; done
+for command in file otool shasum ps awk find; do command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"; done
 [[ -d "$test_app" ]] || phase3_fail "test app does not exist: $test_app"
 [[ -d "$results_dir" && ! -L "$results_dir" ]] || phase3_fail "results directory does not exist: $results_dir"
 test_app_real=$(phase3_real_directory "$test_app")
 phase3_reject_applications_path "$test_app_real"
 results_real=$(phase3_real_directory "$results_dir")
-phase3_validate_signed_test_copy "$test_app_real"
+phase3_validate_signed_test_copy "$test_app_real" "$codesign_executable"
 
 manifest=$(phase3_manifest_path "$test_app_real")
 receipt=$(phase3_receipt_path "$test_app_real")
@@ -33,17 +37,17 @@ main_executable="$test_app_real/Contents/MacOS/$executable_name"
 gpu_helper=$(find "$framework" -type f -path '*/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)' -print -quit)
 [[ -n "$gpu_helper" ]] || phase3_fail 'GPU Helper is missing'
 
-phase3_capture_signature "$results_real/test-copy-current" "$test_app_real"
-phase3_capture_signature "$results_real/main-current" "$main_executable"
-phase3_capture_signature "$results_real/framework-current" "$framework"
-phase3_capture_signature "$results_real/gpu-helper-current" "$gpu_helper"
-if [[ -d "$source_app" && ! -L "$source_app" ]]; then phase3_capture_signature "$results_real/source-current-read-only" "$source_app"; fi
+phase3_capture_signature "$results_real/test-copy-current" "$test_app_real" "$codesign_executable"
+phase3_capture_signature "$results_real/main-current" "$main_executable" "$codesign_executable"
+phase3_capture_signature "$results_real/framework-current" "$framework" "$codesign_executable"
+phase3_capture_signature "$results_real/gpu-helper-current" "$gpu_helper" "$codesign_executable"
+if [[ -d "$source_app" && ! -L "$source_app" ]]; then phase3_capture_signature "$results_real/source-current-read-only" "$source_app" "$codesign_executable"; fi
 for library in libEGL.dylib libGLESv2.dylib; do
   library_path="$libraries_dir/$library"
   capture "$results_real/${library}.file.txt" file "$library_path"
   capture "$results_real/${library}.otool-D.txt" otool -D "$library_path"
   capture "$results_real/${library}.otool-L.txt" otool -L "$library_path"
-  phase3_capture_signature "$results_real/${library}" "$library_path"
+  phase3_capture_signature "$results_real/${library}" "$library_path" "$codesign_executable"
 done
 shasum -a 256 "$libraries_dir/libEGL.dylib" "$libraries_dir/libGLESv2.dylib" > "$results_real/dylib-sha256.txt"
 
@@ -85,3 +89,8 @@ cat > "$results_real/chrome-gpu-manual.txt" <<'EOF'
 Save chrome://gpu from the isolated test app after the run. Record GPU process crash count, GL implementation parts, Display type, GL_VENDOR, GL_RENDERER, WebGL, Compositing, Rasterization, and EGL/Metal errors. Command-line switches are not load proof: report external ANGLE as loaded only when lsof, vmmap, or equivalent direct evidence names both test-copy dylib absolute paths.
 EOF
 printf 'evidence collection complete: %s\n' "$results_real"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  phase3_collect_main /usr/bin/codesign "$@"
+fi

@@ -241,6 +241,24 @@ chmod +x "$sign"
 grep -F 'phase3_sign_main /usr/bin/codesign' "$production_sign" >/dev/null
 run="$repo_root/scripts/run-dynamic-angle-test.sh"
 collect="$repo_root/scripts/collect-phase3-evidence.sh"
+run_wrapper="$fixture/run-wrapper"
+cat > "$run_wrapper" <<EOF
+#!/usr/bin/env bash
+source "$run"
+phase3_run_main "$stub_dir/codesign" "\$@"
+EOF
+chmod +x "$run_wrapper"
+run="$run_wrapper"
+collect_wrapper="$fixture/collect-wrapper"
+cat > "$collect_wrapper" <<EOF
+#!/usr/bin/env bash
+source "$collect"
+phase3_collect_main "$stub_dir/codesign" "\$@"
+EOF
+chmod +x "$collect_wrapper"
+collect="$collect_wrapper"
+grep -F 'phase3_run_main /usr/bin/codesign' "$repo_root/scripts/run-dynamic-angle-test.sh" >/dev/null
+grep -F 'phase3_collect_main /usr/bin/codesign' "$repo_root/scripts/collect-phase3-evidence.sh" >/dev/null
 output="$fixture/output with spaces/Google Chrome 154 ANGLE Test.app"
 output_after_tamper="$fixture/output after tamper/Google Chrome 154 ANGLE Test.app"
 
