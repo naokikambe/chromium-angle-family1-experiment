@@ -375,7 +375,8 @@ phase3_validate_signed_test_copy() {
     phase3_fail 'unsupported signing receipt schema'
   [[ "$(phase3_manifest_value "$receipt" 'TEST_APP')" == "$app" ]] ||
     phase3_fail 'signing receipt app path does not match'
-  [[ "$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')" == 'ad-hoc-deep' ]] ||
+  [[ "$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')" == 'ad-hoc-deep' || \
+      "$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')" == 'ad-hoc-nested' ]] ||
     phase3_fail 'test copy was not ad-hoc signed'
   [[ "$(phase3_manifest_value "$receipt" 'STRICT_VERIFICATION')" == 'passed' ]] ||
     phase3_fail 'signing receipt does not record strict verification'
