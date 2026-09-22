@@ -164,7 +164,7 @@ for argument in "$@"; do
     verify_requested=1
   fi
 done
-if [[ "${PHASE3C_INJECT_MODE:-success}" == copy-fail && "$verify_requested" == 1 && "$target" == */Contents/MacOS/Google\ Chrome ]]; then
+if [[ "${PHASE3C_INJECT_MODE:-success}" == copy-fail && "$verify_requested" == 1 && "$target" == */Contents/MacOS/Google\ Chrome && "$target" != "${PHASE3C_SOURCE_MAIN:-}" ]]; then
   printf 'synthetic-copy-stdout\n'
   printf 'synthetic-copy-stderr\n' >&2
   exit 41
@@ -219,6 +219,7 @@ printf '#!/bin/sh\nexit 0\n' > "$source_app/Contents/MacOS/Google Chrome"
 printf 'framework\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Google Chrome Framework"
 printf '#!/bin/sh\nexit 0\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"
 chmod +x "$source_app/Contents/MacOS/Google Chrome" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current/Google Chrome Framework" "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"
+export PHASE3C_SOURCE_MAIN="$source_app/Contents/MacOS/Google Chrome"
 printf 'baseline\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libchrome.dylib"
 mkdir -p "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/IwaKeyDistribution/nested"
 printf 'nested baseline\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/IwaKeyDistribution/nested/file"

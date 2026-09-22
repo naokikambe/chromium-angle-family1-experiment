@@ -3,13 +3,24 @@ set -euo pipefail
 
 PHASE3_SCRIPT_NAME='sign-chrome-angle-test-copy'
 readonly PHASE3_SCRIPT_NAME
-source "$(cd "$(dirname "$0")" && pwd -P)/phase3-test-copy-common.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/phase3-test-copy-common.sh"
 
 usage() {
   printf 'usage: %s TEST_CHROME_APP RESULTS_DIRECTORY [--dry-run] [--confirm-ad-hoc-signing]\n' "$0" >&2
   exit 64
 }
 
+phase3_sign_capture_signature() {
+  local executable=$1 destination_prefix=$2 target=$3
+  phase3_run_codesign "$executable" -dvvv "$target" > "${destination_prefix}-details.txt" 2>&1 || true
+  phase3_run_codesign "$executable" -d --entitlements :- "$target" > "${destination_prefix}-entitlements.txt" 2>&1 || true
+  phase3_run_codesign "$executable" --verify --deep --strict "$target" > "${destination_prefix}-strict-verify.txt" 2>&1 || true
+}
+
+phase3_sign_main() {
+local codesign_executable=$1
+shift
+[[ -x "$codesign_executable" ]] || phase3_fail "required codesign executable is unavailable: $codesign_executable"
 dry_run=false
 confirmed=false
 [[ $# -ge 2 ]] || usage
@@ -55,7 +66,7 @@ fi
 for command in xattr shasum find; do
   command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"
 done
-[[ -x /usr/bin/codesign ]] || phase3_fail 'required production codesign executable is unavailable: /usr/bin/codesign'
+[[ -x "$codesign_executable" ]] || phase3_fail "required codesign executable is unavailable: $codesign_executable"
 [[ ! -e "$receipt" && ! -e "$receipt_hash" ]] || phase3_fail 'refusing to replace an existing signing receipt'
 
 printf '%s\n' 'WARNING: this will remove extended attributes and replace Google Developer ID/notarized signatures with ad-hoc signatures on the test copy only.' >&2
@@ -73,34 +84,34 @@ source_version=$(phase3_manifest_value "$manifest" 'SOURCE_CHROME_VERSION')
   printf 'timestamp_utc=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 } > "$results_real/signing-metadata.txt"
 
-phase3_capture_signature "$results_real/test-app-before" "$test_app_real"
+phase3_sign_capture_signature "$codesign_executable" "$results_real/test-app-before" "$test_app_real"
 if [[ -d "$source_app" && ! -L "$source_app" ]]; then
-  phase3_capture_signature "$results_real/source-app-read-only" "$source_app"
+  phase3_sign_capture_signature "$codesign_executable" "$results_real/source-app-read-only" "$source_app"
 fi
 framework="$test_app_real/Contents/Frameworks/Google Chrome Framework.framework"
 executable_name=$(phase3_plist_value CFBundleExecutable "$test_app_real/Contents/Info.plist") || phase3_fail 'cannot read test app executable name'
 main_executable="$test_app_real/Contents/MacOS/$executable_name"
 gpu_helper=$(find "$framework" -type f -path '*/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)' -print -quit)
 [[ -x "$main_executable" && -n "$gpu_helper" ]] || phase3_fail 'test app signing targets are missing'
-phase3_capture_signature "$results_real/main-before" "$main_executable"
-phase3_capture_signature "$results_real/framework-before" "$framework"
-phase3_capture_signature "$results_real/gpu-helper-before" "$gpu_helper"
-phase3_capture_signature "$results_real/libEGL-before" "$framework/Libraries/libEGL.dylib"
-phase3_capture_signature "$results_real/libGLESv2-before" "$framework/Libraries/libGLESv2.dylib"
+phase3_sign_capture_signature "$codesign_executable" "$results_real/main-before" "$main_executable"
+phase3_sign_capture_signature "$codesign_executable" "$results_real/framework-before" "$framework"
+phase3_sign_capture_signature "$codesign_executable" "$results_real/gpu-helper-before" "$gpu_helper"
+phase3_sign_capture_signature "$codesign_executable" "$results_real/libEGL-before" "$framework/Libraries/libEGL.dylib"
+phase3_sign_capture_signature "$codesign_executable" "$results_real/libGLESv2-before" "$framework/Libraries/libGLESv2.dylib"
 
 # Matches the fixed ANGLE update_chrome_angle.py signing mode. No metadata
 # preservation flags are added; their effect on Library Validation is not assumed.
-sign_command=(/usr/bin/codesign --force --sign - --deep "$test_app_real")
+sign_command=("$codesign_executable" --force --sign - --deep "$test_app_real")
 xattr -cr "$test_app_real"
 "${sign_command[@]}"
-phase3_run_codesign /usr/bin/codesign --verify --deep --strict "$test_app_real" || phase3_fail 'ad-hoc signed test copy failed strict verification'
+phase3_run_codesign "$codesign_executable" --verify --deep --strict "$test_app_real" || phase3_fail 'ad-hoc signed test copy failed strict verification'
 
-phase3_capture_signature "$results_real/test-app-after" "$test_app_real"
-phase3_capture_signature "$results_real/main-after" "$main_executable"
-phase3_capture_signature "$results_real/framework-after" "$framework"
-phase3_capture_signature "$results_real/gpu-helper-after" "$gpu_helper"
-phase3_capture_signature "$results_real/libEGL-after" "$framework/Libraries/libEGL.dylib"
-phase3_capture_signature "$results_real/libGLESv2-after" "$framework/Libraries/libGLESv2.dylib"
+phase3_sign_capture_signature "$codesign_executable" "$results_real/test-app-after" "$test_app_real"
+phase3_sign_capture_signature "$codesign_executable" "$results_real/main-after" "$main_executable"
+phase3_sign_capture_signature "$codesign_executable" "$results_real/framework-after" "$framework"
+phase3_sign_capture_signature "$codesign_executable" "$results_real/gpu-helper-after" "$gpu_helper"
+phase3_sign_capture_signature "$codesign_executable" "$results_real/libEGL-after" "$framework/Libraries/libEGL.dylib"
+phase3_sign_capture_signature "$codesign_executable" "$results_real/libGLESv2-after" "$framework/Libraries/libGLESv2.dylib"
 for component in test-app main framework gpu-helper libEGL libGLESv2; do
   diff -u "$results_real/${component}-before-details.txt" "$results_real/${component}-after-details.txt" > "$results_real/${component}-details.diff" || true
   diff -u "$results_real/${component}-before-entitlements.txt" "$results_real/${component}-after-entitlements.txt" > "$results_real/${component}-entitlements.diff" || true
@@ -119,3 +130,8 @@ grep -F 'Signature=adhoc' "$results_real/test-app-after-details.txt" >/dev/null 
 } > "$receipt"
 phase3_write_hash_file "$receipt" "$receipt_hash"
 printf 'ad-hoc signing completed only for test copy: %s\n' "$test_app_real"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  phase3_sign_main /usr/bin/codesign "$@"
+fi

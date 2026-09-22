@@ -230,7 +230,15 @@ phase3_prepare_main "\$@" "$stub_dir/codesign"
 EOF
 chmod +x "$prepare"
 grep -F 'phase3_prepare_main "$@" /usr/bin/codesign' "$production_prepare" >/dev/null
-sign="$repo_root/scripts/sign-chrome-angle-test-copy.sh"
+production_sign="$repo_root/scripts/sign-chrome-angle-test-copy.sh"
+sign="$fixture/sign-wrapper"
+cat > "$sign" <<EOF
+#!/usr/bin/env bash
+source "$production_sign"
+phase3_sign_main "$stub_dir/codesign" "\$@"
+EOF
+chmod +x "$sign"
+grep -F 'phase3_sign_main /usr/bin/codesign' "$production_sign" >/dev/null
 run="$repo_root/scripts/run-dynamic-angle-test.sh"
 collect="$repo_root/scripts/collect-phase3-evidence.sh"
 output="$fixture/output with spaces/Google Chrome 154 ANGLE Test.app"
