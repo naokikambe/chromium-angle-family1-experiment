@@ -47,6 +47,17 @@ if [[ " $* " == *' --verify '* ]]; then
   fi
   if [[ "$target" == *'ANGLE Test.app'* && -f "$target/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib" ]]; then
     framework="$target/Contents/Frameworks/Google Chrome Framework.framework"
+
+    # During prepare, unsigned ANGLE dylibs must produce the original
+    # Framework-root error expected by prepare's post-install gate.
+    if [[ ! -e "$target/.fixture-ad-hoc" ]]; then
+      printf '%s: a sealed resource is missing or invalid\n' "$target" >&2
+      printf 'In subcomponent: %s\n' "$framework" >&2
+      exit 1
+    fi
+
+    # Once the test app is ad-hoc signed, require every concrete Framework
+    # version to have been signed as well.
     for version in 154.0.8037.17 154.0.8037.45; do
       if [[ ! -e "$framework/Versions/$version/.fixture-ad-hoc" ]]; then
         printf '%s: a sealed resource is missing or invalid\n' "$target" >&2
@@ -54,11 +65,6 @@ if [[ " $* " == *' --verify '* ]]; then
         exit 1
       fi
     done
-    if [[ ! -e "$target/.fixture-ad-hoc" ]]; then
-      printf '%s: a sealed resource is missing or invalid\n' "$target" >&2
-      printf 'In subcomponent: %s\n' "$framework" >&2
-      exit 1
-    fi
   fi
   exit 0
 fi
