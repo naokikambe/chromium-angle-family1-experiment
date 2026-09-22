@@ -115,6 +115,17 @@ case "${DITTO_BASELINE_MUTATION:-}" in
   link) rm -f "$target_libraries/baseline-link"; ln -s changed-target "$target_libraries/baseline-link" ;;
   control-name) mv "$target_libraries/libaperitif.dylib" "$target_libraries/libaperitif"$'\t'"name.dylib" ;;
   control-link) control_target=$'changed\t-target'; rm -f "$target_libraries/baseline-link"; ln -s "$control_target" "$target_libraries/baseline-link" ;;
+  nested-missing) rm -f "$target_libraries/nested/deeper/nested-file.dylib" ;;
+  nested-sha) printf 'changed\n' > "$target_libraries/nested/deeper/nested-file.dylib" ;;
+  nested-add) printf 'unexpected\n' > "$target_libraries/nested/deeper/nested-added.dylib" ;;
+  nested-type) rm -f "$target_libraries/nested/deeper/nested-file.dylib"; mkdir "$target_libraries/nested/deeper/nested-file.dylib" ;;
+  nested-link) rm -f "$target_libraries/nested/deeper/nested-file.dylib"; ln -s changed-target "$target_libraries/nested/deeper/nested-file.dylib" ;;
+  nested-special) mkfifo "$target_libraries/nested/deeper/unexpected.fifo" ;;
+  nested-socket) ruby -rsocket -e 'socket = Socket.new(Socket::AF_UNIX, Socket::SOCK_STREAM, 0); socket.bind(Socket.sockaddr_un(ARGV.fetch(0))); socket.close' "$target_libraries/nested/deeper/unexpected.sock" ;;
+  nested-control-name) mv "$target_libraries/nested/deeper/nested-file.dylib" "$target_libraries/nested/deeper/nested"$'\t'"file.dylib" ;;
+  nested-control-link) rm -f "$target_libraries/nested/internal-link"; ln -s $'changed\t-target' "$target_libraries/nested/internal-link" ;;
+  nested-control-name-newline) mv "$target_libraries/nested/deeper/nested-file.dylib" "$target_libraries/nested/deeper/nested"$'\n'"file.dylib" ;;
+  nested-control-link-newline) rm -f "$target_libraries/nested/internal-link"; ln -s $'changed\n-target' "$target_libraries/nested/internal-link" ;;
 esac
 case "${DITTO_COPY_MUTATION:-}" in
   missing-main) mv "$output/Contents/MacOS/Google Chrome" "$output/Contents/MacOS/Google Chrome.missing" ;;
@@ -193,6 +204,17 @@ for baseline_name in libaperitif.dylib libchromecompaneros.dylib liboptimization
 done
 ln -s baseline-target "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/baseline-link"
 printf 'fixture baseline target\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/baseline-target"
+mkdir -p "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/IwaKeyDistribution/empty" \
+  "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/nested/deeper" \
+  "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/nested/one" \
+  "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/nested/two"
+printf 'fixture nested\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/nested/deeper/nested-file.dylib"
+: > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/nested/zero-leaf"
+printf 'fixture duplicate one\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/nested/one/duplicate"
+printf 'fixture duplicate two\n' > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/nested/two/duplicate"
+ln -s deeper/nested-file.dylib "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/nested/internal-link"
+ln -s cycle-b "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/nested/cycle-a"
+ln -s cycle-a "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/nested/cycle-b"
 
 expect_fail() { if "$@" >/dev/null 2>&1; then printf 'expected failure: %q\n' "$*" >&2; exit 1; fi; }
 prepare="$repo_root/scripts/prepare-chrome-angle-test-copy.sh"
@@ -225,7 +247,7 @@ source_unknown_output="$fixture/source unknown/Google Chrome 154 ANGLE Test.app"
 
 run_inventory_final_record_regression() {
   local inventory="$fixture/inventory-final-record.tsv"
-  printf 'newline\tsymlink\ttarget\n' > "$inventory"
+  printf 'directory\tdir\t-\nnewline\tsymlink\ttarget\n' > "$inventory"
   printf 'final\tfile\t0000000000000000000000000000000000000000000000000000000000000000' >> "$inventory"
   phase3_validate_inventory_file "$inventory"
 }
@@ -427,11 +449,12 @@ for library_link in other foo parent dot normalized trailing external absolute-i
   fi
 done
 
-for baseline_mutation in missing sha link control-name control-link; do
+for baseline_mutation in missing sha link control-name control-link nested-missing nested-sha nested-add nested-type nested-link nested-special nested-socket nested-control-name nested-control-link nested-control-name-newline nested-control-link-newline; do
   baseline_output="$fixture/baseline ${baseline_mutation}/Google Chrome 154 ANGLE Test.app"
   mkdir -p "$(dirname "$baseline_output")"
   expect_fail env DITTO_BASELINE_MUTATION="$baseline_mutation" "$prepare" "$source_app" "$artifact" "$baseline_output"
   test ! -e "$baseline_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
+  assert_source_unchanged
 done
 
 control_name_source="$fixture/control-name Source.app"
@@ -456,12 +479,23 @@ grep -F 'collision' "$collision_output/Contents/Frameworks/Google Chrome Framewo
 "$prepare" "$source_app" "$artifact" "$output"
 assert_source_unchanged
 test -f "$output.phase3-angle-manifest"
-grep -F 'SCHEMA=phase3-angle-test-copy-v3' "$output.phase3-angle-manifest" >/dev/null
+grep -F 'SCHEMA=phase3-angle-test-copy-v4' "$output.phase3-angle-manifest" >/dev/null
+grep -F 'LIBRARIES_SOURCE_BASELINE_SHA256=' "$output.phase3-angle-manifest" >/dev/null
+grep -F 'LIBRARIES_COPY_BASELINE_SHA256=' "$output.phase3-angle-manifest" >/dev/null
+grep -F 'LIBRARIES_POST_INSTALL_SHA256=' "$output.phase3-angle-manifest" >/dev/null
 grep -F 'COPY_POLICY=norsrc,noextattr,noacl,noqtn' "$output.phase3-angle-manifest" >/dev/null
 grep -F 'COPY_POLICY=norsrc,noextattr,noacl,noqtn' "$output.phase3-angle-manifest.evidence/copy-policy.txt" >/dev/null
 grep -F -- 'ditto --norsrc --noextattr --noacl --noqtn SOURCE_APP OUTPUT_APP' "$output.phase3-angle-manifest.evidence/copy-command.txt" >/dev/null
-test -f "$output.phase3-angle-manifest.evidence/libraries-baseline-inventory.txt"
-test -f "$output.phase3-angle-manifest.evidence/libraries-final-inventory.txt"
+test -f "$output.phase3-angle-manifest.evidence/libraries-source-baseline.txt"
+test -f "$output.phase3-angle-manifest.evidence/libraries-source-baseline.sha256"
+test -f "$output.phase3-angle-manifest.evidence/libraries-copy-baseline.txt"
+test -f "$output.phase3-angle-manifest.evidence/libraries-copy-baseline.sha256"
+test -f "$output.phase3-angle-manifest.evidence/libraries-post-install.txt"
+test -f "$output.phase3-angle-manifest.evidence/libraries-post-install.sha256"
+for inventory in source-baseline copy-baseline post-install; do
+  LC_ALL=C sort "$output.phase3-angle-manifest.evidence/libraries-$inventory.txt" |
+    cmp - "$output.phase3-angle-manifest.evidence/libraries-$inventory.txt"
+done
 directory_output="$fixture/regular directory/Google Chrome 154 ANGLE Test.app"
 mkdir -p "$(dirname "$directory_output")"
 env DITTO_LIBRARY_LINK=directory "$prepare" "$source_app" "$artifact" "$directory_output"
@@ -473,6 +507,20 @@ empty_output="$fixture/empty baseline/Google Chrome 154 ANGLE Test.app"
 mkdir -p "$(dirname "$empty_output")"
 "$prepare" "$empty_source" "$artifact" "$empty_output"
 test -f "$empty_output/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
+zero_source="$fixture/Zero Libraries Source.app"
+cp -R "$source_app" "$zero_source"
+zero_libraries="$zero_source/Contents/Frameworks/Google Chrome Framework.framework/Libraries"
+find -P "$zero_libraries" -mindepth 1 -depth -exec rm -rf {} +
+zero_snapshot="$fixture/zero-source-snapshot"
+cp -R "$zero_source" "$zero_snapshot"
+zero_output="$fixture/zero baseline/Google Chrome 154 ANGLE Test.app"
+mkdir -p "$(dirname "$zero_output")"
+"$prepare" "$zero_source" "$artifact" "$zero_output"
+diff -qr "$zero_source" "$zero_snapshot"
+zero_post="$zero_output.phase3-angle-manifest.evidence/libraries-post-install.txt"
+test "$(wc -l < "$zero_post" | tr -d ' ')" = 2
+grep -F $'libEGL.dylib\tfile\t' "$zero_post" >/dev/null
+grep -F $'libGLESv2.dylib\tfile\t' "$zero_post" >/dev/null
 expect_fail "$run" CASE_B "$output" "$fixture/run-unsigned"
 expect_fail "$sign" "$source_app" "$fixture/sign-original" --dry-run
 expect_fail "$sign" "$output" "$fixture/sign-no-confirm"
@@ -481,6 +529,19 @@ printf '' > "$PHASE3_FIXTURE_LOG"
 test ! -s "$PHASE3_FIXTURE_LOG"
 manifest="$output.phase3-angle-manifest"
 manifest_hash="$manifest.sha256"
+for old_schema in phase3-angle-test-copy-v2 phase3-angle-test-copy-v3; do
+  chmod u+w "$manifest" "$manifest_hash"
+  sed "s/^SCHEMA=.*/SCHEMA=$old_schema/" "$manifest" > "$manifest.new"
+  mv "$manifest.new" "$manifest"
+  printf '%s  %s\n' "$(shasum -a 256 "$manifest" | awk '{print $1}')" "$(basename "$manifest")" > "$manifest_hash"
+  chmod 0444 "$manifest" "$manifest_hash"
+  expect_fail "$sign" "$output" "$fixture/sign-$old_schema" --dry-run
+  chmod u+w "$manifest" "$manifest_hash"
+  sed 's/^SCHEMA=.*/SCHEMA=phase3-angle-test-copy-v4/' "$manifest" > "$manifest.new"
+  mv "$manifest.new" "$manifest"
+  printf '%s  %s\n' "$(shasum -a 256 "$manifest" | awk '{print $1}')" "$(basename "$manifest")" > "$manifest_hash"
+  chmod 0444 "$manifest" "$manifest_hash"
+done
 chmod u+w "$manifest" "$manifest_hash"
 awk 'BEGIN { FS = OFS = "=" } $1 == "COPY_POLICY" { $2 = "unexpected" } { print }' "$manifest" > "$manifest.new"
 mv "$manifest.new" "$manifest"
@@ -509,7 +570,7 @@ output_signed="$fixture/output signed/Google Chrome 154 ANGLE Test.app"
 mkdir -p "$(dirname "$output_signed")"
 "$prepare" "$source_app" "$artifact" "$output_signed"
 "$sign" "$output_signed" "$fixture/sign-confirmed" --confirm-ad-hoc-signing
-inventory="$output_signed.phase3-angle-manifest.evidence/libraries-baseline-inventory.txt"
+inventory="$output_signed.phase3-angle-manifest.evidence/libraries-copy-baseline.txt"
 cp "$inventory" "$inventory.backup"
 chmod u+w "$inventory"
 printf 'tampered\n' >> "$inventory"

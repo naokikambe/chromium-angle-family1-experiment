@@ -6,7 +6,7 @@ readonly PHASE3_ANGLE_REVISION='72b8f72a7587ec776d7d2a57d275a6e9b1781b1d'
 readonly PHASE3_ARTIFACT_NAME='angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-35515036255'
 readonly PHASE3_LIBEGL_SHA256='f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8'
 readonly PHASE3_LIBGLESV2_SHA256='8d3d188d3d4f23cf3f96ecea209b084c6db9c6192244f879cfb6bf0fb2e02cf0'
-readonly PHASE3_TEST_COPY_MANIFEST_SCHEMA='phase3-angle-test-copy-v3'
+readonly PHASE3_TEST_COPY_MANIFEST_SCHEMA='phase3-angle-test-copy-v4'
 readonly PHASE3_COPY_POLICY='norsrc,noextattr,noacl,noqtn'
 readonly PHASE3_LIBRARIES_SYMLINK_TARGET='Versions/Current/Libraries'
 
@@ -181,6 +181,22 @@ phase3_validate_inventory_field() {
   fi
 }
 
+phase3_validate_inventory_path() {
+  local value=$1
+  local description=$2
+  local component
+  phase3_validate_inventory_field "$value" "$description"
+  [[ -n "$value" ]] || phase3_fail "Libraries inventory ${description} is empty"
+  case "$value" in
+    /*|*/|*//* ) phase3_fail "Libraries inventory ${description} is not root-relative: $value" ;;
+  esac
+  while IFS= read -r component; do
+    case "$component" in
+      ''|.|..) phase3_fail "Libraries inventory ${description} has an unsafe component: $value" ;;
+    esac
+  done < <(printf '%s\n' "$value" | tr '/' '\n')
+}
+
 phase3_validate_inventory_file() {
   local inventory=$1
   local line remainder name type value
@@ -190,8 +206,11 @@ phase3_validate_inventory_file() {
     remainder=${line#*$'\t'}
     type=${remainder%%$'\t'*}
     value=${remainder#*$'\t'}
-    phase3_validate_inventory_field "$name" 'entry name'
+    phase3_validate_inventory_path "$name" 'entry path'
     case "$type" in
+      dir)
+        [[ "$value" == '-' ]] || phase3_fail "invalid Libraries directory inventory record: $name"
+        ;;
       file)
         [[ "$value" =~ ^[0-9a-f]{64}$ ]] || phase3_fail "invalid Libraries file inventory record: $name"
         ;;
@@ -202,28 +221,32 @@ phase3_validate_inventory_file() {
     esac
     line=''
   done < "$inventory"
+  awk -F '\t' '{ if (++seen[$1] > 1) exit 1 }' "$inventory" ||
+    phase3_fail "duplicate Libraries inventory path: $inventory"
 }
 
 phase3_inventory_libraries() {
   local libraries_real=$1
   local inventory=$2
-  local entry name link_target hash
+  local entry relpath link_target hash
   : > "$inventory"
   while IFS= read -r -d '' entry; do
-    name=${entry##*/}
-    phase3_validate_inventory_field "$name" 'entry name'
+    relpath=${entry#"$libraries_real"/}
+    phase3_validate_inventory_path "$relpath" 'entry path'
     if [[ -L "$entry" ]]; then
       link_target=$({ readlink -n "$entry"; printf '\001'; }) || phase3_fail "cannot read Libraries entry: $entry"
       link_target=${link_target%$'\001'}
       phase3_validate_inventory_field "$link_target" 'symlink target'
-      printf '%s\tsymlink\t%s\n' "$name" "$link_target" >> "$inventory"
+      printf '%s\tsymlink\t%s\n' "$relpath" "$link_target" >> "$inventory"
+    elif [[ -d "$entry" ]]; then
+      printf '%s\tdir\t-\n' "$relpath" >> "$inventory"
     elif [[ -f "$entry" ]]; then
       hash=$(phase3_hash "$entry")
-      printf '%s\tfile\t%s\n' "$name" "$hash" >> "$inventory"
+      printf '%s\tfile\t%s\n' "$relpath" "$hash" >> "$inventory"
     else
       phase3_fail "unsupported Libraries entry type: $entry"
     fi
-  done < <(find "$libraries_real" -mindepth 1 -maxdepth 1 -print0 | LC_ALL=C sort -z)
+  done < <(find -P "$libraries_real" -mindepth 1 -print0 | LC_ALL=C sort -z)
 }
 
 phase3_validate_post_inventory() {
@@ -243,6 +266,16 @@ phase3_validate_post_inventory() {
     [[ "$actual_line" == "$name	file	${name/libEGL.dylib/$PHASE3_LIBEGL_SHA256}" || "$actual_line" == "$name	file	${name/libGLESv2.dylib/$PHASE3_LIBGLESV2_SHA256}" ]] ||
       phase3_fail "ANGLE Libraries entry has unexpected content: $name"
   done
+  while IFS=$'\t' read -r name type value; do
+    case "$name" in
+      libEGL.dylib|libGLESv2.dylib) ;;
+      *)
+        awk -F '\t' -v n="$name" -v t="$type" -v v="$value" \
+          '$1 == n && $2 == t && $3 == v {found=1} END {exit !found}' "$baseline" ||
+          phase3_fail "unexpected Libraries entry: $name"
+        ;;
+    esac
+  done < "$actual"
   [[ $(wc -l < "$actual" | tr -d ' ') == $(($(wc -l < "$baseline") + 2)) ]] ||
     phase3_fail 'unexpected additional or missing Libraries entries'
 }
@@ -297,14 +330,25 @@ phase3_validate_manifest() {
   [[ -d "$framework" && ! -L "$framework" ]] || phase3_fail 'test app framework is missing or symlinked'
   libraries_dir="$(cd "$framework" && pwd -P)/Libraries"
   evidence_dir="$(phase3_manifest_path "$app").evidence"
-  phase3_verify_sidecar_hash "$evidence_dir/libraries-baseline-inventory.txt" "$evidence_dir/libraries-baseline-inventory.sha256"
-  phase3_verify_sidecar_hash "$evidence_dir/libraries-final-inventory.txt" "$evidence_dir/libraries-final-inventory.sha256"
-  [[ "$(phase3_manifest_value "$(phase3_manifest_path "$app")" 'LIBRARIES_BASELINE_INVENTORY_SHA256')" == "$(phase3_hash "$evidence_dir/libraries-baseline-inventory.txt")" ]] ||
-    phase3_fail 'manifest Libraries baseline inventory hash does not match'
-  phase3_validate_post_inventory "$evidence_dir/libraries-baseline-inventory.txt" "$evidence_dir/libraries-final-inventory.txt"
+  phase3_verify_sidecar_hash "$evidence_dir/libraries-source-baseline.txt" "$evidence_dir/libraries-source-baseline.sha256"
+  phase3_verify_sidecar_hash "$evidence_dir/libraries-copy-baseline.txt" "$evidence_dir/libraries-copy-baseline.sha256"
+  phase3_verify_sidecar_hash "$evidence_dir/libraries-post-install.txt" "$evidence_dir/libraries-post-install.sha256"
+  local inventory_key inventory_file inventory_hash
+  for inventory_key in SOURCE_BASELINE COPY_BASELINE POST_INSTALL; do
+    case "$inventory_key" in
+      SOURCE_BASELINE) inventory_file='libraries-source-baseline.txt' ;;
+      COPY_BASELINE) inventory_file='libraries-copy-baseline.txt' ;;
+      POST_INSTALL) inventory_file='libraries-post-install.txt' ;;
+    esac
+    inventory_hash="$(phase3_hash "$evidence_dir/$inventory_file")"
+    [[ "$(phase3_manifest_value "$(phase3_manifest_path "$app")" "LIBRARIES_${inventory_key}_SHA256")" == "$inventory_hash" ]] ||
+      phase3_fail "manifest Libraries ${inventory_key} inventory hash does not match"
+  done
+  cmp "$evidence_dir/libraries-source-baseline.txt" "$evidence_dir/libraries-copy-baseline.txt" || phase3_fail 'source and copy Libraries baseline differs'
+  phase3_validate_post_inventory "$evidence_dir/libraries-copy-baseline.txt" "$evidence_dir/libraries-post-install.txt"
   current_inventory=$(mktemp "${TMPDIR:-/tmp}/phase3-current-inventory.XXXXXX")
   phase3_inventory_libraries "$(phase3_validate_libraries_directory "$libraries_dir" "$framework")" "$current_inventory"
-  cmp "$evidence_dir/libraries-final-inventory.txt" "$current_inventory" || phase3_fail 'current Libraries inventory differs from prepared inventory'
+  cmp "$evidence_dir/libraries-post-install.txt" "$current_inventory" || phase3_fail 'current Libraries inventory differs from prepared inventory'
   rm -f "$current_inventory"
   phase3_verify_hash "$libraries_dir/libEGL.dylib" "$PHASE3_LIBEGL_SHA256"
   phase3_verify_hash "$libraries_dir/libGLESv2.dylib" "$PHASE3_LIBGLESV2_SHA256"
