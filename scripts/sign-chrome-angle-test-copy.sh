@@ -20,7 +20,23 @@ phase3_sign_capture_signature() {
 phase3_sign_target() {
   local codesign_executable=$1
   local target=$2
+  local target_kind=${3:-code}
   local preserve_metadata=false
+
+  case "$target_kind" in
+    framework-version)
+      # A versioned framework must be signed by concrete version, not through
+      # its Framework root. Do not carry an app's entitlements into a framework.
+      "$codesign_executable" --force --sign - --timestamp=none "$target"
+      return
+      ;;
+    code)
+      ;;
+    *)
+      phase3_fail "unsupported signing target kind: $target_kind"
+      ;;
+  esac
+
   if "$codesign_executable" -d --entitlements :- "$target" >/dev/null 2>&1; then
     preserve_metadata=true
   fi
@@ -32,35 +48,61 @@ phase3_sign_target() {
   fi
 }
 
+phase3_sign_framework_version() {
+  local codesign_executable=$1
+  local version_dir=$2
+  local target
+
+  # Sign nested code inside one concrete Framework version from the inside out.
+  while IFS= read -r -d '' target; do
+    if file -b "$target" | grep -F 'Mach-O' >/dev/null; then
+      phase3_sign_target "$codesign_executable" "$target"
+    fi
+  done < <(find -P "$version_dir" -type f -print0)
+
+  # find -depth emits a child bundle before its parent bundle.
+  while IFS= read -r -d '' target; do
+    phase3_sign_target "$codesign_executable" "$target"
+  done < <(find -P "$version_dir" -depth -type d \
+    \( -name '*.app' -o -name '*.bundle' \) -print0)
+
+  phase3_sign_target "$codesign_executable" "$version_dir" framework-version
+}
+
+phase3_sign_versioned_framework() {
+  local codesign_executable=$1
+  local framework=$2
+  local results_dir=$3
+  local versions_dir="$framework/Versions"
+  local version_dir
+  local version_count=0
+
+  [[ -d "$versions_dir" && ! -L "$versions_dir" ]] ||
+    phase3_fail "Framework Versions directory is missing or symlinked: $versions_dir"
+  : > "$results_dir/framework-versions.txt"
+  while IFS= read -r -d '' version_dir; do
+    version_count=$((version_count + 1))
+    printf '%s\n' "$version_dir" >> "$results_dir/framework-versions.txt"
+    phase3_sign_framework_version "$codesign_executable" "$version_dir"
+    if ! phase3_run_codesign "$codesign_executable" --verify --deep --strict "$version_dir" \
+      > "$results_dir/framework-version-${version_count}-strict-verify.txt" 2>&1; then
+      cat "$results_dir/framework-version-${version_count}-strict-verify.txt" >&2 || true
+      phase3_fail "ad-hoc signed Framework version failed strict verification: $version_dir"
+    fi
+  done < <(find -P "$versions_dir" -mindepth 1 -maxdepth 1 -type d -print0)
+  (( version_count > 0 )) || phase3_fail "Framework contains no concrete versions: $framework"
+}
+
 phase3_sign_nested_components() {
   local codesign_executable=$1
   local test_app_real=$2
   local framework=$3
   local main_executable=$4
-  local target
-  local bundle
-  local -a bundles=()
+  local results_dir=$5
 
-  # Sign Mach-O objects and nested .app/.bundle containers from the inside out.
-  # Do not rely on app-level --deep for Chrome's versioned Framework bundle.
-  while IFS= read -r -d '' target; do
-    if file -b "$target" | grep -F 'Mach-O' >/dev/null; then
-      phase3_sign_target "$codesign_executable" "$target"
-    fi
-  done < <(find -P "$framework" -type f -print0)
-
-  while IFS= read -r bundle; do
-    [[ -n "$bundle" ]] || continue
-    bundles+=("$bundle")
-  done < <(find -P "$framework" -type d \
-    \( -name '*.app' -o -name '*.bundle' \) -print |
-    awk '{ print length, $0 }' | sort -rn | cut -d' ' -f2-)
-
-  for bundle in "${bundles[@]}"; do
-    phase3_sign_target "$codesign_executable" "$bundle"
-  done
-
-  phase3_sign_target "$codesign_executable" "$framework"
+  # Apple requires versioned frameworks to be signed one concrete version at a
+  # time. Signing only the Framework root covers Current, not old versions.
+  phase3_sign_versioned_framework "$codesign_executable" "$framework" "$results_dir"
   phase3_sign_target "$codesign_executable" "$main_executable"
   phase3_sign_target "$codesign_executable" "$test_app_real"
 }
@@ -104,14 +146,14 @@ receipt_hash=$(phase3_receipt_hash_path "$test_app_real")
 if [[ "$dry_run" == true ]]; then
   printf 'dry-run: would clear xattrs and ad-hoc sign only this prepared test copy:\n'
   printf '  xattr -cr %q\n' "$test_app_real"
-  printf '  codesign nested Mach-O files and .app/.bundle containers with ad-hoc identity\n'
-  printf '  then codesign the Framework, main executable, and app\n'
+  printf '  codesign nested Mach-O files and .app/.bundle containers inside each concrete Framework version\n'
+  printf '  then codesign every Framework version, the main executable, and the app\n'
   printf 'no xattr or codesign command was executed.\n'
   exit 0
 fi
 
 [[ "$confirmed" == true ]] || phase3_fail 'refusing ad-hoc signing without --confirm-ad-hoc-signing'
-for command in xattr shasum find file awk sort cut; do
+for command in xattr shasum find file; do
   command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"
 done
 [[ -x "$codesign_executable" ]] || phase3_fail "required codesign executable is unavailable: $codesign_executable"
@@ -147,10 +189,10 @@ phase3_sign_capture_signature "$codesign_executable" "$results_real/gpu-helper-b
 phase3_sign_capture_signature "$codesign_executable" "$results_real/libEGL-before" "$framework/Libraries/libEGL.dylib"
 phase3_sign_capture_signature "$codesign_executable" "$results_real/libGLESv2-before" "$framework/Libraries/libGLESv2.dylib"
 
-# Sign nested Mach-O objects explicitly. The Chrome Framework is a versioned
-# bundle; app-level codesign --deep fails after ANGLE dylibs are added.
+# Sign every concrete Framework version explicitly. App-level --deep signing
+# is not used, and signing the Framework root would omit non-Current versions.
 xattr -cr "$test_app_real"
-phase3_sign_nested_components "$codesign_executable" "$test_app_real" "$framework" "$main_executable"
+phase3_sign_nested_components "$codesign_executable" "$test_app_real" "$framework" "$main_executable" "$results_real"
 phase3_run_codesign "$codesign_executable" --verify --deep --strict "$test_app_real" || phase3_fail 'ad-hoc signed test copy failed strict verification'
 
 phase3_sign_capture_signature "$codesign_executable" "$results_real/test-app-after" "$test_app_real"
@@ -170,7 +212,7 @@ grep -F 'Signature=adhoc' "$results_real/test-app-after-details.txt" >/dev/null 
   printf 'SCHEMA=phase3-angle-signing-receipt-v1\n'
   printf 'TEST_APP=%s\n' "$test_app_real"
   printf 'PREPARE_MANIFEST_SHA256=%s\n' "$(phase3_hash "$manifest")"
-  printf 'SIGNING_METHOD=ad-hoc-nested\n'
+  printf 'SIGNING_METHOD=ad-hoc-versioned-framework\n'
   printf 'SIGNED_AT_UTC=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   printf 'STRICT_VERIFICATION=passed\n'
   printf 'RESULTS_DIRECTORY=%s\n' "$results_real"
