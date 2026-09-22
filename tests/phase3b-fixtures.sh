@@ -40,7 +40,11 @@ if [[ " $* " == *' --verify '* ]]; then
       gpu) [[ "$target" == *'Google Chrome Helper (GPU)' ]] && { printf 'fixture copy GPU Helper strict failure\n' >&2; exit 1; } ;;
     esac
   fi
-  if [[ "$target" == *'ANGLE Test.app'* && -f "$target/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib" && ! -e "$target/.fixture-ad-hoc" ]]; then exit 1; fi
+  if [[ "$target" == *'ANGLE Test.app'* && -f "$target/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib" && ! -e "$target/.fixture-ad-hoc" ]]; then
+    printf '%s: a sealed resource is missing or invalid\n' "$target" >&2
+    printf 'In subcomponent: %s\n' "$target/Contents/Frameworks/Google Chrome Framework.framework" >&2
+    exit 1
+  fi
   exit 0
 fi
 case "$target" in

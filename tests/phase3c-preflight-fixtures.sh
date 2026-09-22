@@ -158,7 +158,13 @@ cat > "$injection_stub" <<'EOF'
 set -euo pipefail
 printf 'INJECTED_CODESIGN %s\n' "$*" >> "${PHASE3C_FIXTURE_LOG:?}"
 target=${!#}
-if [[ "${PHASE3C_INJECT_MODE:-success}" == copy-fail && "$*" == *' --verify '* && "$target" == */Contents/MacOS/Google\ Chrome ]]; then
+verify_requested=0
+for argument in "$@"; do
+  if [[ "$argument" == --verify ]]; then
+    verify_requested=1
+  fi
+done
+if [[ "${PHASE3C_INJECT_MODE:-success}" == copy-fail && "$verify_requested" == 1 && "$target" == */Contents/MacOS/Google\ Chrome ]]; then
   printf 'synthetic-copy-stdout\n'
   printf 'synthetic-copy-stderr\n' >&2
   exit 41
