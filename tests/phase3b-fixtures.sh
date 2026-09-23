@@ -506,7 +506,8 @@ expect_fail env FORCE_HASH_MISMATCH=1 "$prepare" "$source_app" "$artifact" "$fix
 artifact_missing="$fixture/artifact-missing-library"
 mkdir "$artifact_missing"
 cp "$artifact/libEGL.dylib" "$artifact_missing/libEGL.dylib"
-cp "$artifact/ANGLE_REVISION" "$artifact_missing/ANGLE_REVISION"
+cp "$artifact/ANGLE_RELEASE_MANIFEST" "$artifact_missing/ANGLE_RELEASE_MANIFEST"
+cp "$artifact/ANGLE_RELEASE_MANIFEST.sha256" "$artifact_missing/ANGLE_RELEASE_MANIFEST.sha256"
 expect_fail "$prepare" "$source_app" "$artifact_missing" "$fixture/missing-library.app"
 
 cp -R "$source_app" "$fixture/wrong-version.app"
