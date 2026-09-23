@@ -374,7 +374,7 @@ grep -F $'sign-dry-run\tfail\t42' "$sign_failure_results/preflight-step-journal.
 applications_source="$fixture/Applications/Google Chrome.app"
 mkdir -p "$(dirname "$applications_source")"
 cp -R "$source_app" "$applications_source"
-mkdir -p "$fixture/applications-source" "$fixture/self-process" "$fixture/phase3c"
+mkdir -p "$fixture/applications-source" "$fixture/self-process" "$fixture/phase3c" "$fixture/phase3c-preflight"
 "$preflight" --source-app "$applications_source" --artifact-dir "$artifact_dir" --output-app "$fixture/applications-source/attempt-20260923-120000/output.app" --results-dir "$fixture/applications-source/attempt-20260923-120000/results" >/dev/null
 export PHASE3C_SOURCE_SELF_PROCESS=1
 "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/self-process/attempt-20260923-120000/output.app" --results-dir "$fixture/self-process/attempt-20260923-120000/results" >/dev/null
