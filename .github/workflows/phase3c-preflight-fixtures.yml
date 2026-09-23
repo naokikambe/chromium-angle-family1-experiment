@@ -11,9 +11,11 @@ on:
       - scripts/phase3-test-copy-common.sh
       - scripts/prepare-chrome-angle-test-copy.sh
       - scripts/sign-chrome-angle-test-copy.sh
+      - scripts/entitlements/**
       - scripts/inspect-chrome-for-dynamic-angle.sh
       - tests/phase3c-preflight-fixtures.sh
       - docs/phase3-dynamic-angle.md
+      - docs/phase3-signing-references.md
       - AGENTS.md
       - .codex/**
       - .github/workflows/phase3c-preflight-fixtures.yml

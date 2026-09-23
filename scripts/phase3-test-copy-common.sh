@@ -603,19 +603,38 @@ phase3_validate_signed_test_copy() {
   local receipt
   local manifest_sha256
   local signed_inventory
+  local receipt_schema
+  local signing_method
+  local entitlements
+  local required_entitlement
+  local forbidden_entitlement
 
   manifest=$(phase3_manifest_path "$app")
   receipt=$(phase3_receipt_path "$app")
   phase3_verify_sidecar_hash "$receipt" "$(phase3_receipt_hash_path "$app")"
-  [[ "$(phase3_manifest_value "$receipt" 'SCHEMA')" == 'phase3-angle-signing-receipt-v2' ]] ||
-    phase3_fail 'unsupported signing receipt schema'
+  receipt_schema=$(phase3_manifest_value "$receipt" 'SCHEMA')
+  case "$receipt_schema" in
+    phase3-angle-signing-receipt-v2|phase3-angle-signing-receipt-v3) ;;
+    *) phase3_fail 'unsupported signing receipt schema' ;;
+  esac
   [[ "$(phase3_manifest_value "$receipt" 'TEST_APP')" == "$app" ]] ||
     phase3_fail 'signing receipt app path does not match'
-  [[ "$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')" == 'ad-hoc-deep' || \
-      "$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')" == 'ad-hoc-nested' || \
-      "$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')" == 'ad-hoc-versioned-framework' || \
-      "$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')" == 'ad-hoc-current-framework' ]] ||
-    phase3_fail 'test copy was not ad-hoc signed'
+  signing_method=$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')
+  case "$signing_method" in
+    ad-hoc-deep|ad-hoc-nested|ad-hoc-versioned-framework|ad-hoc-current-framework)
+      [[ "$receipt_schema" == 'phase3-angle-signing-receipt-v2' ]] ||
+        phase3_fail 'ad-hoc signing receipt has an unexpected schema'
+      ;;
+    apple-development-current-framework)
+      [[ "$receipt_schema" == 'phase3-angle-signing-receipt-v3' ]] ||
+        phase3_fail 'Apple Development signing receipt has an unexpected schema'
+      [[ "$(phase3_manifest_value "$receipt" 'SIGNING_IDENTITY_SHA1')" =~ ^[0-9A-F]{40}$ ]] ||
+        phase3_fail 'Apple Development signing receipt has an invalid identity fingerprint'
+      [[ "$(phase3_manifest_value "$receipt" 'ENTITLEMENTS_PROFILE')" == 'chromium-base-device-v1' ]] ||
+        phase3_fail 'Apple Development signing receipt has an unsupported entitlements profile'
+      ;;
+    *) phase3_fail 'unsupported signing method' ;;
+  esac
   [[ "$(phase3_manifest_value "$receipt" 'STRICT_VERIFICATION')" == 'passed' ]] ||
     phase3_fail 'signing receipt does not record strict verification'
   manifest_sha256=$(phase3_hash "$manifest")
@@ -627,8 +646,39 @@ phase3_validate_signed_test_copy() {
     phase3_fail 'signing receipt does not match the signed Libraries inventory'
   phase3_validate_manifest "$app" signed "$signed_inventory"
   phase3_run_codesign "$codesign_executable" --verify --deep --strict "$app" || phase3_fail 'test copy strict signature verification failed'
-  phase3_run_codesign "$codesign_executable" -dvvv "$app" 2>&1 | grep -F 'Signature=adhoc' >/dev/null ||
-    phase3_fail 'test copy is not currently ad-hoc signed'
+  case "$signing_method" in
+    ad-hoc-*)
+      phase3_run_codesign "$codesign_executable" -dvvv "$app" 2>&1 | grep -F 'Signature=adhoc' >/dev/null ||
+        phase3_fail 'test copy is not currently ad-hoc signed'
+      ;;
+    apple-development-current-framework)
+      phase3_run_codesign "$codesign_executable" -dvvv "$app" 2>&1 | grep -F 'Authority=Apple Development:' >/dev/null ||
+        phase3_fail 'test copy is not signed with an Apple Development identity'
+      phase3_run_codesign "$codesign_executable" -dvvv "$app" 2>&1 | grep -E '^TeamIdentifier=.+$' | grep -Fv 'TeamIdentifier=not set' >/dev/null ||
+        phase3_fail 'test copy has no Apple Development team identifier'
+      entitlements=$(phase3_run_codesign "$codesign_executable" -d --entitlements :- "$app" 2>&1) ||
+        phase3_fail 'cannot read Apple Development app entitlements'
+      for required_entitlement in \
+        com.apple.security.device.audio-input \
+        com.apple.security.device.bluetooth \
+        com.apple.security.device.camera \
+        com.apple.security.device.print \
+        com.apple.security.device.usb \
+        com.apple.security.personal-information.location \
+        com.apple.security.personal-information.photos-library; do
+        [[ "$entitlements" == *"<key>$required_entitlement</key>"* ]] ||
+          phase3_fail "test copy lacks required development entitlement: $required_entitlement"
+      done
+      for forbidden_entitlement in \
+        com.apple.application-identifier \
+        keychain-access-groups \
+        com.apple.developer.associated-domains.applinks.read-write \
+        com.apple.developer.web-browser.public-key-credential; do
+        [[ "$entitlements" != *"<key>$forbidden_entitlement</key>"* ]] ||
+          phase3_fail "test copy retains Google-bound entitlement: $forbidden_entitlement"
+      done
+      ;;
+  esac
 }
 
 phase3_capture_process_snapshot() {

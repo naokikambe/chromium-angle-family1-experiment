@@ -8,6 +8,7 @@ on:
       - scripts/**
       - tests/**
       - docs/phase3-dynamic-angle.md
+      - docs/phase3-signing-references.md
       - AGENTS.md
       - .codex/**
       - .github/workflows/phase3b-fixtures.yml
