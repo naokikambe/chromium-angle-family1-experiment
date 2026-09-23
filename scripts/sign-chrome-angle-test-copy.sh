@@ -49,7 +49,7 @@ phase3_sign_current_framework() {
   local version_dir="$framework/Versions/$PHASE3_FRAMEWORK_CURRENT_VERSION"
   local target
 
-  phase3_validate_current_only_framework "$framework"
+  phase3_validate_current_only_framework "$framework" "$PHASE3_FRAMEWORK_CURRENT_VERSION"
   printf '%s\n' "$version_dir" > "$results_dir/framework-versions.txt"
 
   # The test copy contains exactly one concrete Framework version. Sign its

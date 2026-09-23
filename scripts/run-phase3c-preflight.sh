@@ -84,10 +84,7 @@ done
 [[ -x /usr/bin/codesign ]] || phase3_fail 'required production codesign executable is unavailable: /usr/bin/codesign'
 for path in "$source_app" "$artifact_dir" "$output_app" "$results_dir"; do
   [[ "$path" != *$'\n'* && "$path" != *$'\r'* ]] || phase3_fail 'paths may not contain newline or carriage return'
-  case "$path" in
-    */retry0|*/retry0/*|*/retry1|*/retry1/*|*/retry2|*/retry2/*|*/retry3|*/retry3/*|*/retry4|*/retry4/*|*/retry5|*/retry5/*|*/retry6|*/retry6/*|*/retry7|*/retry7/*|*/retry8|*/retry8/*|*/retry9|*/retry9/*|*/retry10|*/retry10/*|*/retry11|*/retry11/*)
-      phase3_fail 'retry0-retry11 paths are reserved; retry12 is the next approved root' ;;
-  esac
+  [[ ! "$path" =~ (^|/)([^/]+-)?retry(0|[1-9]|1[0-2])(/|$) ]] || phase3_fail 'legacy retry0-retry12 paths are immutable and reserved'
 done
 
 [[ "$source_app" == /* && "$artifact_dir" == /* && "$output_app" == /* && "$results_dir" == /* ]] ||
@@ -106,11 +103,8 @@ retry_root=$(dirname "$output_app")
 results_root=$(dirname "$results_dir")
 [[ "$retry_root" == "$results_root" ]] || phase3_fail 'output and results must be direct children of one retry root'
 retry_root_name=$(basename "$retry_root")
-[[ "$retry_root_name" == retry12 || "$retry_root_name" == *-retry12 ]] ||
-  phase3_fail 'prospective retry root must end in retry12'
-case "$retry_root_name" in
-  retry[0-9]|*-retry[0-9]|retry10|*-retry10|retry11|*-retry11) phase3_fail 'retry0-retry11 roots are reserved' ;;
-esac
+[[ "$retry_root_name" =~ ^attempt-[0-9]{8}-[0-9]{6}$ ]] ||
+  phase3_fail 'prospective root must use attempt-YYYYMMDD-HHMMSS naming'
 [[ -n "$(basename "$output_app")" && -n "$(basename "$results_dir")" ]] || phase3_fail 'output and results must have non-empty child names'
 [[ ! -e "$retry_root" && ! -L "$retry_root" ]] || phase3_fail 'prospective retry root already exists'
 [[ ! -e "$output_app" && ! -L "$output_app" ]] || phase3_fail 'output app already exists'
@@ -128,16 +122,13 @@ esac
 branch=$(git -C "$repo_root" branch --show-current)
 [[ "$branch" == 'phase3-dynamic-angle-prep' ]] || phase3_fail "unexpected branch: $branch"
 [[ -z "$(git -C "$repo_root" status --porcelain)" ]] || phase3_fail 'repository is not clean'
+phase3_validate_release_manifest "$artifact_real"
 source_version=$(phase3_plist_value CFBundleShortVersionString "$source_real/Contents/Info.plist") || phase3_fail 'cannot read source Chrome version'
-[[ "$source_version" == "$PHASE3_CHROME_VERSION" ]] || phase3_fail "expected Chrome $PHASE3_CHROME_VERSION, found $source_version"
+[[ "$source_version" == "$PHASE3_RELEASE_CHROME_VERSION" ]] || phase3_fail "release expects Chrome $PHASE3_RELEASE_CHROME_VERSION, found $source_version"
 source_executable_name=$(phase3_plist_value CFBundleExecutable "$source_real/Contents/Info.plist") || phase3_fail 'cannot read source executable name'
 source_executable="$source_real/Contents/MacOS/$source_executable_name"
 [[ -x "$source_executable" ]] || phase3_fail 'source executable is missing or not executable'
 lipo -info "$source_executable" | grep -Eq '(^|[[:space:]])x86_64($|[[:space:]])' || phase3_fail 'source executable has no x86_64 slice'
-phase3_verify_hash "$artifact_real/libEGL.dylib" "$PHASE3_LIBEGL_SHA256"
-phase3_verify_hash "$artifact_real/libGLESv2.dylib" "$PHASE3_LIBGLESV2_SHA256"
-[[ -f "$artifact_real/ANGLE_REVISION" && ! -L "$artifact_real/ANGLE_REVISION" ]] || phase3_fail 'artifact ANGLE_REVISION is missing'
-[[ "$(<"$artifact_real/ANGLE_REVISION")" == "$PHASE3_ANGLE_REVISION" ]] || phase3_fail 'artifact ANGLE revision does not match'
 phase3_journal readonly-gates pass 0
 
 process_snapshot=$(mktemp "${TMPDIR:-/tmp}/phase3c-process.XXXXXX")

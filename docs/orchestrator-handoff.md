@@ -36,28 +36,30 @@
 
 ## Current State
 
-- Working branch: `phase3-dynamic-angle-prep`.
-- The Phase 3B Libraries implementation is committed on
-  `phase3-dynamic-angle-prep`; track the active checkpoint from branch HEAD.
-- Chrome target: `154.0.8037.45`; Chromium revision:
-  `731082f0a26ce4b3976c3d82943092f5d13daf13`.
-- ANGLE revision: `72b8f72a7587ec776d7d2a57d275a6e9b1781b1d`.
-- depot_tools revision: `0306e4682b4ac35287c726fa35a983157a625902`.
-- Successful artifact: `angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-35515036255`.
-- Phase 3B Libraries validation preserves the verified Chrome baseline and
-  adds exactly the two top-level ANGLE dylibs. The manifest schema is v4 and
-  recursively records directories, files, and symlinks without following them.
+- Track the active branch, HEAD, and dirty state from the current checkout;
+  this handoff does not pin a release version or artifact.
+- New ANGLE artifacts use `ANGLE_RELEASE_MANIFEST` schema `angle-release-v1`
+  with a SHA-256 sidecar. It binds the requested Chrome release to resolved
+  Chromium/ANGLE revisions, pinned depot_tools, dylib hashes, artifact identity,
+  build run ID, UTC time, and GN-args hash.
+- The Chrome `154.0.8037.45` artifact (run `35515036255`) is a legacy record
+  without this manifest schema. It must not be implicitly accepted by new
+  scripts.
+- Libraries validation preserves the verified source baseline and allows only
+  the two release-manifest-hash-verified ANGLE dylibs as additions. The active
+  Framework version is discovered via `Versions/Current`, not pinned to `.17`
+  or `.45`.
 
 ## Outstanding Work
 
-1. Parent reviews the Libraries inventory implementation, workflow, and
-   fixture coverage.
-2. The complete synthetic fixture suite is accepted only from the pinned
-   macos-15-intel GitHub Actions workflow; local full-suite execution is not
-   evidence.
-3. Parent may checkpoint/fix-commit and push this branch, then dispatch and
-   monitor CI. Main/other branches, force/rebase/merge/tag/release, PR/issue,
-   and real-device or retry operations remain prohibited.
+1. Review release-manifest generation/validation, dynamic attempt-root safety,
+   Framework current-version policy, and all fixture cases.
+2. The complete synthetic fixture suites are accepted only from pinned Phase
+   3B/3C GitHub Actions on `macos-15-intel`; local full-suite execution is
+   prohibited.
+3. CI success is required before asking for human approval of device work, but
+   is not itself authorization. Main/other branches, force/rebase/merge/tag/
+   release, PR/issue, and real-device/retry operations remain approval gates.
 
 CI retains runner/environment information, repository state, fixture
 stdout/stderr, exit status, and the diagnostics index. Formal acceptance
@@ -69,24 +71,12 @@ checkpoint commit/push, and a new run; only one clearly transient
 runner/service failure may justify a rerun. Main and real-device operations
 remain approval boundaries. Retry3 is a saved failure/no-operation record.
 
-Phase 3C adds a bounded preflight script and synthetic CI fixture. It gates a
-clean expected branch, non-symlink user-owned inputs, Chrome version and
-x86_64 source, source-process absence, pinned artifact revision and hashes,
-new safe output/results paths, and collisions/retry paths. It records
-read-only inspection/signature evidence, prepares once, validates manifest and
-inventories, and invokes signing only as `--dry-run`. The one retry4 preflight
-stopped during prepare because its directory entry could not be represented by
-the then-current inventory schema; no ANGLE dylib or manifest was completed and
-sign dry-run was not reached. Retry4 is retained and not reused; retry6 is the
-next planned path. Real signing, Chrome, and KOOV were not performed. The
-retained retry5 reporting discrepancy is labeled `inconsistent-reporting-preserved`;
-its saved evidence records successful copy-before components, unsigned preparation,
-manifest v4/inventories, and sign dry-run. It is evidence only, not a signing or
-reuse authorization.
-The initial Phase 3C CI failure was a synthetic fixture path-role mismatch:
-read-only source validation incorrectly rejected an existing source under
-`/Applications`. That rule is corrected while writable output/results remain
-forbidden there; any real preflight requires renewed human review and approval.
+Phase 3C accepts an explicitly selected artifact only when its verified release
+manifest exactly matches source Chrome's version. Output and results are direct
+children of an unused `attempt-YYYYMMDD-HHMMSS` root; legacy retry0–12 evidence
+remains immutable. Preflight records read-only evidence, prepares once, validates
+the test-copy manifest/inventories, and calls signing only as `--dry-run`. Real
+signing, Chrome, and KOOV require separate human approval.
 
 ## Safety Boundary
 

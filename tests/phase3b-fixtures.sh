@@ -8,6 +8,8 @@ printf 'fixture directory retained for inspection: %s\n' "$fixture"
 stub_dir="$fixture/stubs"
 mkdir "$stub_dir" "$fixture/output with spaces"
 export PHASE3_FIXTURE_LOG="$fixture/command.log"
+export PHASE3_FIXTURE_VERSION='154.0.8037.58'
+export PHASE3_FIXTURE_PREVIOUS_VERSION='154.0.8037.57'
 
 fixture_checkpoint() {
   local name=$1
@@ -60,10 +62,10 @@ if [[ " $* " == *' --verify '* ]]; then
       exit 1
     fi
 
-    [[ ! -e "$framework/Versions/154.0.8037.17" ]] || exit 1
-    if [[ ! -e "$framework/Versions/154.0.8037.45/.fixture-ad-hoc" ]]; then
+    [[ ! -e "$framework/Versions/$PHASE3_FIXTURE_PREVIOUS_VERSION" ]] || exit 1
+    if [[ ! -e "$framework/Versions/$PHASE3_FIXTURE_VERSION/.fixture-ad-hoc" ]]; then
       printf '%s: a sealed resource is missing or invalid\n' "$target" >&2
-      printf 'In subcomponent: %s/Versions/154.0.8037.45\n' "$framework" >&2
+      printf 'In subcomponent: %s/Versions/%s\n' "$framework" "$PHASE3_FIXTURE_VERSION" >&2
       exit 1
     fi
     if [[ ! -e "$framework/.fixture-ad-hoc" ]]; then
@@ -165,8 +167,8 @@ esac
 versions="$output/Contents/Frameworks/Google Chrome Framework.framework/Versions"
 case "${DITTO_VERSION_MUTATION:-}" in
   extra) mkdir "$versions/unexpected" ;;
-  missing-legacy) rm -rf "$versions/154.0.8037.17" ;;
-  current-legacy) rm "$versions/Current"; ln -s 154.0.8037.17 "$versions/Current" ;;
+  missing-legacy) rm -rf "$versions/$PHASE3_FIXTURE_PREVIOUS_VERSION" ;;
+  current-legacy) rm "$versions/Current"; ln -s "$PHASE3_FIXTURE_PREVIOUS_VERSION" "$versions/Current" ;;
 esac
 EOF
 cat > "$stub_dir/lipo" <<'EOF'
@@ -178,9 +180,12 @@ cat > "$stub_dir/shasum" <<'EOF'
 set -euo pipefail
 for argument in "$@"; do
   case "$argument" in
-    */libEGL.dylib) echo "f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8  $argument"; exit 0 ;;
-    */libGLESv2.dylib)
-      if [[ "${FORCE_HASH_MISMATCH:-0}" == 1 ]]; then echo "0000000000000000000000000000000000000000000000000000000000000000  $argument"; else echo "8d3d188d3d4f23cf3f96ecea209b084c6db9c6192244f879cfb6bf0fb2e02cf0  $argument"; fi
+    */libEGL.dylib|*/libGLESv2.dylib)
+      if [[ "${FORCE_HASH_MISMATCH:-0}" == 1 && "$argument" == */libGLESv2.dylib ]]; then
+        echo "0000000000000000000000000000000000000000000000000000000000000000  $argument"
+      else
+        /usr/bin/shasum -a 256 "$argument"
+      fi
       exit 0 ;;
   esac
 done
@@ -224,14 +229,14 @@ source_app="$fixture/Chrome Source.app"
 artifact="$fixture/artifact"
 framework="$source_app/Contents/Frameworks/Google Chrome Framework.framework"
 versions="$framework/Versions"
-legacy_version="$versions/154.0.8037.17"
-current_version="$versions/154.0.8037.45"
+legacy_version="$versions/$PHASE3_FIXTURE_PREVIOUS_VERSION"
+current_version="$versions/$PHASE3_FIXTURE_VERSION"
 mkdir -p "$source_app/Contents/MacOS" "$source_app/Contents/Resources" "$legacy_version" "$current_version/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS" "$artifact"
-ln -s 154.0.8037.45 "$versions/Current"
+ln -s "$PHASE3_FIXTURE_VERSION" "$versions/Current"
 cat > "$source_app/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>154.0.8037.45</string><key>CFBundleExecutable</key><string>Google Chrome</string></dict></plist>
+<plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>154.0.8037.58</string><key>CFBundleExecutable</key><string>Google Chrome</string></dict></plist>
 EOF
 printf '#!/usr/bin/env bash\nexit 0\n' > "$source_app/Contents/MacOS/Google Chrome"
 printf 'fixture legacy framework\n' > "$legacy_version/Google Chrome Framework"
@@ -245,7 +250,28 @@ chmod +x "$google_update_agent/Contents/MacOS/GoogleSoftwareUpdateAgent"
 mkdir -p "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries"
 printf 'fixture egl\n' > "$artifact/libEGL.dylib"
 printf 'fixture gles\n' > "$artifact/libGLESv2.dylib"
-printf '%s\n' '72b8f72a7587ec776d7d2a57d275a6e9b1781b1d' > "$artifact/ANGLE_REVISION"
+cat > "$artifact/args.gn" <<'EOF'
+target_os = "mac"
+target_cpu = "x64"
+EOF
+fixture_egl_sha=$(/usr/bin/shasum -a 256 "$artifact/libEGL.dylib" | awk '{print $1}')
+fixture_gles_sha=$(/usr/bin/shasum -a 256 "$artifact/libGLESv2.dylib" | awk '{print $1}')
+fixture_gn_sha=$(/usr/bin/shasum -a 256 "$artifact/args.gn" | awk '{print $1}')
+cat > "$artifact/ANGLE_RELEASE_MANIFEST" <<EOF
+SCHEMA=angle-release-v1
+ARTIFACT_SCHEMA=angle-artifact-v1
+CHROME_VERSION=$PHASE3_FIXTURE_VERSION
+CHROMIUM_REVISION=1111111111111111111111111111111111111111
+ANGLE_REVISION=2222222222222222222222222222222222222222
+DEPOT_TOOLS_REVISION=3333333333333333333333333333333333333333
+LIBEGL_SHA256=$fixture_egl_sha
+LIBGLESV2_SHA256=$fixture_gles_sha
+ARTIFACT_NAME=angle-macos-x86_64-chrome-$PHASE3_FIXTURE_VERSION-angle-22222222-123456789
+BUILD_RUN_ID=123456789
+BUILT_AT_UTC=2026-09-23T12:00:00Z
+GN_ARGS_SHA256=$fixture_gn_sha
+EOF
+/usr/bin/shasum -a 256 "$artifact/ANGLE_RELEASE_MANIFEST" | awk '{print $1 "  ANGLE_RELEASE_MANIFEST"}' > "$artifact/ANGLE_RELEASE_MANIFEST.sha256"
 for baseline_name in libaperitif.dylib libchromecompaneros.dylib liboptimization_guide_internal.dylib libvk_swiftshader.dylib libvulkan.dylib; do
   printf 'fixture %s\n' "$baseline_name" > "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Libraries/$baseline_name"
 done
@@ -389,9 +415,9 @@ run_evidence_receipt_policy_group() {
   "$prepare" "$source_app" "$artifact" "$focused_output"
   fixture_checkpoint evidence-after-prepare
   "$sign" "$focused_output" "$focused_results" --confirm-ad-hoc-signing
-  test ! -e "$focused_output/Contents/Frameworks/Google Chrome Framework.framework/Versions/154.0.8037.17"
-  test -e "$focused_output/Contents/Frameworks/Google Chrome Framework.framework/Versions/154.0.8037.45/.fixture-ad-hoc"
-  grep -F 'Versions/154.0.8037.45' "$PHASE3_FIXTURE_LOG" >/dev/null
+  test ! -e "$focused_output/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_PREVIOUS_VERSION"
+  test -e "$focused_output/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_VERSION/.fixture-ad-hoc"
+  grep -F "Versions/$PHASE3_FIXTURE_VERSION" "$PHASE3_FIXTURE_LOG" >/dev/null
   fixture_checkpoint evidence-after-sign
 
   export PHASE3_FIXTURE_LIBRARIES="$focused_libraries"
@@ -545,7 +571,7 @@ for version_mutation in extra missing-legacy current-legacy; do
   version_output="$fixture/version ${version_mutation}/Google Chrome 154 ANGLE Test.app"
   mkdir -p "$(dirname "$version_output")"
   expect_fail env DITTO_VERSION_MUTATION="$version_mutation" "$prepare" "$source_app" "$artifact" "$version_output"
-  test ! -e "$version_output/Contents/Frameworks/Google Chrome Framework.framework/Versions/154.0.8037.45/Libraries/libEGL.dylib"
+  test ! -e "$version_output/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_VERSION/Libraries/libEGL.dylib"
   assert_source_unchanged
 done
 
@@ -571,25 +597,26 @@ grep -F 'collision' "$collision_output/Contents/Frameworks/Google Chrome Framewo
 "$prepare" "$source_app" "$artifact" "$output"
 assert_source_unchanged
 test -f "$output.phase3-angle-manifest"
-grep -F 'SCHEMA=phase3-angle-test-copy-v5' "$output.phase3-angle-manifest" >/dev/null
+grep -F 'SCHEMA=phase3-angle-test-copy-v6' "$output.phase3-angle-manifest" >/dev/null
 grep -F 'LIBRARIES_SOURCE_BASELINE_SHA256=' "$output.phase3-angle-manifest" >/dev/null
 grep -F 'LIBRARIES_COPY_BASELINE_SHA256=' "$output.phase3-angle-manifest" >/dev/null
 grep -F 'LIBRARIES_POST_INSTALL_SHA256=' "$output.phase3-angle-manifest" >/dev/null
 grep -F 'FRAMEWORK_VERSION_POLICY=current-only' "$output.phase3-angle-manifest" >/dev/null
-grep -F 'FRAMEWORK_CURRENT_VERSION=154.0.8037.45' "$output.phase3-angle-manifest" >/dev/null
-grep -F 'FRAMEWORK_REMOVED_VERSION=154.0.8037.17' "$output.phase3-angle-manifest" >/dev/null
+grep -F "FRAMEWORK_CURRENT_VERSION=$PHASE3_FIXTURE_VERSION" "$output.phase3-angle-manifest" >/dev/null
+grep -F 'FRAMEWORK_REMOVED_VERSION_NAMES_SHA256=' "$output.phase3-angle-manifest" >/dev/null
 grep -F 'FRAMEWORK_VERSIONS_BEFORE_SHA256=' "$output.phase3-angle-manifest" >/dev/null
 grep -F 'FRAMEWORK_REMOVED_VERSION_INVENTORY_SHA256=' "$output.phase3-angle-manifest" >/dev/null
 grep -F 'FRAMEWORK_VERSIONS_AFTER_SHA256=' "$output.phase3-angle-manifest" >/dev/null
-test -d "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/154.0.8037.17"
-test ! -e "$output/Contents/Frameworks/Google Chrome Framework.framework/Versions/154.0.8037.17"
-test -d "$output/Contents/Frameworks/Google Chrome Framework.framework/Versions/154.0.8037.45"
-test "$(readlink "$output/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current")" = 154.0.8037.45
+test -d "$source_app/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_PREVIOUS_VERSION"
+test ! -e "$output/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_PREVIOUS_VERSION"
+test -d "$output/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_VERSION"
+test "$(readlink "$output/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current")" = "$PHASE3_FIXTURE_VERSION"
 test -f "$output.phase3-angle-manifest.evidence/framework-versions-before.txt"
 test -f "$output.phase3-angle-manifest.evidence/framework-removed-version-inventory.txt"
+grep -Fx "$PHASE3_FIXTURE_PREVIOUS_VERSION" "$output.phase3-angle-manifest.evidence/framework-removed-version-names.txt" >/dev/null
 test -f "$output.phase3-angle-manifest.evidence/framework-versions-after.txt"
-grep -F $'154.0.8037.17\tdir\t-' "$output.phase3-angle-manifest.evidence/framework-versions-before.txt" >/dev/null
-grep -F $'154.0.8037.45\tdir\t-' "$output.phase3-angle-manifest.evidence/framework-versions-after.txt" >/dev/null
+grep -F "$PHASE3_FIXTURE_PREVIOUS_VERSION"$'\tdir\t-' "$output.phase3-angle-manifest.evidence/framework-versions-before.txt" >/dev/null
+grep -F "$PHASE3_FIXTURE_VERSION"$'\tdir\t-' "$output.phase3-angle-manifest.evidence/framework-versions-after.txt" >/dev/null
 test "$(wc -l < "$output.phase3-angle-manifest.evidence/framework-versions-after.txt" | tr -d ' ')" = 2
 grep -F 'COPY_POLICY=norsrc,noextattr,noacl,noqtn' "$output.phase3-angle-manifest" >/dev/null
 grep -F 'COPY_POLICY=norsrc,noextattr,noacl,noqtn' "$output.phase3-angle-manifest.evidence/copy-policy.txt" >/dev/null
@@ -645,7 +672,7 @@ for old_schema in phase3-angle-test-copy-v2 phase3-angle-test-copy-v3 phase3-ang
   chmod 0444 "$manifest" "$manifest_hash"
   expect_fail "$sign" "$output" "$fixture/sign-$old_schema" --dry-run
   chmod u+w "$manifest" "$manifest_hash"
-  sed 's/^SCHEMA=.*/SCHEMA=phase3-angle-test-copy-v5/' "$manifest" > "$manifest.new"
+  sed 's/^SCHEMA=.*/SCHEMA=phase3-angle-test-copy-v6/' "$manifest" > "$manifest.new"
   mv "$manifest.new" "$manifest"
   printf '%s  %s\n' "$(shasum -a 256 "$manifest" | awk '{print $1}')" "$(basename "$manifest")" > "$manifest_hash"
   chmod 0444 "$manifest" "$manifest_hash"
@@ -678,14 +705,14 @@ output_signed="$fixture/output signed/Google Chrome 154 ANGLE Test.app"
 mkdir -p "$(dirname "$output_signed")"
 "$prepare" "$source_app" "$artifact" "$output_signed"
 "$sign" "$output_signed" "$fixture/sign-confirmed" --confirm-ad-hoc-signing
-test ! -e "$output_signed/Contents/Frameworks/Google Chrome Framework.framework/Versions/154.0.8037.17"
-grep -F 'Versions/154.0.8037.45' "$PHASE3_FIXTURE_LOG" >/dev/null
+test ! -e "$output_signed/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_PREVIOUS_VERSION"
+grep -F "Versions/$PHASE3_FIXTURE_VERSION" "$PHASE3_FIXTURE_LOG" >/dev/null
 ! grep -F -- '--bundle-version=' "$PHASE3_FIXTURE_LOG" >/dev/null
-mkdir "$output_signed/Contents/Frameworks/Google Chrome Framework.framework/Versions/154.0.8037.17"
+mkdir "$output_signed/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_PREVIOUS_VERSION"
 expect_fail "$sign" "$output_signed" "$fixture/sign-reintroduced-version" --dry-run
 expect_fail "$run" CASE_B "$output_signed" "$fixture/run-reintroduced-version"
 expect_fail "$collect" "$output_signed" "$fixture/collect-reintroduced-version"
-rmdir "$output_signed/Contents/Frameworks/Google Chrome Framework.framework/Versions/154.0.8037.17"
+rmdir "$output_signed/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_PREVIOUS_VERSION"
 inventory="$output_signed.phase3-angle-manifest.evidence/libraries-copy-baseline.txt"
 cp "$inventory" "$inventory.backup"
 chmod u+w "$inventory"

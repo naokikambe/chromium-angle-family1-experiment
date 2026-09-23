@@ -1,182 +1,87 @@
-# Phase 3A — dynamic ANGLE 実機試験の準備
+# Phase 3 — Dynamic ANGLE experiment
 
-更新日: 2026-09-20
-状態: **準備完了、実機Chromeロード試験は未実施**
+Status: release-manifest migration is under implementation and requires successful
+Phase 3B and Phase 3C synthetic CI before any new device preflight is authorized.
+This workflow does not modify the installed Chrome app, sign code, launch Chrome or
+KOOV, or access existing browser profiles.
 
-このPhaseはMacBookAir6,1（Intel HD Graphics 5000、macOS 15.7.9、OCLP）での安全な比較試験を準備するだけである。この文書と付属scriptはChrome、KOOV、既存プロファイル、`/Applications/Google Chrome.app`を変更または起動しない。Family 1用ANGLEの改修も含まない。
+## Release selection and provenance
 
-## 現行固定入力（Chrome 154.0.8037.45）
+New ANGLE builds are selected through the build workflow's required
+`chrome_version` input. The accepted value is a four-component numeric version.
+The workflow resolves the exact Chromium tag to a commit, verifies the tag's
+`chrome/VERSION`, and extracts `angle_revision` from that commit's `DEPS`. Build
+inputs remain pinned where required: depot_tools revision, Actions revisions,
+runner, GN configuration, and timeouts.
 
-- Chrome: `154.0.8037.45`、Chromium: `731082f0a26ce4b3976c3d82943092f5d13daf13`
-- ANGLE: `72b8f72a7587ec776d7d2a57d275a6e9b1781b1d`、depot_tools: `0306e4682b4ac35287c726fa35a983157a625902`
-- Chromium tag [`154.0.8037.45`](https://chromium.googlesource.com/chromium/src/+/refs/tags/154.0.8037.45) の `chrome/VERSION` はこのChrome versionを示し、同commitの [`DEPS` 350–353行](https://chromium.googlesource.com/chromium/src/+/731082f0a26ce4b3976c3d82943092f5d13daf13/DEPS#350) は `angle_revision` を上記SHAへ固定する。
-- workflowはこのpairを対象にする。artifact名は `angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-<run-id>` とし、.17向けartifactとの混同を避ける。最新成功artifactとdylib SHA-256は後述する。
+Every new artifact contains `ANGLE_RELEASE_MANIFEST` and its SHA-256 sidecar.
+Schema `angle-release-v1` records Chrome version, Chromium and ANGLE revisions,
+depot_tools revision, both dylib hashes, artifact schema/name, run ID, UTC build
+time, and GN-args hash. Artifact validation checks the sidecar, schema, manifest
+fields, GN args when present, and each dylib's bytes. No old manifest is treated
+as this schema. The Phase 3 test-copy manifest records the exact release-manifest
+SHA-256 used to prepare it.
 
-## `.45` workflow 初回実行（失敗、再実行しない）
+At preflight, the source app's `CFBundleShortVersionString` must exactly equal
+the release manifest's `CHROME_VERSION`. A mismatch is fatal; updating Chrome
+does not silently select or substitute an artifact. Download and prepare scripts
+accept an explicitly selected artifact directory/run rather than embedding a
+Chrome version, ANGLE revision, run ID, artifact name, or dylib hashes in code.
 
-手動run [`35514080466`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/35514080466) は、commit `60b1c4410ce06ecccd7b1e31c14f6efbfcdc05fa`で2026-09-20 13:38–13:43 UTCに`macos-15-intel` runnerへ割り当てられた。ANGLE SHAとdepot_tools SHA（`0306e4682b4ac35287c726fa35a983157a625902`）は`gclient sync`後に一致確認した。checkout時のdisk使用量は`8791452 KiB`だった。
+## Attempt directories and immutable history
 
-GN生成stepは`python3_bin_reldir.txt not found. need to initialize depot_tools by running gclient, update_depot_tools or ensure_bootstrap.`で失敗した。このrunの`gclient sync`は完了しているが、固定したdepot_toolsでGNが要求する初期化が完了していなかった。Ninja、dylib作成、artifact検証、uploadはこのrunでは実行されず、artifact・新しいSHA-256は生成されなかった。固定depot_toolsを維持したまま一次ソースでGN前の必要手順を確認し、後述の最小修正を行った。
+Each preflight uses a new, explicitly named `attempt-YYYYMMDD-HHMMSS` root.
+The output app and results directory must be its direct children. The root must
+be absolute, unused, non-symlinked, user-owned, outside the source app, artifact,
+and `/Applications` trees, and have a safe existing parent. Existing retry0–12
+directories and their evidence remain immutable historical records; they are not
+inputs to the new attempt workflow.
 
-## 固定depot_tools bootstrap修正と成功run
+## Framework version policy
 
-固定depot_tools [`0306e4682b4ac35287c726fa35a983157a625902` の `ensure_bootstrap`](https://chromium.googlesource.com/chromium/tools/depot_tools/+/0306e4682b4ac35287c726fa35a983157a625902/ensure_bootstrap#15) は、現在のcheckoutでbootstrap programを準備し、`update_depot_tools`と異なりrepositoryをupdate/syncしないと明記する。同SHAの[`ensure_bootstrap` 45–64行](https://chromium.googlesource.com/chromium/tools/depot_tools/+/0306e4682b4ac35287c726fa35a983157a625902/ensure_bootstrap#45)は非Windowsで`bootstrap_python3`を呼び、CIPDと補助programを同期する。[`bootstrap_python3` 23–30行](https://chromium.googlesource.com/chromium/tools/depot_tools/+/0306e4682b4ac35287c726fa35a983157a625902/bootstrap_python3#23)はCIPD Pythonを準備して`bootstrap/bootstrap.py`を呼び、同[`bootstrap.py` 653–655行](https://chromium.googlesource.com/chromium/tools/depot_tools/+/0306e4682b4ac35287c726fa35a983157a625902/bootstrap/bootstrap.py#653)が`python3_bin_reldir.txt`を出力する。[`python-bin/python3` 14–31行](https://chromium.googlesource.com/chromium/tools/depot_tools/+/0306e4682b4ac35287c726fa35a983157a625902/python-bin/python3#14)はこのfileを読み、相対pathのPythonを実行する。
+The active concrete Framework version is discovered from the source bundle's
+`Versions/Current` link and checked against the release Chrome version. Only that
+active version is retained in the isolated test copy; the installed source bundle
+is never changed. Removed-version inventories, the active version, Libraries
+baseline/post-install inventories, and release-manifest digest are recorded in
+the external test-copy evidence. Existing `Libraries` baseline entries must be
+preserved; the only new entries are the two ANGLE dylibs with hashes from the
+release manifest. Unknown, missing, replaced, or colliding entries fail closed.
 
-workflow commit `37737c8d508a860fdd7d011eba9b9158ca65149a`は、固定SHAのdetached checkout検証直後、`gclient`より前に公式`ensure_bootstrap` stepを追加した。`DEPOT_TOOLS_UPDATE=0`は維持し、`update_depot_tools`も手作業による`python3_bin_reldir.txt`生成も行わない。stepはbootstrap前後にGit HEADが期待SHAと一致すること、生成fileが非空で相対path配下の`python3`が実行可能であること、公式`python-bin/python3 --version`が成功することを検証する。artifactの`build-environment.txt`へ前後HEAD、相対path、bootstrap Python versionを記録する。
+The Libraries symlink is accepted only when its literal target is
+`Versions/Current/Libraries` and its canonical resolution remains within the
+test-copy Framework. Symlink, bundle, inventory, signature-receipt, and
+Case B/Case C isolation checks remain part of the synthetic fixtures.
 
-修正後の手動run [`35515036255`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/35515036255) はcommit `37737c8d508a860fdd7d011eba9b9158ca65149a`で成功した（job所要25分5秒）。`macos-15-intel` runnerはmacOS / X64、`x86_64`、4 CPU、Xcode 16.4、macOS SDK 15.5を記録した。bootstrap前後と`gclient sync`後のdepot_tools HEADはすべて`0306e4682b4ac35287c726fa35a983157a625902`で、生成relative pathは`bootstrap-2@3.11.8.chromium.35_bin/python3/bin`、bootstrap Pythonは3.11.8だった。ANGLE SHAも`gclient sync`後に期待値と一致した。
+## Signing and runtime boundary
 
-GN、Ninja（`libEGL libGLESv2`、1314 target）、artifact検証、uploadは成功した。disk使用量はcheckout後`8794000 KiB`、GN後`8808444 KiB`、build後`8854780 KiB`だった。artifact `angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-35515036255` は`libEGL.dylib`、`libGLESv2.dylib`、revision、GN args、environment、検証report、root `LICENSE`と`licenses/LICENSE`を含む。2本だけがdylibで、両方thin x86_64 Mach-O shared library、未署名である。`libEGL.dylib`のSHA-256は`f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`、`libGLESv2.dylib`は`8d3d188d3d4f23cf3f96ecea209b084c6db9c6192244f879cfb6bf0fb2e02cf0`である。
+Copy validation precedes ANGLE placement. Signing is an explicitly confirmed,
+test-copy-only operation; the preflight command calls signing only with
+`--dry-run`. Ad-hoc signing replaces Google's Developer ID signature and
+notarization on that test copy. It is not a normal browsing or distribution
+copy. Signature, entitlements, CodeDirectory, strict-verification, and GPU
+process load evidence are retained before any later runtime decision. Strict
+verification failures are not ignored or retried automatically.
 
-両dylibのinstall nameはそれぞれ`./libEGL.dylib`、`./libGLESv2.dylib`であり、`otool -L`先頭の同名項目は自己IDとして依存判定から除外した。残る依存は`/System/Library`または`/usr/lib`のみであり、非system依存、runner固有絶対path、未解決依存は検出されなかった。これはartifactの形式検証結果であり、未署名dylibをChromeが実機でloadできることを意味しない。Chrome app、xattr、署名、プロファイル、KOOVはこのrunおよびartifact検証で操作していない。
+The complete synthetic fixture suites are accepted only through the pinned
+Phase 3B and Phase 3C GitHub Actions workflows on `macos-15-intel`. Local full
+fixture execution is prohibited. CI success is required before requesting a new
+human-approved real-device preflight. CI success alone does not establish that
+the GPU process loads both external dylibs or that KOOV works.
 
-## Phase 3B のtest copyと署名境界（retry4-8は保存済み失敗、retry9は未実施）
+## Legacy artifacts
 
-`scripts/download-angle-artifact.sh`はrun `35515036255`のartifactだけを取得し、`libEGL.dylib`の`f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`と`libGLESv2.dylib`の`8d3d188d3d4f23cf3f96ecea209b084c6db9c6192244f879cfb6bf0fb2e02cf0`を固定して検証する。artifactにはANGLE revision、build environment、GN args、2本のdylib、形式/署名/`otool` report、root `LICENSE`、`licenses/LICENSE`がある。dylibはthin x86_64 Mach-Oで未署名、自己install name以外の依存はsystem libraryだけである。
+The artifact built for Chrome `154.0.8037.45` (run `35515036255`, Chromium
+revision `731082f0a26ce4b3976c3d82943092f5d13daf13`, ANGLE revision
+`72b8f72a7587ec776d7d2a57d275a6e9b1781b1d`) is retained as a legacy record.
+Its fixed hashes and artifact identity are historical facts, not current script
+constants. It does not contain the new `angle-release-v1` manifest and must not
+be silently accepted by the new download, prepare, sign, run, collect, or
+preflight path. Do not use it for a different Chrome version.
 
-固定ANGLE [`update_chrome_angle.py` 35–43行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/scripts/update_chrome_angle.py#35)はmacOSのCanary Framework `Libraries`を対象に2本のdylibとcomponent build用optional dylibを定義し、[`114–118行`](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/scripts/update_chrome_angle.py#114)で`xattr -cr`と`codesign --force --sign - --deep`を実行する。Phase 3Bのtest copyでは、`--deep`での署名は使わない。ChromeのFrameworkは複数の具体versionを持つため、各`Versions/<version>`配下を内側から署名・strict検証し、最後にmain executableとappを署名する。Framework rootへの一括署名は行わない。これは[Appleのversioned framework手順](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/Procedures/Procedures.html)に合わせるものであり、Library Validationやentitlementsへの効果は推測せず、署名前後のdetails、CodeDirectory flags、TeamIdentifier、Authority、Runtime、entitlementsを保存して比較する。
-
-`prepare-chrome-angle-test-copy.sh`はsource/outputを明示指定し、root、`/Applications`、symlink component、既存output、非所有parent、version/x86_64/SHA mismatchを拒否する。copyには`ditto --norsrc --noextattr --noacl --noqtn`を使い、resource fork/HFS metadata、extended attributes、ACL、quarantineを持ち込まない。これはtest-only copyであり、通常利用・配布を目的としない。copyのFinderInfo/ResourceFork不在、Info.plist・Resources・main/Framework/GPU Helperの必要componentと実行属性、strict signature検証成功を確認してから2本だけを配置する。sourceのmain executable、Framework、GPU Helperは前後で読み取り検証する。dylib配置によるcopyのGoogle署名無効化は記録するが、このscriptは再署名も起動も行わない。
-
-prepareはapp外部にread-only manifest v4と別SHA-256 fileを作る。v2/v3は拒否する。manifestはcopy policy、canonical paths、固定version/revision、artifact名、2本のdylib SHA、unsigned stageを記録し、Libraries inventoryはrootを除く再帰TSVで相対path、`dir`/`file`/`symlink`、`-`/file SHA-256/symlink targetを記録する。IwaKeyDistributionを含む通常のディレクトリや同名leafは例外扱いせず、symlinkは追跡しない。baselineはsource/copyで一致し、finalはbaseline全entryにtop-levelの`libEGL.dylib`と`libGLESv2.dylib`だけを固定SHAで追加する。collision、未知entry、特殊entry、制御文字、壊れた・外部を指すsymlinkを拒否し、sign/run/collectはmanifest、sidecar、保存済みinventoryを再検証する。完全な耐改ざん境界ではないため、user-owned test copyだけを署名対象にする。
-
-`sign-chrome-angle-test-copy.sh`はprepared manifest、2本のhash、strict確認済みad-hoc signing receiptを必須にする。`--dry-run`は`xattr`/`codesign`を実行せず、実行には`--confirm-ad-hoc-signing`が必須である。実行時はGoogle Developer ID署名とnotarization状態を失うため、通常利用・通常Web閲覧・既存profileでの使用を禁止する。`run-dynamic-angle-test.sh`はad-hoc receipt、現在のstrict verification、`Signature=adhoc`、new `mktemp` profile、Case B/Cを確認する。Case Bにはoverrideを付けず、Case Cだけが`--disable-angle-features=requireGpuFamily2`を付ける。
-
-`collect-phase3-evidence.sh`は署名前後のsignature/entitlement record、dylib hashと署名、GPU PID/command、`lsof`または`vmmap`を保存する。`--use-dynamic-angle`は要求の証拠に過ぎず、両dylibのtest copy内絶対pathが同一GPU processで確認できた場合だけ外部ANGLEロードを確認済みとする。KOOV、Family 1改修、Case B/C実機起動はさらに後であり、今回未実施である。
-
-### Phase 3B manifest schema v4 のfixture確認（retry4-8は保存済み失敗、retry9は未実施）
-
-完全なfixture acceptanceは、固定SHAのActionsを使う
-`.github/workflows/phase3b-fixtures.yml`を`macos-15-intel`で実行した結果だけを正式判定とする。
-ローカルではfull suiteを実行せず、実装・レビュー・`bash -n`・YAML parse・`git diff --check`と、
-必要な短い非全体診断だけを行う。CIはsynthetic dataだけを使い、runner情報、repo state、fixture
-stdout/stderr、exit statusを失敗時も含めて保存する。
-CI environment information and the diagnostics index are retained with each
-run. Acceptance additionally requires job success, fixture exit `0`, passing
-static checks and `git diff --check`, no skipped required fixtures, and no
-unexpected diagnostics; this document does not claim that the new CI run has
-passed. A failure is reviewed and classified by the parent, fixed by Luna,
-then rechecked and checkpointed before a new run; only one clearly transient
-runner/service failure permits a rerun. Retry3 remains a saved failure/no-op.
-
-### Phase 3C bounded preflight
-
-`scripts/run-phase3c-preflight.sh` は `SOURCE_APP`、`ARTIFACT_DIR`、
-`OUTPUT_APP`、`RESULTS_DIR` を明示指定し、branch clean、入力の非symlink、
-Chrome version/x86_64、source process不在、固定artifact revision/SHA、
-新規かつ安全なoutput/results、collision、retry0-8拒否を検証する。CIでは
-synthetic inputに対して一度だけprepareし、schema/hash/inventoryをcommon
-validationで再検証し、read-only inspection/signature evidenceを保存する。
-sign scriptは`--dry-run`だけを呼び、署名、起動、削除、xattr変更は行わない。
-results directory作成後は、その内部にappend-onlyのstep journalとauthoritative final resultを保存する。read-only gateまたはroot作成前の失敗ではresultsを安全に作成できないため、journal/resultがないこと自体をその境界として扱う。
-retry4はdirectory entryを表現できないためprepare中に停止した保存済みfailureであり、再利用しない。retry5の報告不整合は`inconsistent-reporting-preserved`として記録だけを保持する。retry7はnested bundle未署名、retry8はversioned Framework root署名の不整合で停止した保存済みfailureであり、いずれも再利用しない。retry9より前に、CIで複数Framework versionを再現して署名順を検証する。
-read-only sourceの既存`/Applications`配置は検証対象として許可するが、
-writable output/resultsの`/Applications`配置は拒否する。このpath-role修正は
-synthetic CIの初回failureを受けたものであり、retry9の実機試行には改めて承認が必要である。
-
-| path role | lifecycle rule |
-| --- | --- |
-| existing source/artifact | regular non-symlink input; source may be an existing absolute app under `/Applications` |
-| prospective retry root | absent `retry9` or labeled `*-retry9`, one lexical level below an existing regular non-symlink parent; no `..` or symlink components; retry0-8 reserved |
-| output/results | absent direct children of that root; root is created only after all read-only gates, then results is created and prepare creates output |
-| protected paths | root, `/Applications` destinations, source/evidence, retry0-8, collisions, and post-create canonical/symlink drift are rejected |
-
-The preflight fixture directly covers absent-root success, existing or missing/
-symlinked parents, an existing root, `/Applications` and source-contained
-roots, retry0-6, parent/child mismatches, identical or existing output/results,
-lexical dot/empty components, simulated root/results mkdir failures, and
-post-create canonical/symlink races. These rejection cases verify through the
-stub log that prepare/sign were not called; the source hash and retry0-6
-absence are checked afterward. The root is created once, results once, and no
-automatic cleanup or retry is performed.
-The third CI stop was caused by requiring the root basename to be exactly
-`retry4`; the retained retry4 failure is not reused. Approved labeled roots
-such as `phase3c-preflight-retry9` are accepted, while retry0-8 labels
-remain reserved. The process snapshot keeps
-the fixed snapshot method but excludes the current preflight PID before
-matching the source executable; a different matching PID remains a rejection.
-
-manifestはschema v4を必須とし、v2/v3は拒否する。Libraries inventoryは再帰TSVで、rootを除く相対pathごとに`dir`、`file`、`symlink`を記録し、source baseline、copy baseline、post-installの各inventoryとSHA sidecarを保存する。特殊entry、制御文字、symlink cycleを追跡せずに拒否する。copy前のbaseline inventoryはsource/copyで一致し、post-installはbaseline全entryにtop-levelの`libEGL.dylib`と`libGLESv2.dylib`だけを固定SHAで追加する。ANGLE名collision、未知entry、型変更、hash/sidecar/manifest改変、壊れた・外部を指す`Libraries` symlinkは拒否する。sign/run/collectは3 inventory、3 sidecar、3 manifest hashを再検証する。`evidence-receipt-policy` groupはこれらの再検証、policy mismatch、strict/non-ad-hoc signature、receipt改変をまとめて確認し、full suiteもこのgroupを再利用する。retry4-8は保存済みfailureとして再利用せず保持し、次の承認対象はretry9である。今回もChrome、GPU Helper、profile、KOOVの起動や実機test、実署名は行っていない。
-
-### Source metadata とclean copyのstrict gate
-
-Phase 3B prepareの実機初回試行ではartifact検証まで成功したが、source main executableの`codesign --verify --strict`が`resource fork, Finder information, or similar detritus not allowed`でStage 1停止した。test copy、manifest、dylib、signing receiptは生成されていない。このsource-side failureは元Chromeにあるextended attributeの記録であり、元appのxattrは変更しない。
-
-prepare scriptはsource app/main executable/Framework/GPU Helperごとに、strict verificationのstdout/stderr、exit status、`codesign -dvvv`、entitlements、read-only xattr一覧、実行ファイルSHA-256を保存する。strict failureはこの既知message**だけ**をwarningとしてStage 2へ進め、ほかの署名エラーはfatalである。`--ignore-resources`は使用せず、source strict結果を成功へ書き換えない。
-
-retry1では`ditto --noextattr --noqtn`後にもapp root、Contents、Resources、各`.lproj`等にFinderInfoが残り、Stage 2で停止した。dylib、manifest、receiptは生成されていない。次のcopyは`ditto --norsrc --noextattr --noacl --noqtn`を使用する。`--norsrc`はresource forkとHFS metadataを除外し、併記した`--noextattr`、`--noacl`、`--noqtn`はextended attributes、ACL、quarantineを再有効化しない意図を明示する。
-
-このpolicy後のcopyは、app全体の`--verify --deep --strict`、main executable、Framework、GPU Helperの各`--verify --strict`、Google Developer ID Authority、TeamIdentifier `EQHXZ8M8AV`、再帰xattr一覧のFinderInfo/ResourceFork不在を**すべて**満たすまでdylibを配置しない。source/copyの各主要componentは、pathを除いたAuthority/TeamIdentifier/CodeDirectory identityとSHA-256を比較して証拠化する。copy側のmetadata detritus又は署名failureは許容しない。
-
-失敗したprepareのevidence、output、sidecarは削除・上書きしない。retry1も保持する。次の実機試行は、既存retry/evidenceと重ならないことを確認した、明示的に選んだ未使用のuser-owned pathで行う。
-
-artifact保存期限後にも再検証できるよう、利用者はGit管理外の保全先を作り、CI完了後に記録するrun IDと2本のSHA-256を指定して次を実行し、そのディレクトリとchecksumsを保管する。
-
-```sh
-scripts/download-angle-artifact.sh "$ARTIFACT_ARCHIVE_DIRECTORY"
-```
-
-このscriptはrepository内へのdownload、既存出力の上書き、Chrome/Chromium/ANGLE識別子またはSHAの不一致を拒否する。artifactの未署名dylibをChromeへ配置することは、署名・Library Validationを含む明示的なPhase 3B判断まで行わない。
-
-## 履歴artifact（Chrome 154.0.8037.17、流用禁止）
-
-run [`35501697418`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/35501697418) の `angle-macos-x86_64-35501697418` は、Chromium `62d2fcb41a84e4dcefd8c4da7dfa534e6c482854` とANGLE `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448` 向けである。Phase 3AでGit管理外の一時領域へ取得し、`ANGLE_REVISION`、2本のSHA-256、`args.gn`、`build-environment.txt`、911個の第三者license/NOTICEを確認した。`libEGL.dylib`は`f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`、`libGLESv2.dylib`は`2e0aadc21e76b0bb1adcfb3b908e757906995b75abb9e90edb3dfb5c1d1adef0`で、両方thin x86_64 Mach-O・未署名だった。**これはChrome 154.0.8037.45へ流用しない。**
-
-## .45 固定ソース確認と .17との差分
-
-- Chromium [`ui/gl/gl_switches.cc` 95–98、191–196行](https://chromium.googlesource.com/chromium/src/+/731082f0a26ce4b3976c3d82943092f5d13daf13/ui/gl/gl_switches.cc#95) は`USE_STATIC_ANGLE`で`--use-dynamic-angle`を定義し、GPU processへコピーするGL switch一覧に含める。[`gpu_process_host.cc` 1476–1485行](https://chromium.googlesource.com/chromium/src/+/731082f0a26ce4b3976c3d82943092f5d13daf13/content/browser/gpu/gpu_process_host.cc#1476) はこの一覧をbrowser command lineからGPU processへcopyする。
-- 同commitの [`gl_initializer_mac.cc` 34–110行](https://chromium.googlesource.com/chromium/src/+/731082f0a26ce4b3976c3d82943092f5d13daf13/ui/gl/init/gl_initializer_mac.cc#34) はapp bundleのFramework `Libraries`から`libGLESv2.dylib`、続いて`libEGL.dylib`をloadし、static ANGLE buildで`--use-dynamic-angle`がある場合はstatic loaderを使わない。
-- ANGLE [`mtl_features.json` 367–373行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/include/platform/mtl_features.json#367) と生成済み [`FeaturesMtl_autogen.h` 305–309行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/include/platform/autogen/FeaturesMtl_autogen.h#305) は`requireGpuFamily2`の定義とCLI名を示す。[`DisplayMtl.mm` 141–145行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/src/libANGLE/renderer/metal/DisplayMtl.mm#141) は有効かつMac GPU Family 2非対応時に初期化を停止し、[1209–1213行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/src/libANGLE/renderer/metal/DisplayMtl.mm#1209)でoverride適用後、[1314–1316行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/src/libANGLE/renderer/metal/DisplayMtl.mm#1314)で既定有効化を行う。
-- [`Feature.h` 16–23、143–147行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/include/platform/Feature.h#16)の`ANGLE_FEATURE_CONDITION`は`hasOverride`がfalseの場合だけ既定値を設定する。[`renderer_utils.cpp` 72–76、1715–1721行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/src/libANGLE/renderer/renderer_utils.cpp#72)ではoverrideが`enabled`を設定して`hasOverride = true`にし、disabled一覧はfalseとして適用する。入力文字列が実機で認識されたこと自体は未確認である。
-- `git diff`をChromiumの上記3ファイルとANGLEの上記5ファイルに限定して`.17`固定commitと`.45`固定commitを比較し、これらのdynamic loader、switch転送、`requireGpuFamily2`、override処理に差分がないことを確認した。対象外の変更が動作に無関係と断定するものではない。
-
-## 比較ケース
-
-| Case | ANGLE | Feature override | 目的 | Phase 3Aの状態 |
-| --- | --- | --- | --- | --- |
-| A | Chrome内蔵 | なし | Chrome 154の既存失敗基準 | 実行準備のみ |
-| B | 外部の標準ANGLE | なし | dynamic ANGLEのロード経路と標準挙動確認 | 実行準備のみ |
-| C | 外部の標準ANGLE | `requireGpuFamily2`無効 | override伝達後の初期化段階確認 | 実行準備のみ |
-| D | 外部のFamily 1実験版 | `requireGpuFamily2`無効 | Family 1でMetal/WebGLが初期化可能か確認 | 未実装・未実施 |
-| E | Case D | 同上 | WebGLテスト | 未実装・未実施 |
-| F | Case D | 同上 | KOOV試験 | 未実装・未実施 |
-
-Case Bが実機で外部standard ANGLEの直接ロード証拠を得るまで、Family 1用コード改修へ進まない。Case Cは入力switchを渡すだけであり、ANGLE内部Feature名として認識されたこと、overrideが実際に適用されたことはPhase 4の診断ログまたは実機証拠なしに断定しない。`requireMsl21`は固定ANGLEで未確認のため、使用しない。
-
-## 配置根拠と安全境界
-
-Chromium固定commitの[`gl_initializer_mac.cc` 34–110行](https://chromium.googlesource.com/chromium/src/+/731082f0a26ce4b3976c3d82943092f5d13daf13/ui/gl/init/gl_initializer_mac.cc#34)は、app bundleで`FrameworkBundlePath().Append("Libraries")`から`libGLESv2.dylib`、`libEGL.dylib`を順にloadする。ANGLE固定commitの[`update_chrome_angle.py` 35–43行](https://chromium.googlesource.com/angle/angle/+/72b8f72a7587ec776d7d2a57d275a6e9b1781b1d/scripts/update_chrome_angle.py#35)も`Google Chrome Framework.framework/Libraries`をコピー先として示す。このためprepare scriptは**コピー後のテストappだけ**のFramework実体内`Libraries`を対象にする。元appと同一出力、`/Applications`配下への出力、既存appの暗黙上書き、再署名、SIP/Gatekeeper/AMFI/Library Validationの回避は拒否する。
-
-`scripts/inspect-chrome-for-dynamic-angle.sh`は読み取り専用で、対象version、architecture、Framework実体、Libraries候補、app/main executable/Framework/GPU Helperの署名、TeamIdentifier、Hardened Runtime表示、entitlements、既存dylibを記録する。Hardened Runtimeと`com.apple.security.cs.disable-library-validation`の有無は、各対象の`codesign`詳細・entitlements出力を人間が確認する必要がある。未署名dylibの配置後に署名が無効なら、prepare scriptは再署名せず停止する。
-
-## 実機実行順序（Phase 3B以降、今回実行しない）
-
-1. `scripts/inspect-chrome-for-dynamic-angle.sh "$SOURCE_CHROME_APP"` を読み取り実行し、Chrome 154/x86_64と元appの署名を確認する。
-2. `scripts/download-angle-artifact.sh "$ARTIFACT_DIRECTORY"` でartifactをGit管理外へ保全・再検証する。
-3. `scripts/prepare-chrome-angle-test-copy.sh "$SOURCE_CHROME_APP" "$ARTIFACT_DIRECTORY" "$TEST_APP"` を実行し、結果を人間がレビューする。署名無効化が記録されたら、承認まで停止する。
-4. 承認後に`sign-chrome-angle-test-copy.sh "$TEST_APP" "$SIGN_RESULTS" --dry-run`を確認し、さらに承認後に`--confirm-ad-hoc-signing`を明示して署名する。
-5. 承認済みの有効なtest copyだけに対して、`scripts/run-dynamic-angle-test.sh CASE_B "$TEST_APP" "$RESULTS_DIRECTORY"` を実行する。Case Bに`--disable-angle-features`は付与しない。
-6. `scripts/collect-phase3-evidence.sh "$TEST_APP" "$RESULTS_DIRECTORY"` と手動の`chrome://gpu`保存手順で結果を保全する。`lsof`、`vmmap`などで両dylibのtest copy内絶対pathが確認できるまで、外部ANGLEは未確認とする。
-7. Case Bの直接ロード証拠が得られた後だけ、`CASE_C`を実行する。Case Cだけが`--disable-angle-features=requireGpuFamily2`を付与する。
-
-run scriptは既存Chrome processを検出すると停止し、`open -a`を使わずtest appのexecutableだけを起動する。各runは新規`mktemp`の`--user-data-dir`を使い、既存profileを指定・削除・利用しない。結果は`local-results/`など`.gitignore`対象に置き、profileは自動削除しない。
-
-ローカル専用の保全構造は次を想定する。これらはGitへ追加しない。
-
-```text
-local-results/
-  phase0/
-    chrome149-success/
-    chrome154-failure/
-  phase3/
-    case-b-dynamic-stock/
-    case-c-dynamic-stock-family1-override/
-```
-
-## ロード判定と未確認事項
-
-`--use-dynamic-angle`がcommand lineやGPU process command lineに現れるだけでは外部ANGLEロードの証拠にならない。`collect-phase3-evidence.sh`はGPU processが存続する場合、`lsof`または`vmmap`でtest bundle内の`libEGL.dylib`と`libGLESv2.dylib`の**絶対パスの両方**を確認したときだけ`load-evidence.txt`に直接ロード証拠として記録する。短時間終了、権限不足、またはpath未検出なら「未確認」であり成功と推測しない。信頼できるdyld load記録も同等の証拠として扱える。
-
-実機でのみ未確認なのは、Chrome 154がこのtest copyを起動・loadできるか、未署名dylibに対する署名・Library Validation、GPU processの存続、Metal/EGL初期化、`requireGpuFamily2`入力認識、WebGL/Compositing/Rasterization、GPU crash count、KOOV動作である。Chrome本体、KOOV、実機profileを変更・起動する前に、これらの境界と結果公開時の秘匿情報を人間がレビューする。
-
-実機の元Chrome app全体に対する`codesign --verify --deep --strict`は`com.apple.FinderInfo`属性のため失敗した。一方、main executable、Framework、GPU Helperの個別Google署名は有効だった。この差異は未解決事項として記録し、元appの`xattr`は変更しない。
+The original dynamic ANGLE rationale remains: Chromium forwards the dynamic ANGLE
+switch to the GPU process and resolves `libGLESv2.dylib` and `libEGL.dylib` from
+the Framework `Libraries` directory. This establishes the intended loading path,
+not successful runtime loading on a specific device. Case A/B/C comparisons and
+direct GPU-process evidence are required; Family 1-specific ANGLE changes remain
+outside this phase.
