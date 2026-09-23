@@ -6,9 +6,12 @@ readonly PHASE3_ANGLE_REVISION='72b8f72a7587ec776d7d2a57d275a6e9b1781b1d'
 readonly PHASE3_ARTIFACT_NAME='angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-35515036255'
 readonly PHASE3_LIBEGL_SHA256='f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8'
 readonly PHASE3_LIBGLESV2_SHA256='8d3d188d3d4f23cf3f96ecea209b084c6db9c6192244f879cfb6bf0fb2e02cf0'
-readonly PHASE3_TEST_COPY_MANIFEST_SCHEMA='phase3-angle-test-copy-v4'
+readonly PHASE3_TEST_COPY_MANIFEST_SCHEMA='phase3-angle-test-copy-v5'
 readonly PHASE3_COPY_POLICY='norsrc,noextattr,noacl,noqtn'
 readonly PHASE3_LIBRARIES_SYMLINK_TARGET='Versions/Current/Libraries'
+readonly PHASE3_FRAMEWORK_CURRENT_VERSION='154.0.8037.45'
+readonly PHASE3_FRAMEWORK_REMOVED_VERSION='154.0.8037.17'
+readonly PHASE3_FRAMEWORK_VERSION_POLICY='current-only'
 
 phase3_fail() {
   printf '%s: %s\n' "${PHASE3_SCRIPT_NAME:-phase3}" "$1" >&2
@@ -231,13 +234,13 @@ phase3_validate_inventory_file() {
     phase3_fail "duplicate Libraries inventory path: $inventory"
 }
 
-phase3_inventory_libraries() {
-  local libraries_real=$1
+phase3_inventory_tree() {
+  local tree_real=$1
   local inventory=$2
   local entry relpath link_target hash
   : > "$inventory"
   while IFS= read -r -d '' entry; do
-    relpath=${entry#"$libraries_real"/}
+    relpath=${entry#"$tree_real"/}
     phase3_validate_inventory_path "$relpath" 'entry path'
     if [[ -L "$entry" ]]; then
       link_target=$({ readlink -n "$entry"; printf '\001'; }) || phase3_fail "cannot read Libraries entry: $entry"
@@ -252,7 +255,75 @@ phase3_inventory_libraries() {
     else
       phase3_fail "unsupported Libraries entry type: $entry"
     fi
-  done < <(find -P "$libraries_real" -mindepth 1 -print0 | LC_ALL=C sort -z)
+  done < <(find -P "$tree_real" -mindepth 1 -print0 | LC_ALL=C sort -z)
+}
+
+phase3_inventory_libraries() {
+  phase3_inventory_tree "$@"
+}
+
+phase3_inventory_framework_versions_layout() {
+  local framework=$1
+  local inventory=$2
+  local versions="$framework/Versions"
+  local entry name target
+
+  [[ -d "$versions" && ! -L "$versions" ]] ||
+    phase3_fail "Framework Versions directory is missing or symlinked: $versions"
+  : > "$inventory"
+  while IFS= read -r -d '' entry; do
+    name=$(basename "$entry")
+    phase3_validate_inventory_path "$name" 'Framework version entry'
+    if [[ -L "$entry" ]]; then
+      target=$({ readlink -n "$entry"; printf '\001'; }) ||
+        phase3_fail "cannot read Framework version symlink: $entry"
+      target=${target%$'\001'}
+      phase3_validate_inventory_field "$target" 'Framework version symlink target'
+      printf '%s\tsymlink\t%s\n' "$name" "$target" >> "$inventory"
+    elif [[ -d "$entry" ]]; then
+      printf '%s\tdir\t-\n' "$name" >> "$inventory"
+    else
+      phase3_fail "unsupported Framework Versions entry: $entry"
+    fi
+  done < <(find -P "$versions" -mindepth 1 -maxdepth 1 -print0 | LC_ALL=C sort -z)
+}
+
+phase3_validate_current_only_framework() {
+  local framework=$1
+  local versions="$framework/Versions"
+  local current="$versions/Current"
+  local current_target
+  local entry name
+  local current_seen=0
+  local version_seen=0
+
+  [[ -d "$framework" && ! -L "$framework" ]] ||
+    phase3_fail "Framework is missing or symlinked: $framework"
+  [[ -d "$versions" && ! -L "$versions" ]] ||
+    phase3_fail "Framework Versions directory is missing or symlinked: $versions"
+  [[ -L "$current" ]] || phase3_fail 'Framework Current is not a symlink'
+  current_target=$(readlink "$current") || phase3_fail 'Framework Current symlink cannot be read'
+  [[ "$current_target" == "$PHASE3_FRAMEWORK_CURRENT_VERSION" ]] ||
+    phase3_fail "Framework Current does not target $PHASE3_FRAMEWORK_CURRENT_VERSION"
+  [[ -d "$versions/$PHASE3_FRAMEWORK_CURRENT_VERSION" && ! -L "$versions/$PHASE3_FRAMEWORK_CURRENT_VERSION" ]] ||
+    phase3_fail 'current Framework version is missing or symlinked'
+
+  while IFS= read -r -d '' entry; do
+    name=$(basename "$entry")
+    case "$name" in
+      Current)
+        [[ -L "$entry" ]] || phase3_fail 'Framework Current entry changed type'
+        current_seen=$((current_seen + 1))
+        ;;
+      "$PHASE3_FRAMEWORK_CURRENT_VERSION")
+        [[ -d "$entry" && ! -L "$entry" ]] || phase3_fail 'current Framework version changed type'
+        version_seen=$((version_seen + 1))
+        ;;
+      *) phase3_fail "unexpected Framework version entry: $name" ;;
+    esac
+  done < <(find -P "$versions" -mindepth 1 -maxdepth 1 -print0)
+  [[ "$current_seen" -eq 1 && "$version_seen" -eq 1 ]] ||
+    phase3_fail 'Framework current-only layout is incomplete'
 }
 
 phase3_validate_post_inventory() {
@@ -331,14 +402,24 @@ phase3_validate_manifest() {
     phase3_fail 'manifest libGLESv2 SHA-256 does not match'
   [[ "$(phase3_manifest_value "$manifest" 'COPY_POLICY')" == "$PHASE3_COPY_POLICY" ]] ||
     phase3_fail 'manifest copy policy does not match'
+  [[ "$(phase3_manifest_value "$manifest" 'FRAMEWORK_VERSION_POLICY')" == "$PHASE3_FRAMEWORK_VERSION_POLICY" ]] ||
+    phase3_fail 'manifest Framework version policy does not match'
+  [[ "$(phase3_manifest_value "$manifest" 'FRAMEWORK_CURRENT_VERSION')" == "$PHASE3_FRAMEWORK_CURRENT_VERSION" ]] ||
+    phase3_fail 'manifest current Framework version does not match'
+  [[ "$(phase3_manifest_value "$manifest" 'FRAMEWORK_REMOVED_VERSION')" == "$PHASE3_FRAMEWORK_REMOVED_VERSION" ]] ||
+    phase3_fail 'manifest removed Framework version does not match'
 
   framework="$app/Contents/Frameworks/Google Chrome Framework.framework"
   [[ -d "$framework" && ! -L "$framework" ]] || phase3_fail 'test app framework is missing or symlinked'
+  phase3_validate_current_only_framework "$framework"
   libraries_dir="$(cd "$framework" && pwd -P)/Libraries"
   evidence_dir="$(phase3_manifest_path "$app").evidence"
   phase3_verify_sidecar_hash "$evidence_dir/libraries-source-baseline.txt" "$evidence_dir/libraries-source-baseline.sha256"
   phase3_verify_sidecar_hash "$evidence_dir/libraries-copy-baseline.txt" "$evidence_dir/libraries-copy-baseline.sha256"
   phase3_verify_sidecar_hash "$evidence_dir/libraries-post-install.txt" "$evidence_dir/libraries-post-install.sha256"
+  phase3_verify_sidecar_hash "$evidence_dir/framework-versions-before.txt" "$evidence_dir/framework-versions-before.sha256"
+  phase3_verify_sidecar_hash "$evidence_dir/framework-removed-version-inventory.txt" "$evidence_dir/framework-removed-version-inventory.sha256"
+  phase3_verify_sidecar_hash "$evidence_dir/framework-versions-after.txt" "$evidence_dir/framework-versions-after.sha256"
   local inventory_key inventory_file inventory_hash
   for inventory_key in SOURCE_BASELINE COPY_BASELINE POST_INSTALL; do
     case "$inventory_key" in
@@ -350,6 +431,34 @@ phase3_validate_manifest() {
     [[ "$(phase3_manifest_value "$(phase3_manifest_path "$app")" "LIBRARIES_${inventory_key}_SHA256")" == "$inventory_hash" ]] ||
       phase3_fail "manifest Libraries ${inventory_key} inventory hash does not match"
   done
+  local framework_inventory_key framework_inventory_file framework_inventory_hash
+  for framework_inventory_key in VERSIONS_BEFORE REMOVED_VERSION_INVENTORY VERSIONS_AFTER; do
+    case "$framework_inventory_key" in
+      VERSIONS_BEFORE) framework_inventory_file='framework-versions-before.txt' ;;
+      REMOVED_VERSION_INVENTORY) framework_inventory_file='framework-removed-version-inventory.txt' ;;
+      VERSIONS_AFTER) framework_inventory_file='framework-versions-after.txt' ;;
+    esac
+    framework_inventory_hash=$(phase3_hash "$evidence_dir/$framework_inventory_file")
+    [[ "$(phase3_manifest_value "$manifest" "FRAMEWORK_${framework_inventory_key}_SHA256")" == "$framework_inventory_hash" ]] ||
+      phase3_fail "manifest Framework ${framework_inventory_key} inventory hash does not match"
+  done
+  phase3_validate_inventory_file "$evidence_dir/framework-versions-before.txt"
+  phase3_validate_inventory_file "$evidence_dir/framework-removed-version-inventory.txt"
+  phase3_validate_inventory_file "$evidence_dir/framework-versions-after.txt"
+  grep -F $'Current\tsymlink\t154.0.8037.45' "$evidence_dir/framework-versions-before.txt" >/dev/null ||
+    phase3_fail 'Framework versions-before evidence lacks the expected Current symlink'
+  grep -F $'154.0.8037.17\tdir\t-' "$evidence_dir/framework-versions-before.txt" >/dev/null ||
+    phase3_fail 'Framework versions-before evidence lacks the removed legacy version'
+  grep -F $'154.0.8037.45\tdir\t-' "$evidence_dir/framework-versions-before.txt" >/dev/null ||
+    phase3_fail 'Framework versions-before evidence lacks the current version'
+  [[ $(wc -l < "$evidence_dir/framework-versions-before.txt" | tr -d ' ') == 3 ]] ||
+    phase3_fail 'Framework versions-before evidence contains unexpected entries'
+  grep -F $'Current\tsymlink\t154.0.8037.45' "$evidence_dir/framework-versions-after.txt" >/dev/null ||
+    phase3_fail 'Framework versions-after evidence lacks the expected Current symlink'
+  grep -F $'154.0.8037.45\tdir\t-' "$evidence_dir/framework-versions-after.txt" >/dev/null ||
+    phase3_fail 'Framework versions-after evidence lacks the current version'
+  [[ $(wc -l < "$evidence_dir/framework-versions-after.txt" | tr -d ' ') == 2 ]] ||
+    phase3_fail 'Framework versions-after evidence is not current-only'
   cmp "$evidence_dir/libraries-source-baseline.txt" "$evidence_dir/libraries-copy-baseline.txt" || phase3_fail 'source and copy Libraries baseline differs'
   phase3_validate_post_inventory "$evidence_dir/libraries-copy-baseline.txt" "$evidence_dir/libraries-post-install.txt"
   current_inventory=$(mktemp "${TMPDIR:-/tmp}/phase3-current-inventory.XXXXXX")
@@ -377,7 +486,8 @@ phase3_validate_signed_test_copy() {
     phase3_fail 'signing receipt app path does not match'
   [[ "$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')" == 'ad-hoc-deep' || \
       "$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')" == 'ad-hoc-nested' || \
-      "$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')" == 'ad-hoc-versioned-framework' ]] ||
+      "$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')" == 'ad-hoc-versioned-framework' || \
+      "$(phase3_manifest_value "$receipt" 'SIGNING_METHOD')" == 'ad-hoc-current-framework' ]] ||
     phase3_fail 'test copy was not ad-hoc signed'
   [[ "$(phase3_manifest_value "$receipt" 'STRICT_VERIFICATION')" == 'passed' ]] ||
     phase3_fail 'signing receipt does not record strict verification'

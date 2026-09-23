@@ -172,6 +172,80 @@ verify_clean_copy_components() {
   verify_copy_component "$evidence_dir/copy-before-dylibs-gpu-helper" "$gpu_helper"
 }
 
+prepare_current_only_framework() {
+  local framework=$1
+  local evidence_dir=$2
+  local versions="$framework/Versions"
+  local current="$versions/Current"
+  local removed="$versions/$PHASE3_FRAMEWORK_REMOVED_VERSION"
+  local kept="$versions/$PHASE3_FRAMEWORK_CURRENT_VERSION"
+  local removed_executable="$removed/Google Chrome Framework"
+  local framework_real removed_real current_target
+  local before="$evidence_dir/framework-versions-before.txt"
+  local removed_inventory="$evidence_dir/framework-removed-version-inventory.txt"
+  local after="$evidence_dir/framework-versions-after.txt"
+  local status
+
+  [[ -d "$framework" && ! -L "$framework" ]] || phase3_fail 'test copy framework is missing or symlinked'
+  [[ -d "$versions" && ! -L "$versions" ]] || phase3_fail 'test copy Framework Versions directory is missing or symlinked'
+  [[ -L "$current" ]] || phase3_fail 'test copy Framework Current is not a symlink'
+  current_target=$(readlink "$current") || phase3_fail 'test copy Framework Current symlink cannot be read'
+  [[ "$current_target" == "$PHASE3_FRAMEWORK_CURRENT_VERSION" ]] ||
+    phase3_fail "test copy Framework Current does not target $PHASE3_FRAMEWORK_CURRENT_VERSION"
+  [[ -d "$removed" && ! -L "$removed" ]] || phase3_fail 'legacy Framework version is missing or symlinked'
+  [[ -d "$kept" && ! -L "$kept" ]] || phase3_fail 'current Framework version is missing or symlinked'
+  [[ -f "$removed_executable" && ! -L "$removed_executable" ]] ||
+    phase3_fail 'legacy Framework executable is missing or symlinked'
+
+  framework_real=$(cd "$framework" && pwd -P)
+  removed_real=$(cd "$removed" && pwd -P)
+  [[ "$removed_real" == "$framework_real/Versions/$PHASE3_FRAMEWORK_REMOVED_VERSION" ]] ||
+    phase3_fail 'legacy Framework version resolves outside the expected test-copy path'
+
+  phase3_inventory_framework_versions_layout "$framework" "$before"
+  [[ $(wc -l < "$before" | tr -d ' ') == 3 ]] ||
+    phase3_fail 'test copy Framework Versions contains unexpected entries before normalization'
+  grep -Fx "$PHASE3_FRAMEWORK_REMOVED_VERSION"$'\tdir\t-' "$before" >/dev/null ||
+    phase3_fail 'Framework versions-before evidence lacks the legacy version'
+  grep -Fx "$PHASE3_FRAMEWORK_CURRENT_VERSION"$'\tdir\t-' "$before" >/dev/null ||
+    phase3_fail 'Framework versions-before evidence lacks the current version'
+  grep -Fx 'Current'$'\tsymlink\t'"$PHASE3_FRAMEWORK_CURRENT_VERSION" "$before" >/dev/null ||
+    phase3_fail 'Framework versions-before evidence lacks the canonical Current symlink'
+  phase3_write_hash_file "$before" "$evidence_dir/framework-versions-before.sha256"
+
+  phase3_inventory_tree "$removed_real" "$removed_inventory"
+  phase3_write_hash_file "$removed_inventory" "$evidence_dir/framework-removed-version-inventory.sha256"
+  phase3_run_codesign "$PHASE3_CODESIGN_EXECUTABLE" -dvvv "$removed_executable" \
+    > "$evidence_dir/framework-removed-version-signature-details.txt" 2>&1 || true
+  phase3_run_codesign "$PHASE3_CODESIGN_EXECUTABLE" --verify --strict "$removed_executable" \
+    > "$evidence_dir/framework-removed-version-strict-verify.txt" 2>&1 || true
+
+  # The path is exact, canonical, inside the new test copy, and the source app
+  # is never passed to this function. Remove only the retained legacy version.
+  rm -rf -- "$removed_real"
+  [[ ! -e "$removed" && ! -L "$removed" ]] || phase3_fail 'legacy Framework version remains after normalization'
+  phase3_validate_current_only_framework "$framework"
+  phase3_inventory_framework_versions_layout "$framework" "$after"
+  phase3_write_hash_file "$after" "$evidence_dir/framework-versions-after.sha256"
+
+  set +e
+  phase3_run_codesign "$PHASE3_CODESIGN_EXECUTABLE" --verify --deep --strict "$framework" \
+    > "$evidence_dir/framework-after-normalization-strict-verify-stdout.txt" \
+    2> "$evidence_dir/framework-after-normalization-strict-verify-stderr.txt"
+  status=$?
+  set -e
+  printf '%s\n' "$status" > "$evidence_dir/framework-after-normalization-strict-verify-status.txt"
+  {
+    printf 'POLICY=%s\n' "$PHASE3_FRAMEWORK_VERSION_POLICY"
+    printf 'CURRENT_VERSION=%s\n' "$PHASE3_FRAMEWORK_CURRENT_VERSION"
+    printf 'REMOVED_VERSION=%s\n' "$PHASE3_FRAMEWORK_REMOVED_VERSION"
+    printf 'REMOVED_PATH=%s\n' "$removed_real"
+    printf 'REMOVED_FROM_TEST_COPY_ONLY=true\n'
+    printf 'SOURCE_APP_WRITTEN=false\n'
+    printf 'NORMALIZED_AT_UTC=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  } > "$evidence_dir/framework-version-normalization.txt"
+}
+
 phase3_prepare_main() {
   local codesign_executable=$4
   [[ $# -eq 4 ]] || phase3_prepare_usage
@@ -179,7 +253,7 @@ phase3_prepare_main() {
   PHASE3_CODESIGN_EXECUTABLE="$codesign_executable"
 phase3_reject_root
 
-for command in ditto shasum lipo xattr stat find install cmp date; do
+for command in ditto shasum lipo xattr stat find install cmp date rm; do
   command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"
 done
 
@@ -244,6 +318,12 @@ verify_source_components "$source_real" "$evidence_dir" source-after-copy
 for component in app main framework gpu-helper; do
   compare_component_identity_and_hash "$evidence_dir/source-before-${component}" "$evidence_dir/source-after-copy-${component}"
 done
+
+# Stage 2.5: normalize only the new test copy to the clean-install-equivalent
+# current Framework layout. Preserve a hashed inventory before removing the
+# retained legacy version. The source app is read-only throughout.
+framework="$output_real/Contents/Frameworks/Google Chrome Framework.framework"
+prepare_current_only_framework "$framework" "$evidence_dir"
 
 # Stage 3: only two verified non-component dylibs. This intentionally invalidates
 # the copied Google signature; ad-hoc signing is a separate explicit script.
@@ -328,6 +408,12 @@ done
   printf 'LIBRARIES_SOURCE_BASELINE_SHA256=%s\n' "$(phase3_hash "$evidence_dir/libraries-source-baseline.txt")"
   printf 'LIBRARIES_COPY_BASELINE_SHA256=%s\n' "$(phase3_hash "$evidence_dir/libraries-copy-baseline.txt")"
   printf 'LIBRARIES_POST_INSTALL_SHA256=%s\n' "$(phase3_hash "$evidence_dir/libraries-post-install.txt")"
+  printf 'FRAMEWORK_VERSION_POLICY=%s\n' "$PHASE3_FRAMEWORK_VERSION_POLICY"
+  printf 'FRAMEWORK_CURRENT_VERSION=%s\n' "$PHASE3_FRAMEWORK_CURRENT_VERSION"
+  printf 'FRAMEWORK_REMOVED_VERSION=%s\n' "$PHASE3_FRAMEWORK_REMOVED_VERSION"
+  printf 'FRAMEWORK_VERSIONS_BEFORE_SHA256=%s\n' "$(phase3_hash "$evidence_dir/framework-versions-before.txt")"
+  printf 'FRAMEWORK_REMOVED_VERSION_INVENTORY_SHA256=%s\n' "$(phase3_hash "$evidence_dir/framework-removed-version-inventory.txt")"
+  printf 'FRAMEWORK_VERSIONS_AFTER_SHA256=%s\n' "$(phase3_hash "$evidence_dir/framework-versions-after.txt")"
   printf 'COPY_POLICY=%s\n' "$PHASE3_COPY_POLICY"
   printf 'CREATED_AT_UTC=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   printf 'PREPARATION_STATE=unsigned-angle-libraries\n'
