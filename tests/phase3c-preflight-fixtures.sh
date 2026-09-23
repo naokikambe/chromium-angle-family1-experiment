@@ -313,6 +313,11 @@ expect_rejected_without_prepare "$preflight" --source-app "$source_app" --artifa
 
 # Release-manifest regressions: tampering, stale sidecar, legacy schema,
 # source-version mismatch, and altered artifact bytes must all fail closed.
+validate_release_manifest_in_subshell() {
+  bash -c 'source "$1"; phase3_validate_release_manifest "$2"' _ \
+    "$repo_root/scripts/phase3-test-copy-common.sh" "$1"
+}
+
 for release_case in manifest-tamper sidecar schema chrome-version dylib; do
   bad_artifact="$fixture/release-$release_case"
   cp -R "$artifact_dir" "$bad_artifact"
@@ -332,7 +337,7 @@ for release_case in manifest-tamper sidecar schema chrome-version dylib; do
     dylib)
       printf 'tampered\n' >> "$bad_artifact/libEGL.dylib" ;;
   esac
-  expect_fail phase3_validate_release_manifest "$bad_artifact"
+  expect_fail validate_release_manifest_in_subshell "$bad_artifact"
 done
 
 test "$(shasum -a 256 "$source_app/Contents/MacOS/Google Chrome" | awk '{print $1}')" = "$source_main_hash"
