@@ -28,7 +28,7 @@ phase3_validate_signed_test_copy "$test_app_real" "$codesign_executable"
 
 info_plist="$test_app_real/Contents/Info.plist"
 chrome_version=$(phase3_plist_value CFBundleShortVersionString "$info_plist") || phase3_fail 'cannot read Chrome version'
-[[ "$chrome_version" == "$PHASE3_CHROME_VERSION" ]] || phase3_fail "expected Chrome $PHASE3_CHROME_VERSION, found $chrome_version"
+[[ "$chrome_version" == "$PHASE3_RELEASE_CHROME_VERSION" ]] || phase3_fail "manifest expects Chrome $PHASE3_RELEASE_CHROME_VERSION, found $chrome_version"
 executable_name=$(phase3_plist_value CFBundleExecutable "$info_plist") || phase3_fail 'cannot read Chrome executable name'
 chrome_executable="$test_app_real/Contents/MacOS/$executable_name"
 [[ -x "$chrome_executable" ]] || phase3_fail 'test app main executable is missing'
@@ -66,10 +66,11 @@ fi
   printf 'timestamp_utc=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   printf 'case=%s\n' "$test_case"
   printf 'chrome_version=%s\n' "$chrome_version"
-  printf 'angle_revision=%s\n' "$PHASE3_ANGLE_REVISION"
-  printf 'artifact_name=%s\n' "$PHASE3_ARTIFACT_NAME"
-  printf 'libEGL_sha256=%s\n' "$PHASE3_LIBEGL_SHA256"
-  printf 'libGLESv2_sha256=%s\n' "$PHASE3_LIBGLESV2_SHA256"
+  printf 'angle_revision=%s\n' "$PHASE3_RELEASE_ANGLE_REVISION"
+  printf 'artifact_name=%s\n' "$PHASE3_RELEASE_ARTIFACT_NAME"
+  printf 'release_manifest_sha256=%s\n' "$(phase3_manifest_value "$(phase3_manifest_path "$test_app_real")" 'RELEASE_MANIFEST_SHA256')"
+  printf 'libEGL_sha256=%s\n' "$PHASE3_RELEASE_LIBEGL_SHA256"
+  printf 'libGLESv2_sha256=%s\n' "$PHASE3_RELEASE_LIBGLESV2_SHA256"
   printf 'user_data_dir=%s\n' "$profile_dir"
   printf 'command='
   printf '%q ' "${command[@]}"

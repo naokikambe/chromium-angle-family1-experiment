@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
 
-readonly PHASE3_CHROME_VERSION='154.0.8037.45'
-readonly PHASE3_CHROMIUM_REVISION='731082f0a26ce4b3976c3d82943092f5d13daf13'
-readonly PHASE3_ANGLE_REVISION='72b8f72a7587ec776d7d2a57d275a6e9b1781b1d'
-readonly PHASE3_ARTIFACT_NAME='angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-35515036255'
-readonly PHASE3_LIBEGL_SHA256='f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8'
-readonly PHASE3_LIBGLESV2_SHA256='8d3d188d3d4f23cf3f96ecea209b084c6db9c6192244f879cfb6bf0fb2e02cf0'
-readonly PHASE3_TEST_COPY_MANIFEST_SCHEMA='phase3-angle-test-copy-v5'
+readonly PHASE3_TEST_COPY_MANIFEST_SCHEMA='phase3-angle-test-copy-v6'
+readonly PHASE3_RELEASE_MANIFEST_SCHEMA='angle-release-v1'
+readonly PHASE3_ARTIFACT_SCHEMA='angle-artifact-v1'
 readonly PHASE3_COPY_POLICY='norsrc,noextattr,noacl,noqtn'
 readonly PHASE3_LIBRARIES_SYMLINK_TARGET='Versions/Current/Libraries'
-readonly PHASE3_FRAMEWORK_CURRENT_VERSION='154.0.8037.45'
-readonly PHASE3_FRAMEWORK_REMOVED_VERSION='154.0.8037.17'
 readonly PHASE3_FRAMEWORK_VERSION_POLICY='current-only'
+
+PHASE3_RELEASE_CHROME_VERSION=''
+PHASE3_RELEASE_CHROMIUM_REVISION=''
+PHASE3_RELEASE_ANGLE_REVISION=''
+PHASE3_RELEASE_DEPOT_TOOLS_REVISION=''
+PHASE3_RELEASE_LIBEGL_SHA256=''
+PHASE3_RELEASE_LIBGLESV2_SHA256=''
+PHASE3_RELEASE_ARTIFACT_NAME=''
+PHASE3_RELEASE_BUILD_RUN_ID=''
+PHASE3_RELEASE_BUILT_AT_UTC=''
+PHASE3_RELEASE_GN_ARGS_SHA256=''
+PHASE3_RELEASE_MANIFEST_SHA256=''
 
 phase3_fail() {
   printf '%s: %s\n' "${PHASE3_SCRIPT_NAME:-phase3}" "$1" >&2
@@ -94,6 +100,57 @@ phase3_manifest_path() {
 
 phase3_manifest_hash_path() {
   printf '%s.sha256\n' "$(phase3_manifest_path "$1")"
+}
+
+phase3_release_manifest_path() {
+  printf '%s/ANGLE_RELEASE_MANIFEST\n' "$1"
+}
+
+phase3_release_manifest_hash_path() {
+  printf '%s/ANGLE_RELEASE_MANIFEST.sha256\n' "$1"
+}
+
+phase3_release_value() {
+  phase3_manifest_value "$(phase3_release_manifest_path "$1")" "$2"
+}
+
+phase3_validate_release_manifest() {
+  local artifact_dir=$1 metadata_only=${2:-false} manifest sidecar schema actual_gn_hash
+  manifest=$(phase3_release_manifest_path "$artifact_dir")
+  sidecar=$(phase3_release_manifest_hash_path "$artifact_dir")
+  phase3_verify_sidecar_hash "$manifest" "$sidecar"
+  schema=$(phase3_manifest_value "$manifest" SCHEMA)
+  [[ "$schema" == "$PHASE3_RELEASE_MANIFEST_SCHEMA" ]] || phase3_fail 'unsupported ANGLE release manifest schema'
+  [[ "$(phase3_manifest_value "$manifest" ARTIFACT_SCHEMA)" == "$PHASE3_ARTIFACT_SCHEMA" ]] ||
+    phase3_fail 'unsupported ANGLE artifact schema'
+  PHASE3_RELEASE_CHROME_VERSION=$(phase3_manifest_value "$manifest" CHROME_VERSION)
+  [[ "$PHASE3_RELEASE_CHROME_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || phase3_fail 'invalid release Chrome version'
+  PHASE3_RELEASE_CHROMIUM_REVISION=$(phase3_manifest_value "$manifest" CHROMIUM_REVISION)
+  PHASE3_RELEASE_ANGLE_REVISION=$(phase3_manifest_value "$manifest" ANGLE_REVISION)
+  PHASE3_RELEASE_DEPOT_TOOLS_REVISION=$(phase3_manifest_value "$manifest" DEPOT_TOOLS_REVISION)
+  [[ "$PHASE3_RELEASE_CHROMIUM_REVISION" =~ ^[0-9a-f]{40}$ && "$PHASE3_RELEASE_ANGLE_REVISION" =~ ^[0-9a-f]{40}$ && "$PHASE3_RELEASE_DEPOT_TOOLS_REVISION" =~ ^[0-9a-f]{40}$ ]] || phase3_fail 'invalid source revision in release manifest'
+  PHASE3_RELEASE_LIBEGL_SHA256=$(phase3_manifest_value "$manifest" LIBEGL_SHA256)
+  PHASE3_RELEASE_LIBGLESV2_SHA256=$(phase3_manifest_value "$manifest" LIBGLESV2_SHA256)
+  [[ "$PHASE3_RELEASE_LIBEGL_SHA256" =~ ^[0-9a-f]{64}$ && "$PHASE3_RELEASE_LIBGLESV2_SHA256" =~ ^[0-9a-f]{64}$ ]] || phase3_fail 'invalid dylib SHA-256 in release manifest'
+  PHASE3_RELEASE_ARTIFACT_NAME=$(phase3_manifest_value "$manifest" ARTIFACT_NAME)
+  PHASE3_RELEASE_BUILD_RUN_ID=$(phase3_manifest_value "$manifest" BUILD_RUN_ID)
+  [[ "$PHASE3_RELEASE_BUILD_RUN_ID" =~ ^[0-9]+$ ]] || phase3_fail 'invalid release build run ID'
+  [[ "$PHASE3_RELEASE_ARTIFACT_NAME" == "angle-macos-x86_64-chrome-${PHASE3_RELEASE_CHROME_VERSION}-angle-${PHASE3_RELEASE_ANGLE_REVISION:0:8}-${PHASE3_RELEASE_BUILD_RUN_ID}" ]] || phase3_fail 'release artifact name does not match manifest inputs'
+  PHASE3_RELEASE_BUILT_AT_UTC=$(phase3_manifest_value "$manifest" BUILT_AT_UTC)
+  [[ "$PHASE3_RELEASE_BUILT_AT_UTC" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || phase3_fail 'invalid release build timestamp'
+  PHASE3_RELEASE_GN_ARGS_SHA256=$(phase3_manifest_value "$manifest" GN_ARGS_SHA256)
+  [[ "$PHASE3_RELEASE_GN_ARGS_SHA256" =~ ^[0-9a-f]{64}$ ]] || phase3_fail 'invalid GN args SHA-256'
+  if [[ "$metadata_only" != true ]]; then
+    [[ -f "$artifact_dir/libEGL.dylib" && ! -L "$artifact_dir/libEGL.dylib" ]] || phase3_fail 'release artifact lacks libEGL.dylib'
+    [[ -f "$artifact_dir/libGLESv2.dylib" && ! -L "$artifact_dir/libGLESv2.dylib" ]] || phase3_fail 'release artifact lacks libGLESv2.dylib'
+    phase3_verify_hash "$artifact_dir/libEGL.dylib" "$PHASE3_RELEASE_LIBEGL_SHA256"
+    phase3_verify_hash "$artifact_dir/libGLESv2.dylib" "$PHASE3_RELEASE_LIBGLESV2_SHA256"
+  fi
+  if [[ -f "$artifact_dir/args.gn" ]]; then
+    actual_gn_hash=$(phase3_hash "$artifact_dir/args.gn")
+    [[ "$actual_gn_hash" == "$PHASE3_RELEASE_GN_ARGS_SHA256" ]] || phase3_fail 'release artifact GN args hash mismatch'
+  fi
+  PHASE3_RELEASE_MANIFEST_SHA256=$(phase3_hash "$manifest")
 }
 
 phase3_receipt_path() {
@@ -290,6 +347,7 @@ phase3_inventory_framework_versions_layout() {
 
 phase3_validate_current_only_framework() {
   local framework=$1
+  local expected_version=${2:-}
   local versions="$framework/Versions"
   local current="$versions/Current"
   local current_target
@@ -303,9 +361,9 @@ phase3_validate_current_only_framework() {
     phase3_fail "Framework Versions directory is missing or symlinked: $versions"
   [[ -L "$current" ]] || phase3_fail 'Framework Current is not a symlink'
   current_target=$(readlink "$current") || phase3_fail 'Framework Current symlink cannot be read'
-  [[ "$current_target" == "$PHASE3_FRAMEWORK_CURRENT_VERSION" ]] ||
-    phase3_fail "Framework Current does not target $PHASE3_FRAMEWORK_CURRENT_VERSION"
-  [[ -d "$versions/$PHASE3_FRAMEWORK_CURRENT_VERSION" && ! -L "$versions/$PHASE3_FRAMEWORK_CURRENT_VERSION" ]] ||
+  [[ "$current_target" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || phase3_fail 'Framework Current target is not a numeric version'
+  [[ -z "$expected_version" || "$current_target" == "$expected_version" ]] || phase3_fail 'Framework Current target differs from the recorded release version'
+  [[ -d "$versions/$current_target" && ! -L "$versions/$current_target" ]] ||
     phase3_fail 'current Framework version is missing or symlinked'
 
   while IFS= read -r -d '' entry; do
@@ -315,7 +373,7 @@ phase3_validate_current_only_framework() {
         [[ -L "$entry" ]] || phase3_fail 'Framework Current entry changed type'
         current_seen=$((current_seen + 1))
         ;;
-      "$PHASE3_FRAMEWORK_CURRENT_VERSION")
+      "$current_target")
         [[ -d "$entry" && ! -L "$entry" ]] || phase3_fail 'current Framework version changed type'
         version_seen=$((version_seen + 1))
         ;;
@@ -329,6 +387,8 @@ phase3_validate_current_only_framework() {
 phase3_validate_post_inventory() {
   local baseline=$1
   local actual=$2
+  local libegl_sha=${3:-$PHASE3_RELEASE_LIBEGL_SHA256}
+  local gles_sha=${4:-$PHASE3_RELEASE_LIBGLESV2_SHA256}
   local name type value actual_line
   phase3_validate_inventory_file "$baseline"
   phase3_validate_inventory_file "$actual"
@@ -340,7 +400,9 @@ phase3_validate_post_inventory() {
   for name in libEGL.dylib libGLESv2.dylib; do
     actual_line=$(awk -F '\t' -v n="$name" '$1 == n {print; found=1} END {if (!found) exit 1}' "$actual") ||
       phase3_fail "ANGLE Libraries entry is missing: $name"
-    [[ "$actual_line" == "$name	file	${name/libEGL.dylib/$PHASE3_LIBEGL_SHA256}" || "$actual_line" == "$name	file	${name/libGLESv2.dylib/$PHASE3_LIBGLESV2_SHA256}" ]] ||
+    expected_sha=$libegl_sha
+    [[ "$name" != libGLESv2.dylib ]] || expected_sha=$gles_sha
+    [[ "$actual_line" == "$name	file	$expected_sha" ]] ||
       phase3_fail "ANGLE Libraries entry has unexpected content: $name"
   done
   while IFS=$'\t' read -r name type value; do
@@ -357,21 +419,11 @@ phase3_validate_post_inventory() {
     phase3_fail 'unexpected additional or missing Libraries entries'
 }
 
-phase3_require_only_angle_dylibs() {
-  local libraries_dir=$1
-  local framework_dir=$2
-  local library
-  local libraries_real
-  local -a actual=()
-  local -a expected=(libEGL.dylib libGLESv2.dylib)
-
+phase3_require_angle_dylibs_present() {
+  local libraries_dir=$1 framework_dir=$2 libraries_real
   libraries_real=$(phase3_validate_libraries_directory "$libraries_dir" "$framework_dir")
-  while IFS= read -r library; do
-    actual+=("$(basename "$library")")
-    [[ ! -L "$library" ]] || phase3_fail "dylib is symlinked: $library"
-  done < <(find "$libraries_real" -maxdepth 1 -type f -name '*.dylib' -print | LC_ALL=C sort)
-  [[ "${actual[*]}" == "${expected[*]}" ]] ||
-    phase3_fail 'Libraries directory must contain exactly libEGL.dylib and libGLESv2.dylib'
+  [[ -f "$libraries_real/libEGL.dylib" && ! -L "$libraries_real/libEGL.dylib" ]] || phase3_fail 'libEGL.dylib is missing or symlinked'
+  [[ -f "$libraries_real/libGLESv2.dylib" && ! -L "$libraries_real/libGLESv2.dylib" ]] || phase3_fail 'libGLESv2.dylib is missing or symlinked'
 }
 
 phase3_validate_manifest() {
@@ -382,6 +434,7 @@ phase3_validate_manifest() {
   local libraries_dir
   local evidence_dir
   local current_inventory
+  local release_manifest_hash
 
   manifest=$(phase3_manifest_path "$app")
   manifest_hash=$(phase3_manifest_hash_path "$app")
@@ -390,28 +443,26 @@ phase3_validate_manifest() {
     phase3_fail 'unsupported test-copy manifest schema'
   [[ "$(phase3_manifest_value "$manifest" 'TEST_APP')" == "$app" ]] ||
     phase3_fail 'manifest test app path does not match the requested app'
-  [[ "$(phase3_manifest_value "$manifest" 'CHROME_VERSION')" == "$PHASE3_CHROME_VERSION" ]] ||
-    phase3_fail 'manifest Chrome version does not match'
-  [[ "$(phase3_manifest_value "$manifest" 'ANGLE_REVISION')" == "$PHASE3_ANGLE_REVISION" ]] ||
-    phase3_fail 'manifest ANGLE revision does not match'
-  [[ "$(phase3_manifest_value "$manifest" 'ARTIFACT_NAME')" == "$PHASE3_ARTIFACT_NAME" ]] ||
-    phase3_fail 'manifest artifact name does not match'
-  [[ "$(phase3_manifest_value "$manifest" 'LIBEGL_SHA256')" == "$PHASE3_LIBEGL_SHA256" ]] ||
-    phase3_fail 'manifest libEGL SHA-256 does not match'
-  [[ "$(phase3_manifest_value "$manifest" 'LIBGLESV2_SHA256')" == "$PHASE3_LIBGLESV2_SHA256" ]] ||
-    phase3_fail 'manifest libGLESv2 SHA-256 does not match'
+  evidence_dir="$(phase3_manifest_path "$app").evidence"
+  phase3_validate_release_manifest "$evidence_dir" true
+  release_manifest_hash=$(phase3_hash "$(phase3_release_manifest_path "$evidence_dir")")
+  [[ "$(phase3_manifest_value "$manifest" 'RELEASE_MANIFEST_SHA256')" == "$release_manifest_hash" ]] || phase3_fail 'test-copy manifest release-manifest hash mismatch'
+  [[ "$(phase3_manifest_value "$manifest" 'CHROME_VERSION')" == "$PHASE3_RELEASE_CHROME_VERSION" ]] || phase3_fail 'test-copy Chrome version differs from release manifest'
+  [[ "$(phase3_manifest_value "$manifest" 'CHROMIUM_REVISION')" == "$PHASE3_RELEASE_CHROMIUM_REVISION" ]] || phase3_fail 'test-copy Chromium revision differs from release manifest'
+  [[ "$(phase3_manifest_value "$manifest" 'ANGLE_REVISION')" == "$PHASE3_RELEASE_ANGLE_REVISION" ]] || phase3_fail 'test-copy ANGLE revision differs from release manifest'
+  [[ "$(phase3_manifest_value "$manifest" 'ARTIFACT_NAME')" == "$PHASE3_RELEASE_ARTIFACT_NAME" ]] || phase3_fail 'test-copy artifact name differs from release manifest'
+  [[ "$(phase3_manifest_value "$manifest" 'LIBEGL_SHA256')" == "$PHASE3_RELEASE_LIBEGL_SHA256" ]] || phase3_fail 'test-copy libEGL SHA differs from release manifest'
+  [[ "$(phase3_manifest_value "$manifest" 'LIBGLESV2_SHA256')" == "$PHASE3_RELEASE_LIBGLESV2_SHA256" ]] || phase3_fail 'test-copy libGLESv2 SHA differs from release manifest'
   [[ "$(phase3_manifest_value "$manifest" 'COPY_POLICY')" == "$PHASE3_COPY_POLICY" ]] ||
     phase3_fail 'manifest copy policy does not match'
   [[ "$(phase3_manifest_value "$manifest" 'FRAMEWORK_VERSION_POLICY')" == "$PHASE3_FRAMEWORK_VERSION_POLICY" ]] ||
     phase3_fail 'manifest Framework version policy does not match'
-  [[ "$(phase3_manifest_value "$manifest" 'FRAMEWORK_CURRENT_VERSION')" == "$PHASE3_FRAMEWORK_CURRENT_VERSION" ]] ||
-    phase3_fail 'manifest current Framework version does not match'
-  [[ "$(phase3_manifest_value "$manifest" 'FRAMEWORK_REMOVED_VERSION')" == "$PHASE3_FRAMEWORK_REMOVED_VERSION" ]] ||
-    phase3_fail 'manifest removed Framework version does not match'
+  PHASE3_FRAMEWORK_CURRENT_VERSION=$(phase3_manifest_value "$manifest" 'FRAMEWORK_CURRENT_VERSION')
+  [[ "$PHASE3_FRAMEWORK_CURRENT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || phase3_fail 'manifest current Framework version is invalid'
 
   framework="$app/Contents/Frameworks/Google Chrome Framework.framework"
   [[ -d "$framework" && ! -L "$framework" ]] || phase3_fail 'test app framework is missing or symlinked'
-  phase3_validate_current_only_framework "$framework"
+  phase3_validate_current_only_framework "$framework" "$PHASE3_FRAMEWORK_CURRENT_VERSION"
   libraries_dir="$(cd "$framework" && pwd -P)/Libraries"
   evidence_dir="$(phase3_manifest_path "$app").evidence"
   phase3_verify_sidecar_hash "$evidence_dir/libraries-source-baseline.txt" "$evidence_dir/libraries-source-baseline.sha256"
@@ -419,6 +470,7 @@ phase3_validate_manifest() {
   phase3_verify_sidecar_hash "$evidence_dir/libraries-post-install.txt" "$evidence_dir/libraries-post-install.sha256"
   phase3_verify_sidecar_hash "$evidence_dir/framework-versions-before.txt" "$evidence_dir/framework-versions-before.sha256"
   phase3_verify_sidecar_hash "$evidence_dir/framework-removed-version-inventory.txt" "$evidence_dir/framework-removed-version-inventory.sha256"
+  phase3_verify_sidecar_hash "$evidence_dir/framework-removed-version-names.txt" "$evidence_dir/framework-removed-version-names.sha256"
   phase3_verify_sidecar_hash "$evidence_dir/framework-versions-after.txt" "$evidence_dir/framework-versions-after.sha256"
   local inventory_key inventory_file inventory_hash
   for inventory_key in SOURCE_BASELINE COPY_BASELINE POST_INSTALL; do
@@ -445,28 +497,25 @@ phase3_validate_manifest() {
   phase3_validate_inventory_file "$evidence_dir/framework-versions-before.txt"
   phase3_validate_inventory_file "$evidence_dir/framework-removed-version-inventory.txt"
   phase3_validate_inventory_file "$evidence_dir/framework-versions-after.txt"
-  grep -F $'Current\tsymlink\t154.0.8037.45' "$evidence_dir/framework-versions-before.txt" >/dev/null ||
+  grep -F $'Current\tsymlink\t'"$PHASE3_FRAMEWORK_CURRENT_VERSION" "$evidence_dir/framework-versions-before.txt" >/dev/null ||
     phase3_fail 'Framework versions-before evidence lacks the expected Current symlink'
-  grep -F $'154.0.8037.17\tdir\t-' "$evidence_dir/framework-versions-before.txt" >/dev/null ||
-    phase3_fail 'Framework versions-before evidence lacks the removed legacy version'
-  grep -F $'154.0.8037.45\tdir\t-' "$evidence_dir/framework-versions-before.txt" >/dev/null ||
+  grep -F "$PHASE3_FRAMEWORK_CURRENT_VERSION"$'\tdir\t-' "$evidence_dir/framework-versions-before.txt" >/dev/null ||
     phase3_fail 'Framework versions-before evidence lacks the current version'
-  [[ $(wc -l < "$evidence_dir/framework-versions-before.txt" | tr -d ' ') == 3 ]] ||
-    phase3_fail 'Framework versions-before evidence contains unexpected entries'
-  grep -F $'Current\tsymlink\t154.0.8037.45' "$evidence_dir/framework-versions-after.txt" >/dev/null ||
+  grep -F $'Current\tsymlink\t'"$PHASE3_FRAMEWORK_CURRENT_VERSION" "$evidence_dir/framework-versions-after.txt" >/dev/null ||
     phase3_fail 'Framework versions-after evidence lacks the expected Current symlink'
-  grep -F $'154.0.8037.45\tdir\t-' "$evidence_dir/framework-versions-after.txt" >/dev/null ||
+  grep -F "$PHASE3_FRAMEWORK_CURRENT_VERSION"$'\tdir\t-' "$evidence_dir/framework-versions-after.txt" >/dev/null ||
     phase3_fail 'Framework versions-after evidence lacks the current version'
   [[ $(wc -l < "$evidence_dir/framework-versions-after.txt" | tr -d ' ') == 2 ]] ||
     phase3_fail 'Framework versions-after evidence is not current-only'
+  [[ "$(phase3_manifest_value "$manifest" 'FRAMEWORK_REMOVED_VERSION_NAMES_SHA256')" == "$(phase3_hash "$evidence_dir/framework-removed-version-names.txt")" ]] || phase3_fail 'removed Framework version list hash mismatch'
   cmp "$evidence_dir/libraries-source-baseline.txt" "$evidence_dir/libraries-copy-baseline.txt" || phase3_fail 'source and copy Libraries baseline differs'
   phase3_validate_post_inventory "$evidence_dir/libraries-copy-baseline.txt" "$evidence_dir/libraries-post-install.txt"
   current_inventory=$(mktemp "${TMPDIR:-/tmp}/phase3-current-inventory.XXXXXX")
   phase3_inventory_libraries "$(phase3_validate_libraries_directory "$libraries_dir" "$framework")" "$current_inventory"
   cmp "$evidence_dir/libraries-post-install.txt" "$current_inventory" || phase3_fail 'current Libraries inventory differs from prepared inventory'
   rm -f "$current_inventory"
-  phase3_verify_hash "$libraries_dir/libEGL.dylib" "$PHASE3_LIBEGL_SHA256"
-  phase3_verify_hash "$libraries_dir/libGLESv2.dylib" "$PHASE3_LIBGLESV2_SHA256"
+  phase3_verify_hash "$libraries_dir/libEGL.dylib" "$PHASE3_RELEASE_LIBEGL_SHA256"
+  phase3_verify_hash "$libraries_dir/libGLESv2.dylib" "$PHASE3_RELEASE_LIBGLESV2_SHA256"
 }
 
 phase3_validate_signed_test_copy() {

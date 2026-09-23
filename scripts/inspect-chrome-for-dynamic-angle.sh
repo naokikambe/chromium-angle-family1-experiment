@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly EXPECTED_CHROME_VERSION='154.0.8037.45'
-
 fail() {
   printf 'inspect-chrome-for-dynamic-angle: %s\n' "$1" >&2
   exit 1
@@ -80,9 +78,7 @@ printf 'Main executable: %s\n' "$main_executable"
 printf 'Framework real path: %s\n' "$framework_real"
 printf 'dynamic ANGLE Libraries candidate: %s\n' "$libraries_dir"
 
-if [[ "$chrome_version" != "$EXPECTED_CHROME_VERSION" ]]; then
-  printf 'warning: expected Chrome %s, found %s\n' "$EXPECTED_CHROME_VERSION" "$chrome_version" >&2
-fi
+[[ "$chrome_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'Chrome version is not a four-part numeric version'
 
 printf '\n== Main executable architecture ==\n'
 lipo -info "$main_executable"

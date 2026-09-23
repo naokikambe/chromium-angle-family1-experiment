@@ -40,6 +40,7 @@ require_command lipo
 require_command otool
 require_command codesign
 require_command shasum
+require_command awk
 
 cd "$artifact_dir"
 
@@ -155,6 +156,41 @@ done
 check_forbidden_path otool-results.txt
 
 shasum -a 256 -- "${libraries[@]}" > checksums.sha256
+
+release_manifest=ANGLE_RELEASE_MANIFEST
+release_sidecar=ANGLE_RELEASE_MANIFEST.sha256
+[[ -f "$release_manifest" && ! -L "$release_manifest" ]] || fail 'ANGLE release manifest is missing or symlinked'
+[[ -f "$release_sidecar" && ! -L "$release_sidecar" ]] || fail 'ANGLE release manifest checksum is missing or symlinked'
+shasum -a 256 -c "$release_sidecar" >/dev/null || fail 'ANGLE release manifest checksum mismatch'
+manifest_value() {
+  local key=$1 matches
+  matches=$(grep -E "^${key}=" "$release_manifest" || true)
+  [[ $(printf '%s\n' "$matches" | sed '/^$/d' | wc -l | tr -d ' ') == 1 ]] || fail "invalid release manifest key: $key"
+  printf '%s\n' "${matches#*=}"
+}
+[[ "$(manifest_value SCHEMA)" == angle-release-v1 ]] || fail 'unsupported release manifest schema'
+[[ "$(manifest_value ARTIFACT_SCHEMA)" == angle-artifact-v1 ]] || fail 'unsupported artifact schema'
+chrome_version=$(manifest_value CHROME_VERSION)
+chromium_revision=$(manifest_value CHROMIUM_REVISION)
+angle_revision=$(manifest_value ANGLE_REVISION)
+depot_revision=$(manifest_value DEPOT_TOOLS_REVISION)
+libegl_sha=$(manifest_value LIBEGL_SHA256)
+gles_sha=$(manifest_value LIBGLESV2_SHA256)
+artifact_name=$(manifest_value ARTIFACT_NAME)
+run_id=$(manifest_value BUILD_RUN_ID)
+gn_args_sha=$(manifest_value GN_ARGS_SHA256)
+[[ "$chrome_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'invalid Chrome version in release manifest'
+for revision in "$chromium_revision" "$angle_revision" "$depot_revision"; do [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || fail 'invalid source revision in release manifest'; done
+for checksum in "$libegl_sha" "$gles_sha" "$gn_args_sha"; do [[ "$checksum" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid SHA-256 in release manifest'; done
+[[ "$run_id" =~ ^[0-9]+$ ]] || fail 'invalid build run ID in release manifest'
+[[ "$artifact_name" == "angle-macos-x86_64-chrome-${chrome_version}-angle-${angle_revision:0:8}-${run_id}" ]] || fail 'artifact name does not match release manifest fields'
+[[ "$(shasum -a 256 libEGL.dylib | awk '{print $1}')" == "$libegl_sha" ]] || fail 'libEGL SHA-256 does not match release manifest'
+[[ "$(shasum -a 256 libGLESv2.dylib | awk '{print $1}')" == "$gles_sha" ]] || fail 'libGLESv2 SHA-256 does not match release manifest'
+[[ "$(shasum -a 256 args.gn | awk '{print $1}')" == "$gn_args_sha" ]] || fail 'args.gn SHA-256 does not match release manifest'
+grep -Fx "CHROME_VERSION=$chrome_version" build-environment.txt >/dev/null || fail 'build environment Chrome version differs from release manifest'
+grep -Fx "CHROMIUM_REVISION=$chromium_revision" build-environment.txt >/dev/null || fail 'build environment Chromium revision differs from release manifest'
+grep -Fx "ANGLE_EXPECTED_REVISION=$angle_revision" build-environment.txt >/dev/null || fail 'build environment ANGLE revision differs from release manifest'
+grep -Fx "DEPOT_TOOLS_EXPECTED_REVISION=$depot_revision" build-environment.txt >/dev/null || fail 'build environment depot_tools revision differs from release manifest'
 
 if (( signature_invalid != 0 )); then
   fail 'one or more dylibs have an invalid code signature'

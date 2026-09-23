@@ -2,6 +2,11 @@ name: Build unmodified ANGLE for macOS x86_64
 
 on:
   workflow_dispatch:
+    inputs:
+      chrome_version:
+        description: Chrome release version (for example 154.0.8037.58)
+        required: true
+        type: string
 
 concurrency:
   group: angle-macos-x64-${{ github.ref }}
@@ -16,9 +21,7 @@ jobs:
     runs-on: macos-15-intel
     timeout-minutes: 120
     env:
-      CHROME_VERSION: 154.0.8037.45
-      CHROMIUM_REVISION: 731082f0a26ce4b3976c3d82943092f5d13daf13
-      ANGLE_REVISION: 72b8f72a7587ec776d7d2a57d275a6e9b1781b1d
+      CHROME_VERSION: ${{ inputs.chrome_version }}
       ANGLE_REPOSITORY: https://chromium.googlesource.com/angle/angle.git
       DEPOT_TOOLS_REPOSITORY: https://chromium.googlesource.com/chromium/tools/depot_tools.git
       DEPOT_TOOLS_REVISION: 0306e4682b4ac35287c726fa35a983157a625902
@@ -48,15 +51,35 @@ jobs:
           printf 'cpu.architecture=%s\n' "$(uname -m)"
           printf 'cpu.count=%s\n' "$(sysctl -n hw.ncpu)"
           sw_vers
-          printf 'expected ANGLE revision: %s\n' "$ANGLE_REVISION"
-          printf 'expected Chrome version: %s\n' "$CHROME_VERSION"
-          printf 'expected Chromium revision: %s\n' "$CHROMIUM_REVISION"
+          [[ "$CHROME_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'chrome_version must be a four-part numeric version' >&2; exit 1; }
+          printf 'requested Chrome version: %s\n' "$CHROME_VERSION"
           printf 'expected depot_tools revision: %s\n' "$DEPOT_TOOLS_REVISION"
           xcodebuild -version
           printf 'macOS SDK version: %s\n' "$(xcrun --show-sdk-version)"
           xcrun clang --version
           python3 --version
           df -h .
+
+      - name: Resolve Chromium tag and ANGLE revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="refs/tags/$CHROME_VERSION"
+          chromium_root="$RUNNER_TEMP/chromium-source"
+          git init "$chromium_root"
+          git -C "$chromium_root" remote add origin https://chromium.googlesource.com/chromium/src.git
+          git -C "$chromium_root" fetch --depth=1 origin "$tag"
+          chromium_revision=$(git -C "$chromium_root" rev-parse FETCH_HEAD^{commit})
+          chromium_version=$(git -C "$chromium_root" show "$chromium_revision:chrome/VERSION" | awk -F= '$1 == "MAJOR" {a=$2} $1 == "MINOR" {b=$2} $1 == "BUILD" {c=$2} $1 == "PATCH" {d=$2} END {printf "%s.%s.%s.%s",a,b,c,d}')
+          test "$chromium_version" = "$CHROME_VERSION"
+          angle_revision=$(git -C "$chromium_root" show "$chromium_revision:DEPS" | sed -nE "s/^[[:space:]]*'angle_revision':[[:space:]]*'([0-9a-f]{40})'.*/\\1/p" | head -n 1)
+          [[ "$angle_revision" =~ ^[0-9a-f]{40}$ ]] || { echo 'could not resolve ANGLE revision from Chromium DEPS' >&2; exit 1; }
+          printf 'resolved Chromium revision: %s\nresolved ANGLE revision: %s\n' "$chromium_revision" "$angle_revision"
+          {
+            printf 'CHROMIUM_REVISION=%s\n' "$chromium_revision"
+            printf 'ANGLE_REVISION=%s\n' "$angle_revision"
+            printf 'ANGLE_SHORT_REVISION=%s\n' "${angle_revision:0:8}"
+          } >> "$GITHUB_ENV"
 
       - name: Get depot_tools
         shell: bash
@@ -236,6 +259,23 @@ jobs:
             printf 'NINJA_VERSION=%s\n' "$(ninja --version)"
             printf 'NINJA_TARGETS=libEGL libGLESv2\n'
           } > "$ARTIFACT_DIR/build-environment.txt"
+          artifact_name="angle-macos-x86_64-chrome-${CHROME_VERSION}-angle-${ANGLE_SHORT_REVISION}-${GITHUB_RUN_ID}"
+          gn_args_sha256=$(shasum -a 256 "$ARTIFACT_DIR/args.gn" | awk '{print $1}')
+          {
+            printf 'SCHEMA=angle-release-v1\n'
+            printf 'ARTIFACT_SCHEMA=angle-artifact-v1\n'
+            printf 'CHROME_VERSION=%s\n' "$CHROME_VERSION"
+            printf 'CHROMIUM_REVISION=%s\n' "$CHROMIUM_REVISION"
+            printf 'ANGLE_REVISION=%s\n' "$ANGLE_REVISION"
+            printf 'DEPOT_TOOLS_REVISION=%s\n' "$DEPOT_TOOLS_REVISION"
+            printf 'LIBEGL_SHA256=%s\n' "$(shasum -a 256 "$ARTIFACT_DIR/libEGL.dylib" | awk '{print $1}')"
+            printf 'LIBGLESV2_SHA256=%s\n' "$(shasum -a 256 "$ARTIFACT_DIR/libGLESv2.dylib" | awk '{print $1}')"
+            printf 'ARTIFACT_NAME=%s\n' "$artifact_name"
+            printf 'BUILD_RUN_ID=%s\n' "$GITHUB_RUN_ID"
+            printf 'BUILT_AT_UTC=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            printf 'GN_ARGS_SHA256=%s\n' "$gn_args_sha256"
+          } > "$ARTIFACT_DIR/ANGLE_RELEASE_MANIFEST"
+          shasum -a 256 "$ARTIFACT_DIR/ANGLE_RELEASE_MANIFEST" | awk '{print $1 "  ANGLE_RELEASE_MANIFEST"}' > "$ARTIFACT_DIR/ANGLE_RELEASE_MANIFEST.sha256"
           bash "$GITHUB_WORKSPACE/scripts/verify-artifact.sh" "$ARTIFACT_DIR"
           printf 'artifact files and sizes:\n'
           (
@@ -247,7 +287,7 @@ jobs:
       - name: Upload ANGLE artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: angle-macos-x86_64-chrome-154.0.8037.45-angle-72b8f72a-${{ github.run_id }}
+          name: angle-macos-x86_64-chrome-${{ inputs.chrome_version }}-angle-${{ env.ANGLE_SHORT_REVISION }}-${{ github.run_id }}
           path: ${{ env.ARTIFACT_DIR }}
           if-no-files-found: error
           retention-days: 14
