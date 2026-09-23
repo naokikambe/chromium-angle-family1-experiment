@@ -328,7 +328,7 @@ framework="$output_real/Contents/Frameworks/Google Chrome Framework.framework"
 prepare_current_only_framework "$framework" "$evidence_dir"
 
 # Stage 3: only two verified non-component dylibs. This intentionally invalidates
-# the copied Google signature; ad-hoc signing is a separate explicit script.
+# the copied Google signature; Apple Development signing is a separate explicit script.
 framework="$output_real/Contents/Frameworks/Google Chrome Framework.framework"
 [[ -d "$framework" && ! -L "$framework" ]] || phase3_fail 'test copy framework is missing or symlinked'
 libraries_dir="$(cd "$framework" && pwd -P)/Libraries"

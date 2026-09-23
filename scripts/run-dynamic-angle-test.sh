@@ -76,7 +76,7 @@ fi
   printf '%q ' "${command[@]}"
   printf '\n'
 } > "$results_real/run-metadata.txt"
-printf '%s\n' 'This test copy is ad-hoc signed and is not for normal browsing or existing profiles.' >&2
+printf '%s\n' 'This test copy is Apple Development signed and is not for normal browsing or existing profiles.' >&2
 "${command[@]}" > "$results_real/stdout.log" 2> "$results_real/stderr.log" &
 browser_pid=$!
 printf '%s\n' "$browser_pid" > "$results_real/browser.pid"

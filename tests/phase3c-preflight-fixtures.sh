@@ -209,6 +209,7 @@ grep -F -- '--source-app APP' "$help_output" >/dev/null
 grep -F -- '--artifact-dir DIR' "$help_output" >/dev/null
 grep -F -- '--output-app APP' "$help_output" >/dev/null
 grep -F -- '--results-dir DIR' "$help_output" >/dev/null
+grep -F -- '--signing-identity APPLE_DEVELOPMENT_IDENTITY_SHA1' "$help_output" >/dev/null
 grep -F 'phase3_preflight_main /usr/bin/codesign' "$repo_root/scripts/run-phase3c-preflight.sh" >/dev/null
 
 source_app="$fixture/Google Chrome.app"
@@ -422,10 +423,13 @@ sign_script="$repo_root/scripts/sign-chrome-angle-test-copy.sh"
 grep -F 'phase3_sign_current_framework' "$sign_script" >/dev/null
 grep -F 'phase3_sign_target' "$sign_script" >/dev/null
 grep -F 'phase3_validate_current_only_framework "$framework"' "$sign_script" >/dev/null
-grep -F 'phase3_sign_target "$codesign_executable" "$framework"' "$sign_script" >/dev/null
+grep -F 'phase3_sign_target "$codesign_executable" "$identity" "$framework"' "$sign_script" >/dev/null
 ! grep -F -- '--bundle-version=' "$sign_script" >/dev/null
 ! grep -F 'sign_command=("$codesign_executable" --force --sign - --deep "$test_app_real")' "$sign_script" >/dev/null
-grep -F "SIGNING_METHOD=ad-hoc-current-framework" "$sign_script" >/dev/null
-grep -F "SCHEMA=phase3-angle-signing-receipt-v2" "$sign_script" >/dev/null
+grep -F "SIGNING_METHOD=apple-development-current-framework" "$sign_script" >/dev/null
+grep -F "SCHEMA=phase3-angle-signing-receipt-v3" "$sign_script" >/dev/null
+grep -F -- '--confirm-apple-development-signing' "$sign_script" >/dev/null
+grep -F "'runtime,kill,restrict'" "$sign_script" >/dev/null
+! grep -F -- '--preserve-metadata=entitlements' "$sign_script" >/dev/null
 grep -F "SIGNED_LIBRARIES_INVENTORY_SHA256=" "$sign_script" >/dev/null
 printf '%s\n' 'phase3c preflight fixture tests passed'

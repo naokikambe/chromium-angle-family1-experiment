@@ -10,7 +10,7 @@ source "$script_dir/prepare-chrome-angle-test-copy.sh"
 
 usage() {
   cat <<'EOF'
-usage: run-phase3c-preflight.sh --source-app APP --artifact-dir DIR --output-app APP --results-dir DIR
+usage: run-phase3c-preflight.sh --source-app APP --artifact-dir DIR --output-app APP --results-dir DIR --signing-identity APPLE_DEVELOPMENT_IDENTITY_SHA1
 
 Runs Phase 3C gates, prepares one new test copy, and performs only a sign dry-run.
 It never signs, launches, deletes, or replaces an existing retry/evidence directory.
@@ -25,23 +25,28 @@ shift 3
 [[ -x "$codesign_executable" ]] || phase3_fail "required codesign executable is unavailable: $codesign_executable"
 [[ -x "$sign_dry_run_script" ]] || phase3_fail "required sign dry-run script is unavailable: $sign_dry_run_script"
 [[ -x "$inspect_script" ]] || phase3_fail "required inspect script is unavailable: $inspect_script"
-source_app=''; artifact_dir=''; output_app=''; results_dir=''
+source_app=''; artifact_dir=''; output_app=''; results_dir=''; signing_identity=''
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
-    --source-app|--artifact-dir|--output-app|--results-dir)
+    --source-app|--artifact-dir|--output-app|--results-dir|--signing-identity)
       [[ $# -ge 2 ]] || { usage >&2; exit 64; }
       case "$1" in
         --source-app) source_app=$2 ;;
         --artifact-dir) artifact_dir=$2 ;;
         --output-app) output_app=$2 ;;
         --results-dir) results_dir=$2 ;;
+        --signing-identity) signing_identity=$2 ;;
       esac
       shift 2 ;;
     *) phase3_fail "unknown option: $1" ;;
   esac
 done
 [[ -n "$source_app" && -n "$artifact_dir" && -n "$output_app" && -n "$results_dir" ]] || { usage >&2; exit 64; }
+if [[ "$sign_dry_run_script" == "$script_dir/sign-chrome-angle-test-copy.sh" ]]; then
+  [[ "$signing_identity" =~ ^[0-9A-Fa-f]{40}$ ]] ||
+    phase3_fail 'production preflight requires --signing-identity with an Apple Development identity SHA-1'
+fi
 
 results_real=''
 journal_path=''
@@ -181,11 +186,15 @@ phase3_journal manifest-validation pass 0
 phase3_capture_signature "$results_real/output-read-only" "$output_real"
 sign_dry_run_dir="$results_real/sign-dry-run"
 current_step=sign-dry-run
-"$sign_dry_run_script" "$output_real" "$sign_dry_run_dir" --dry-run > "$results_real/sign-dry-run-stdout.txt" 2> "$results_real/sign-dry-run-stderr.txt"
+sign_dry_run_command=("$sign_dry_run_script" "$output_real" "$sign_dry_run_dir" --dry-run)
+if [[ -n "$signing_identity" ]]; then
+  sign_dry_run_command+=(--identity "$signing_identity")
+fi
+"${sign_dry_run_command[@]}" > "$results_real/sign-dry-run-stdout.txt" 2> "$results_real/sign-dry-run-stderr.txt"
 cat "$results_real/sign-dry-run-stdout.txt" "$results_real/sign-dry-run-stderr.txt" > "$results_real/sign-dry-run.txt"
 phase3_journal sign-dry-run pass 0
 printf 'PHASE3C_STATE=prepared-unsigned-sign-dry-run\n' > "$results_real/preflight-state.txt"
-printf 'NEXT_APPROVED_COMMAND=sign-chrome-angle-test-copy.sh %q %q --confirm-ad-hoc-signing\n' "$output_real" "$results_real/sign-results" > "$results_real/next-step.txt"
+printf 'NEXT_APPROVED_COMMAND=sign-chrome-angle-test-copy.sh %q %q --identity %q --confirm-apple-development-signing\n' "$output_real" "$results_real/sign-results" "$signing_identity" > "$results_real/next-step.txt"
 printf 'Phase 3C preflight passed gates; no signing, launch, deletion, retry operation, or xattr mutation was performed.\n'
 }
 

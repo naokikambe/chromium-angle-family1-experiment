@@ -70,19 +70,30 @@ Case B/Case C isolation checks remain part of the synthetic fixtures.
 
 Copy validation precedes ANGLE placement. Signing is an explicitly confirmed,
 test-copy-only operation; the preflight command calls signing only with
-`--dry-run`. Ad-hoc signing replaces Google's Developer ID signature and
-notarization on that test copy. It is not a normal browsing or distribution
-copy. Signature, entitlements, CodeDirectory, strict-verification, and GPU
-process load evidence are retained before any later runtime decision. Strict
-verification failures are not ignored or retried automatically.
+`--dry-run`. New attempts require an explicitly supplied, currently valid
+Apple Development identity SHA-1 and replace Google's Developer ID signature
+and notarization on the test copy. They are not normal browsing or distribution
+copies. The signing path does not preserve the Google identity-bound
+`application-identifier`, `keychain-access-groups`, associated-domains, or
+browser public-key-credential entitlements. It supplies Chromium's base device
+permissions (including Bluetooth, USB, camera, microphone, print, location,
+and Photos) to the app and the Chromium JIT entitlement only to the GPU and
+renderer helper app bundles. Those JIT-capable helpers use Chromium's
+`runtime,kill,restrict` flags rather than inheriting Library Validation; the
+outer app retains its Library Validation flag. Signature, entitlements, CodeDirectory,
+strict-verification, and GPU process load evidence are retained before any
+later runtime decision. Strict verification failures are not ignored or retried
+automatically.
 
-Preparation records the artifact and pre-sign Libraries bytes. Ad-hoc signing
-legitimately changes the bytes of every signed Mach-O in Libraries, including
-the two added ANGLE dylibs. Therefore signing writes a separate, external
-post-sign Libraries inventory and checksum, referenced by signing receipt
-schema `phase3-angle-signing-receipt-v2`. Run and collection require that
-signed inventory, while continuing to enforce the prepared entry set, types,
-and symlink targets. Receipt v1 is not accepted as a v2 receipt.
+Preparation records the artifact and pre-sign Libraries bytes. Apple Development
+signing legitimately changes the bytes of every signed Mach-O in Libraries,
+including the two added ANGLE dylibs. Therefore signing writes a separate,
+external post-sign Libraries inventory and checksum, referenced by signing
+receipt schema `phase3-angle-signing-receipt-v3`. Run and collection require
+that signed inventory, while continuing to enforce the prepared entry set,
+types, and symlink targets. Receipt v1 is not accepted; legacy v2 receipts are
+accepted only for immutable historical ad-hoc attempts and are never emitted by
+the current signing path.
 
 The complete synthetic fixture suites are accepted only through the pinned
 Phase 3B and Phase 3C GitHub Actions workflows on `macos-15-intel`. Local full

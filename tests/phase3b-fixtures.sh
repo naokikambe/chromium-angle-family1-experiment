@@ -10,6 +10,7 @@ mkdir "$stub_dir" "$fixture/output with spaces"
 export PHASE3_FIXTURE_LOG="$fixture/command.log"
 export PHASE3_FIXTURE_VERSION='154.0.8037.58'
 export PHASE3_FIXTURE_PREVIOUS_VERSION='154.0.8037.57'
+export PHASE3_FIXTURE_APPLE_DEVELOPMENT_ID='0123456789ABCDEF0123456789ABCDEF01234567'
 
 fixture_checkpoint() {
   local name=$1
@@ -26,12 +27,17 @@ set -euo pipefail
 printf 'codesign %q\n' "$*" >> "$PHASE3_FIXTURE_LOG"
 target=${!#}
 if [[ " $* " == *' --force '* ]]; then
+  signature_marker='.fixture-ad-hoc'
+  [[ " $* " == *' --sign - '* ]] || signature_marker='.fixture-apple-development'
   if [[ "$target" == *.framework ]]; then
     current_version=$(readlink "$target/Versions/Current")
-    touch "$target/Versions/$current_version/.fixture-ad-hoc"
-    touch "$target/.fixture-ad-hoc"
+    touch "$target/Versions/$current_version/$signature_marker"
+    touch "$target/$signature_marker"
   elif [[ -d "$target" ]]; then
-    touch "$target/.fixture-ad-hoc"
+    touch "$target/$signature_marker"
+    if [[ " $* " == *' --options runtime,kill,restrict '* ]]; then
+      touch "$target/.fixture-jit-options"
+    fi
   elif [[ "$target" == *'/Libraries/'*.dylib ]]; then
     # Model the fact that real codesign changes a Mach-O's bytes. This keeps
     # the synthetic fixture from accepting a prepared inventory after sign.
@@ -60,24 +66,38 @@ if [[ " $* " == *' --verify '* ]]; then
 
     # During prepare, unsigned ANGLE dylibs must produce the original
     # Framework-root error expected by prepare's post-install gate.
-    if [[ ! -e "$target/.fixture-ad-hoc" ]]; then
+    if [[ ! -e "$target/.fixture-ad-hoc" && ! -e "$target/.fixture-apple-development" ]]; then
       printf '%s: a sealed resource is missing or invalid\n' "$target" >&2
       printf 'In subcomponent: %s\n' "$framework" >&2
       exit 1
     fi
 
     [[ ! -e "$framework/Versions/$PHASE3_FIXTURE_PREVIOUS_VERSION" ]] || exit 1
-    if [[ ! -e "$framework/Versions/$PHASE3_FIXTURE_VERSION/.fixture-ad-hoc" ]]; then
+    if [[ ! -e "$framework/Versions/$PHASE3_FIXTURE_VERSION/.fixture-ad-hoc" && ! -e "$framework/Versions/$PHASE3_FIXTURE_VERSION/.fixture-apple-development" ]]; then
       printf '%s: a sealed resource is missing or invalid\n' "$target" >&2
       printf 'In subcomponent: %s/Versions/%s\n' "$framework" "$PHASE3_FIXTURE_VERSION" >&2
       exit 1
     fi
-    if [[ ! -e "$framework/.fixture-ad-hoc" ]]; then
+    if [[ ! -e "$framework/.fixture-ad-hoc" && ! -e "$framework/.fixture-apple-development" ]]; then
       printf '%s: a sealed resource is missing or invalid\n' "$target" >&2
       printf 'In subcomponent: %s\n' "$framework" >&2
       exit 1
     fi
   fi
+  exit 0
+fi
+if [[ " $* " == *' -d --entitlements '* && -e "$target/.fixture-apple-development" ]]; then
+  cat <<'PLIST'
+<?xml version="1.0"?><plist version="1.0"><dict>
+<key>com.apple.security.device.audio-input</key><true/>
+<key>com.apple.security.device.bluetooth</key><true/>
+<key>com.apple.security.device.camera</key><true/>
+<key>com.apple.security.device.print</key><true/>
+<key>com.apple.security.device.usb</key><true/>
+<key>com.apple.security.personal-information.location</key><true/>
+<key>com.apple.security.personal-information.photos-library</key><true/>
+</dict></plist>
+PLIST
   exit 0
 fi
 case "$target" in
@@ -88,6 +108,10 @@ esac
 printf 'Executable=%s\n' "$executable"
 if [[ -e "$target/.fixture-ad-hoc" && "${CODESIGN_NONADHOC:-0}" != 1 ]]; then
   echo 'Signature=adhoc'
+elif [[ -e "$target/.fixture-apple-development" && "${CODESIGN_NONADHOC:-0}" != 1 ]]; then
+  echo 'Authority=Apple Development: Fixture User (FIXTURETEAM)'
+  echo 'TeamIdentifier=FIXTURETEAM'
+  echo 'CodeDirectory v=20500 flags=0x10000(runtime)'
 elif [[ "$target" == *'ANGLE Test.app'* && "${CODESIGN_COPY_TEAM_MISMATCH:-0}" == 1 ]]; then
   echo 'Authority=Developer ID Application: Other LLC (BADTEAM)'
   echo 'TeamIdentifier=BADTEAM'
@@ -97,6 +121,15 @@ else
   echo 'TeamIdentifier=EQHXZ8M8AV'
   echo 'CodeDirectory v=20500 flags=0x10000(runtime)'
 fi
+EOF
+cat > "$stub_dir/security" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ " $* " == *' find-identity '* && " $* " == *' codesigning '* ]]; then
+  printf '  1) %s "Apple Development: Fixture User (FIXTURETEAM)"\n' "${PHASE3_FIXTURE_APPLE_DEVELOPMENT_ID:?}"
+  exit 0
+fi
+exit 64
 EOF
 cat > "$stub_dir/xattr" <<'EOF'
 #!/usr/bin/env bash
@@ -235,7 +268,9 @@ framework="$source_app/Contents/Frameworks/Google Chrome Framework.framework"
 versions="$framework/Versions"
 legacy_version="$versions/$PHASE3_FIXTURE_PREVIOUS_VERSION"
 current_version="$versions/$PHASE3_FIXTURE_VERSION"
-mkdir -p "$source_app/Contents/MacOS" "$source_app/Contents/Resources" "$legacy_version" "$current_version/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS" "$artifact"
+mkdir -p "$source_app/Contents/MacOS" "$source_app/Contents/Resources" "$legacy_version" \
+  "$current_version/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS" \
+  "$current_version/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS" "$artifact"
 ln -s "$PHASE3_FIXTURE_VERSION" "$versions/Current"
 cat > "$source_app/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -246,7 +281,10 @@ printf '#!/usr/bin/env bash\nexit 0\n' > "$source_app/Contents/MacOS/Google Chro
 printf 'fixture legacy framework\n' > "$legacy_version/Google Chrome Framework"
 printf 'fixture current framework\n' > "$current_version/Google Chrome Framework"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$current_version/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"
-chmod +x "$source_app/Contents/MacOS/Google Chrome" "$legacy_version/Google Chrome Framework" "$current_version/Google Chrome Framework" "$current_version/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$current_version/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer)"
+chmod +x "$source_app/Contents/MacOS/Google Chrome" "$legacy_version/Google Chrome Framework" "$current_version/Google Chrome Framework" \
+  "$current_version/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)" \
+  "$current_version/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer)"
 google_update_agent="$current_version/Helpers/GoogleUpdater.app/Contents/Helpers/GoogleSoftwareUpdate.bundle/Contents/Resources/GoogleSoftwareUpdateAgent.app"
 mkdir -p "$google_update_agent/Contents/MacOS"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$google_update_agent/Contents/MacOS/GoogleSoftwareUpdateAgent"
@@ -308,10 +346,10 @@ sign="$fixture/sign-wrapper"
 cat > "$sign" <<EOF
 #!/usr/bin/env bash
 source "$production_sign"
-phase3_sign_main "$stub_dir/codesign" "\$@"
+phase3_sign_main "$stub_dir/codesign" "$stub_dir/security" "\$@"
 EOF
 chmod +x "$sign"
-grep -F 'phase3_sign_main /usr/bin/codesign' "$production_sign" >/dev/null
+grep -F 'phase3_sign_main /usr/bin/codesign /usr/bin/security' "$production_sign" >/dev/null
 run="$repo_root/scripts/run-dynamic-angle-test.sh"
 collect="$repo_root/scripts/collect-phase3-evidence.sh"
 run_wrapper="$fixture/run-wrapper"
@@ -418,15 +456,18 @@ run_evidence_receipt_policy_group() {
   fixture_checkpoint evidence-before-prepare
   "$prepare" "$source_app" "$artifact" "$focused_output"
   fixture_checkpoint evidence-after-prepare
-  "$sign" "$focused_output" "$focused_results" --confirm-ad-hoc-signing
+  "$sign" "$focused_output" "$focused_results" --identity "$PHASE3_FIXTURE_APPLE_DEVELOPMENT_ID" --confirm-apple-development-signing
   test -f "$focused_receipt.evidence/libraries-post-sign.txt"
   test -f "$focused_receipt.evidence/libraries-post-sign.txt.sha256"
   ! cmp "$focused_output.phase3-angle-manifest.evidence/libraries-post-install.txt" \
     "$focused_receipt.evidence/libraries-post-sign.txt"
-  grep -F 'SCHEMA=phase3-angle-signing-receipt-v2' "$focused_receipt" >/dev/null
+  grep -F 'SCHEMA=phase3-angle-signing-receipt-v3' "$focused_receipt" >/dev/null
+  grep -F 'SIGNING_METHOD=apple-development-current-framework' "$focused_receipt" >/dev/null
   grep -F 'SIGNED_LIBRARIES_INVENTORY_SHA256=' "$focused_receipt" >/dev/null
   test ! -e "$focused_output/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_PREVIOUS_VERSION"
-  test -e "$focused_output/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_VERSION/.fixture-ad-hoc"
+  test -e "$focused_output/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_VERSION/.fixture-apple-development"
+  test -e "$focused_output/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_VERSION/Helpers/Google Chrome Helper (GPU).app/.fixture-jit-options"
+  test -e "$focused_output/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_VERSION/Helpers/Google Chrome Helper (Renderer).app/.fixture-jit-options"
   grep -F "Versions/$PHASE3_FIXTURE_VERSION" "$PHASE3_FIXTURE_LOG" >/dev/null
   fixture_checkpoint evidence-after-sign
 
@@ -683,10 +724,11 @@ grep -F $'libEGL.dylib\tfile\t' "$zero_post" >/dev/null
 grep -F $'libGLESv2.dylib\tfile\t' "$zero_post" >/dev/null
 expect_fail "$run" CASE_B "$output" "$fixture/run-unsigned"
 expect_fail "$sign" "$source_app" "$fixture/sign-original" --dry-run
-expect_fail "$sign" "$output" "$fixture/sign-no-confirm"
+expect_fail "$sign" "$output" "$fixture/sign-no-confirm" --identity "$PHASE3_FIXTURE_APPLE_DEVELOPMENT_ID"
 printf '' > "$PHASE3_FIXTURE_LOG"
-"$sign" "$output" "$fixture/sign-dry-run" --dry-run
+"$sign" "$output" "$fixture/sign-dry-run" --dry-run --identity "$PHASE3_FIXTURE_APPLE_DEVELOPMENT_ID"
 test ! -s "$PHASE3_FIXTURE_LOG"
+expect_fail "$sign" "$output" "$fixture/sign-invalid-identity" --dry-run --identity 0000000000000000000000000000000000000000
 manifest="$output.phase3-angle-manifest"
 manifest_hash="$manifest.sha256"
 for old_schema in phase3-angle-test-copy-v2 phase3-angle-test-copy-v3 phase3-angle-test-copy-v4; do
@@ -695,7 +737,7 @@ for old_schema in phase3-angle-test-copy-v2 phase3-angle-test-copy-v3 phase3-ang
   mv "$manifest.new" "$manifest"
   printf '%s  %s\n' "$(shasum -a 256 "$manifest" | awk '{print $1}')" "$(basename "$manifest")" > "$manifest_hash"
   chmod 0444 "$manifest" "$manifest_hash"
-  expect_fail "$sign" "$output" "$fixture/sign-$old_schema" --dry-run
+  expect_fail "$sign" "$output" "$fixture/sign-$old_schema" --dry-run --identity "$PHASE3_FIXTURE_APPLE_DEVELOPMENT_ID"
   chmod u+w "$manifest" "$manifest_hash"
   sed 's/^SCHEMA=.*/SCHEMA=phase3-angle-test-copy-v6/' "$manifest" > "$manifest.new"
   mv "$manifest.new" "$manifest"
@@ -707,7 +749,7 @@ awk 'BEGIN { FS = OFS = "=" } $1 == "COPY_POLICY" { $2 = "unexpected" } { print 
 mv "$manifest.new" "$manifest"
 printf '%s  %s\n' "$(shasum -a 256 "$manifest" | awk '{print $1}')" "$(basename "$manifest")" > "$manifest_hash"
 chmod 0444 "$manifest" "$manifest_hash"
-expect_fail "$sign" "$output" "$fixture/sign-policy-mismatch" --dry-run
+expect_fail "$sign" "$output" "$fixture/sign-policy-mismatch" --dry-run --identity "$PHASE3_FIXTURE_APPLE_DEVELOPMENT_ID"
 chmod u+w "$manifest" "$manifest_hash"
 awk 'BEGIN { FS = OFS = "=" } $1 == "COPY_POLICY" { $2 = "norsrc,noextattr,noacl,noqtn" } { print }' "$manifest" > "$manifest.new"
 mv "$manifest.new" "$manifest"
@@ -717,11 +759,11 @@ chmod 0444 "$manifest" "$manifest_hash"
 mkdir -p "$(dirname "$output_after_tamper")"
 "$prepare" "$source_app" "$artifact" "$output_after_tamper"
 printf 'unexpected\n' > "$output_after_tamper/Contents/Frameworks/Google Chrome Framework.framework/Libraries/unexpected.dylib"
-expect_fail "$sign" "$output_after_tamper" "$fixture/sign-unexpected" --dry-run
+expect_fail "$sign" "$output_after_tamper" "$fixture/sign-unexpected" --dry-run --identity "$PHASE3_FIXTURE_APPLE_DEVELOPMENT_ID"
 manifest="$output_after_tamper.phase3-angle-manifest"
 chmod 0644 "$manifest"
 printf 'tampered\n' >> "$manifest"
-expect_fail "$sign" "$output_after_tamper" "$fixture/sign-tampered" --dry-run
+expect_fail "$sign" "$output_after_tamper" "$fixture/sign-tampered" --dry-run --identity "$PHASE3_FIXTURE_APPLE_DEVELOPMENT_ID"
 output_no_manifest="$fixture/output no manifest/Google Chrome 154 ANGLE Test.app"
 mkdir -p "$(dirname "$output_no_manifest")"
 cp -R "$output" "$output_no_manifest"
@@ -729,7 +771,7 @@ expect_fail "$run" CASE_B "$output_no_manifest" "$fixture/run-missing-manifest"
 output_signed="$fixture/output signed/Google Chrome 154 ANGLE Test.app"
 mkdir -p "$(dirname "$output_signed")"
 "$prepare" "$source_app" "$artifact" "$output_signed"
-"$sign" "$output_signed" "$fixture/sign-confirmed" --confirm-ad-hoc-signing
+"$sign" "$output_signed" "$fixture/sign-confirmed" --identity "$PHASE3_FIXTURE_APPLE_DEVELOPMENT_ID" --confirm-apple-development-signing
 signed_inventory="$output_signed.phase3-angle-signing-receipt.evidence/libraries-post-sign.txt"
 test -f "$signed_inventory"
 ! cmp "$output_signed.phase3-angle-manifest.evidence/libraries-post-install.txt" "$signed_inventory"
@@ -737,7 +779,7 @@ test ! -e "$output_signed/Contents/Frameworks/Google Chrome Framework.framework/
 grep -F "Versions/$PHASE3_FIXTURE_VERSION" "$PHASE3_FIXTURE_LOG" >/dev/null
 ! grep -F -- '--bundle-version=' "$PHASE3_FIXTURE_LOG" >/dev/null
 mkdir "$output_signed/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_PREVIOUS_VERSION"
-expect_fail "$sign" "$output_signed" "$fixture/sign-reintroduced-version" --dry-run
+expect_fail "$sign" "$output_signed" "$fixture/sign-reintroduced-version" --dry-run --identity "$PHASE3_FIXTURE_APPLE_DEVELOPMENT_ID"
 expect_fail "$run" CASE_B "$output_signed" "$fixture/run-reintroduced-version"
 expect_fail "$collect" "$output_signed" "$fixture/collect-reintroduced-version"
 rmdir "$output_signed/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_PREVIOUS_VERSION"
@@ -745,7 +787,7 @@ inventory="$output_signed.phase3-angle-manifest.evidence/libraries-copy-baseline
 cp "$inventory" "$inventory.backup"
 chmod u+w "$inventory"
 printf 'tampered\n' >> "$inventory"
-expect_fail "$sign" "$output_signed" "$fixture/sign-inventory-tampered" --dry-run
+expect_fail "$sign" "$output_signed" "$fixture/sign-inventory-tampered" --dry-run --identity "$PHASE3_FIXTURE_APPLE_DEVELOPMENT_ID"
 expect_fail "$run" CASE_B "$output_signed" "$fixture/run-inventory-tampered"
 expect_fail "$collect" "$output_signed" "$fixture/collect-inventory-tampered"
 mv "$inventory.backup" "$inventory"
@@ -768,10 +810,13 @@ run_evidence_receipt_policy_group
 sign_script="$repo_root/scripts/sign-chrome-angle-test-copy.sh"
 grep -F 'phase3_sign_current_framework' "$sign_script" >/dev/null
 grep -F 'phase3_validate_current_only_framework "$framework"' "$sign_script" >/dev/null
-grep -F 'phase3_sign_target "$codesign_executable" "$framework"' "$sign_script" >/dev/null
+grep -F 'phase3_sign_target "$codesign_executable" "$identity" "$framework"' "$sign_script" >/dev/null
 ! grep -F -- '--bundle-version=' "$sign_script" >/dev/null
-grep -F 'SIGNING_METHOD=ad-hoc-current-framework' "$sign_script" >/dev/null
-grep -F 'SCHEMA=phase3-angle-signing-receipt-v2' "$sign_script" >/dev/null
+grep -F 'SIGNING_METHOD=apple-development-current-framework' "$sign_script" >/dev/null
+grep -F 'SCHEMA=phase3-angle-signing-receipt-v3' "$sign_script" >/dev/null
+grep -F -- '--confirm-apple-development-signing' "$sign_script" >/dev/null
+grep -F "'runtime,kill,restrict'" "$sign_script" >/dev/null
+! grep -F -- '--preserve-metadata=entitlements' "$sign_script" >/dev/null
 grep -F 'SIGNED_LIBRARIES_INVENTORY_SHA256=' "$sign_script" >/dev/null
 ! grep -F "codesign --force --sign - --deep" "$sign_script" >/dev/null
 printf 'phase3b fixture tests passed\n'
