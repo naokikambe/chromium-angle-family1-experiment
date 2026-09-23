@@ -32,6 +32,10 @@ if [[ " $* " == *' --force '* ]]; then
     touch "$target/.fixture-ad-hoc"
   elif [[ -d "$target" ]]; then
     touch "$target/.fixture-ad-hoc"
+  elif [[ "$target" == *'/Libraries/'*.dylib ]]; then
+    # Model the fact that real codesign changes a Mach-O's bytes. This keeps
+    # the synthetic fixture from accepting a prepared inventory after sign.
+    printf 'fixture ad-hoc signature\n' >> "$target"
   fi
   exit 0
 fi
@@ -415,6 +419,12 @@ run_evidence_receipt_policy_group() {
   "$prepare" "$source_app" "$artifact" "$focused_output"
   fixture_checkpoint evidence-after-prepare
   "$sign" "$focused_output" "$focused_results" --confirm-ad-hoc-signing
+  test -f "$focused_receipt.evidence/libraries-post-sign.txt"
+  test -f "$focused_receipt.evidence/libraries-post-sign.txt.sha256"
+  ! cmp "$focused_output.phase3-angle-manifest.evidence/libraries-post-install.txt" \
+    "$focused_receipt.evidence/libraries-post-sign.txt"
+  grep -F 'SCHEMA=phase3-angle-signing-receipt-v2' "$focused_receipt" >/dev/null
+  grep -F 'SIGNED_LIBRARIES_INVENTORY_SHA256=' "$focused_receipt" >/dev/null
   test ! -e "$focused_output/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_PREVIOUS_VERSION"
   test -e "$focused_output/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_VERSION/.fixture-ad-hoc"
   grep -F "Versions/$PHASE3_FIXTURE_VERSION" "$PHASE3_FIXTURE_LOG" >/dev/null
@@ -475,6 +485,20 @@ EOF
   fixture_checkpoint evidence-tampered-receipt
   expect_fail "$run" CASE_B "$focused_output" "$fixture/evidence tampered-receipt run"
   expect_fail "$collect" "$focused_output" "$fixture/evidence tampered-receipt"
+
+  # A v1 receipt is not silently accepted as a v2 signed-inventory receipt.
+  chmod u+w "$focused_receipt" "$focused_receipt.sha256"
+  awk -v prepare_hash="$(phase3_hash "$focused_manifest")" 'BEGIN { FS = OFS = "=" }
+    $1 == "SCHEMA" { $2 = "phase3-angle-signing-receipt-v1" }
+    $1 == "PREPARE_MANIFEST_SHA256" { $2 = prepare_hash }
+    { print }' "$focused_receipt" > "$focused_receipt.new"
+  mv "$focused_receipt.new" "$focused_receipt"
+  printf '%s  %s\n' "$(shasum -a 256 "$focused_receipt" | awk '{print $1}')" "$(basename "$focused_receipt")" > "$focused_receipt.sha256"
+  chmod 0444 "$focused_receipt" "$focused_receipt.sha256"
+  mkdir "$fixture/evidence old-receipt"
+  fixture_checkpoint evidence-old-receipt
+  expect_fail "$run" CASE_B "$focused_output" "$fixture/evidence old-receipt run"
+  expect_fail "$collect" "$focused_output" "$fixture/evidence old-receipt"
   fixture_group_end evidence-receipt-policy
 }
 
@@ -706,6 +730,9 @@ output_signed="$fixture/output signed/Google Chrome 154 ANGLE Test.app"
 mkdir -p "$(dirname "$output_signed")"
 "$prepare" "$source_app" "$artifact" "$output_signed"
 "$sign" "$output_signed" "$fixture/sign-confirmed" --confirm-ad-hoc-signing
+signed_inventory="$output_signed.phase3-angle-signing-receipt.evidence/libraries-post-sign.txt"
+test -f "$signed_inventory"
+! cmp "$output_signed.phase3-angle-manifest.evidence/libraries-post-install.txt" "$signed_inventory"
 test ! -e "$output_signed/Contents/Frameworks/Google Chrome Framework.framework/Versions/$PHASE3_FIXTURE_PREVIOUS_VERSION"
 grep -F "Versions/$PHASE3_FIXTURE_VERSION" "$PHASE3_FIXTURE_LOG" >/dev/null
 ! grep -F -- '--bundle-version=' "$PHASE3_FIXTURE_LOG" >/dev/null
@@ -732,6 +759,11 @@ grep -F -- '--disable-angle-features=requireGpuFamily2' "$fixture/case-c/run-met
 printf '222 %s --type=gpu-process\n' "$output_signed/Contents/MacOS/Google Chrome" > "$process_snapshot"
 expect_fail "$run" CASE_B "$output_signed" "$fixture/case-already-running"
 
+printf 'tampered after signing\n' >> "$output_signed/Contents/Frameworks/Google Chrome Framework.framework/Libraries/libEGL.dylib"
+expect_fail "$run" CASE_B "$output_signed" "$fixture/case-signed-inventory-tampered"
+mkdir "$fixture/collect-signed-inventory-tampered"
+expect_fail "$collect" "$output_signed" "$fixture/collect-signed-inventory-tampered"
+
 run_evidence_receipt_policy_group
 sign_script="$repo_root/scripts/sign-chrome-angle-test-copy.sh"
 grep -F 'phase3_sign_current_framework' "$sign_script" >/dev/null
@@ -739,5 +771,7 @@ grep -F 'phase3_validate_current_only_framework "$framework"' "$sign_script" >/d
 grep -F 'phase3_sign_target "$codesign_executable" "$framework"' "$sign_script" >/dev/null
 ! grep -F -- '--bundle-version=' "$sign_script" >/dev/null
 grep -F 'SIGNING_METHOD=ad-hoc-current-framework' "$sign_script" >/dev/null
+grep -F 'SCHEMA=phase3-angle-signing-receipt-v2' "$sign_script" >/dev/null
+grep -F 'SIGNED_LIBRARIES_INVENTORY_SHA256=' "$sign_script" >/dev/null
 ! grep -F "codesign --force --sign - --deep" "$sign_script" >/dev/null
 printf 'phase3b fixture tests passed\n'

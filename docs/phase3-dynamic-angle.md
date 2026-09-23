@@ -22,11 +22,24 @@ fields, GN args when present, and each dylib's bytes. No old manifest is treated
 as this schema. The Phase 3 test-copy manifest records the exact release-manifest
 SHA-256 used to prepare it.
 
-At preflight, the source app's `CFBundleShortVersionString` must exactly equal
-the release manifest's `CHROME_VERSION`. A mismatch is fatal; updating Chrome
-does not silently select or substitute an artifact. Download and prepare scripts
-accept an explicitly selected artifact directory/run rather than embedding a
-Chrome version, ANGLE revision, run ID, artifact name, or dylib hashes in code.
+`ensure-angle-release-artifact.sh` is Step 0. It reads the installed source
+Chrome version without modifying the app and searches only direct child artifact
+directories of an explicitly supplied cache root. Exactly one artifact is
+reused only when its `angle-release-v1` manifest, sidecar, and both dylib hashes
+verify and its Chrome version matches. With no match, Step 0 dispatches the
+pinned build workflow for that version, waits for the newly created run,
+downloads it into a new cache child, verifies it, and prints the selected path.
+Multiple matches fail closed. Step 0 is read-only toward source Chrome and the
+repository, but build dispatch and artifact download are explicit side effects.
+
+At preflight, the source app's `CFBundleShortVersionString` is checked again and
+must exactly equal the selected release manifest's `CHROME_VERSION`. A mismatch
+is fatal. No script embeds a Chrome version, ANGLE revision, run ID, artifact
+name, or dylib hash.
+
+The operational sequence is Step 0 artifact assurance, Step 1 Phase 3C
+preflight through signing dry-run, Step 2 separately approved real signing, and
+Step 3 separately approved Case B/Case C launch and evidence collection.
 
 ## Attempt directories and immutable history
 
@@ -62,6 +75,14 @@ notarization on that test copy. It is not a normal browsing or distribution
 copy. Signature, entitlements, CodeDirectory, strict-verification, and GPU
 process load evidence are retained before any later runtime decision. Strict
 verification failures are not ignored or retried automatically.
+
+Preparation records the artifact and pre-sign Libraries bytes. Ad-hoc signing
+legitimately changes the bytes of every signed Mach-O in Libraries, including
+the two added ANGLE dylibs. Therefore signing writes a separate, external
+post-sign Libraries inventory and checksum, referenced by signing receipt
+schema `phase3-angle-signing-receipt-v2`. Run and collection require that
+signed inventory, while continuing to enforce the prepared entry set, types,
+and symlink targets. Receipt v1 is not accepted as a v2 receipt.
 
 The complete synthetic fixture suites are accepted only through the pinned
 Phase 3B and Phase 3C GitHub Actions workflows on `macos-15-intel`. Local full

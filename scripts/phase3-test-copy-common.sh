@@ -161,6 +161,18 @@ phase3_receipt_hash_path() {
   printf '%s.sha256\n' "$(phase3_receipt_path "$1")"
 }
 
+phase3_receipt_evidence_dir() {
+  printf '%s.evidence\n' "$(phase3_receipt_path "$1")"
+}
+
+phase3_signed_libraries_inventory_path() {
+  printf '%s/libraries-post-sign.txt\n' "$(phase3_receipt_evidence_dir "$1")"
+}
+
+phase3_signed_libraries_inventory_hash_path() {
+  printf '%s.sha256\n' "$(phase3_signed_libraries_inventory_path "$1")"
+}
+
 phase3_write_hash_file() {
   local input=$1
   local output=$2
@@ -419,6 +431,59 @@ phase3_validate_post_inventory() {
     phase3_fail 'unexpected additional or missing Libraries entries'
 }
 
+phase3_validate_signed_inventory() {
+  local prepared=$1
+  local signed=$2
+  local current=$3
+  local name type value signed_line prepared_line signed_type signed_value prepared_type prepared_value
+
+  phase3_validate_inventory_file "$prepared"
+  phase3_validate_inventory_file "$signed"
+  phase3_validate_inventory_file "$current"
+
+  # Code signatures legitimately change the byte hashes of signed Mach-O
+  # files. Preserve the prepared path/type/link layout, then pin the exact
+  # post-sign inventory for later run/collect validation.
+  while IFS=$'\t' read -r name type value; do
+    signed_line=$(awk -F '\t' -v n="$name" '$1 == n {print; found=1} END {if (!found) exit 1}' "$signed") ||
+      phase3_fail "signed Libraries entry is missing: $name"
+    signed_type=${signed_line#*$'\t'}
+    signed_type=${signed_type%%$'\t'*}
+    signed_value=${signed_line#*$'\t'*$'\t'}
+    case "$type" in
+      file)
+        [[ "$signed_type" == file && "$signed_value" =~ ^[0-9a-f]{64}$ ]] ||
+          phase3_fail "signed Libraries file entry changed type: $name"
+        ;;
+      dir|symlink)
+        [[ "$signed_line" == "$name"$'\t'"$type"$'\t'"$value" ]] ||
+          phase3_fail "signed Libraries non-file entry changed: $name"
+        ;;
+    esac
+  done < "$prepared"
+
+  while IFS=$'\t' read -r name type value; do
+    prepared_line=$(awk -F '\t' -v n="$name" '$1 == n {print; found=1} END {if (!found) exit 1}' "$prepared") ||
+      phase3_fail "unexpected signed Libraries entry: $name"
+    prepared_type=${prepared_line#*$'\t'}
+    prepared_type=${prepared_type%%$'\t'*}
+    prepared_value=${prepared_line#*$'\t'*$'\t'}
+    case "$type" in
+      file)
+        [[ "$prepared_type" == file && "$prepared_value" =~ ^[0-9a-f]{64}$ ]] ||
+          phase3_fail "signed Libraries file entry changed type: $name"
+        ;;
+      dir|symlink)
+        [[ "$prepared_line" == "$name"$'\t'"$type"$'\t'"$value" ]] ||
+          phase3_fail "signed Libraries non-file entry changed: $name"
+        ;;
+    esac
+  done < "$signed"
+  [[ $(wc -l < "$signed" | tr -d ' ') == $(wc -l < "$prepared" | tr -d ' ') ]] ||
+    phase3_fail 'signed Libraries inventory has an unexpected entry count'
+  cmp "$signed" "$current" || phase3_fail 'current Libraries inventory differs from signed inventory'
+}
+
 phase3_require_angle_dylibs_present() {
   local libraries_dir=$1 framework_dir=$2 libraries_real
   libraries_real=$(phase3_validate_libraries_directory "$libraries_dir" "$framework_dir")
@@ -428,6 +493,8 @@ phase3_require_angle_dylibs_present() {
 
 phase3_validate_manifest() {
   local app=$1
+  local validation_state=${2:-prepared}
+  local signed_inventory=${3:-}
   local manifest
   local manifest_hash
   local framework
@@ -435,6 +502,11 @@ phase3_validate_manifest() {
   local evidence_dir
   local current_inventory
   local release_manifest_hash
+
+  case "$validation_state" in
+    prepared|signed) ;;
+    *) phase3_fail "unsupported test-copy validation state: $validation_state" ;;
+  esac
 
   manifest=$(phase3_manifest_path "$app")
   manifest_hash=$(phase3_manifest_hash_path "$app")
@@ -512,10 +584,16 @@ phase3_validate_manifest() {
   phase3_validate_post_inventory "$evidence_dir/libraries-copy-baseline.txt" "$evidence_dir/libraries-post-install.txt"
   current_inventory=$(mktemp "${TMPDIR:-/tmp}/phase3-current-inventory.XXXXXX")
   phase3_inventory_libraries "$(phase3_validate_libraries_directory "$libraries_dir" "$framework")" "$current_inventory"
-  cmp "$evidence_dir/libraries-post-install.txt" "$current_inventory" || phase3_fail 'current Libraries inventory differs from prepared inventory'
+  if [[ "$validation_state" == prepared ]]; then
+    cmp "$evidence_dir/libraries-post-install.txt" "$current_inventory" || phase3_fail 'current Libraries inventory differs from prepared inventory'
+    phase3_verify_hash "$libraries_dir/libEGL.dylib" "$PHASE3_RELEASE_LIBEGL_SHA256"
+    phase3_verify_hash "$libraries_dir/libGLESv2.dylib" "$PHASE3_RELEASE_LIBGLESV2_SHA256"
+  else
+    [[ -n "$signed_inventory" ]] || phase3_fail 'signed Libraries inventory path is missing'
+    phase3_verify_sidecar_hash "$signed_inventory" "${signed_inventory}.sha256"
+    phase3_validate_signed_inventory "$evidence_dir/libraries-post-install.txt" "$signed_inventory" "$current_inventory"
+  fi
   rm -f "$current_inventory"
-  phase3_verify_hash "$libraries_dir/libEGL.dylib" "$PHASE3_RELEASE_LIBEGL_SHA256"
-  phase3_verify_hash "$libraries_dir/libGLESv2.dylib" "$PHASE3_RELEASE_LIBGLESV2_SHA256"
 }
 
 phase3_validate_signed_test_copy() {
@@ -524,12 +602,12 @@ phase3_validate_signed_test_copy() {
   local manifest
   local receipt
   local manifest_sha256
+  local signed_inventory
 
-  phase3_validate_manifest "$app"
   manifest=$(phase3_manifest_path "$app")
   receipt=$(phase3_receipt_path "$app")
   phase3_verify_sidecar_hash "$receipt" "$(phase3_receipt_hash_path "$app")"
-  [[ "$(phase3_manifest_value "$receipt" 'SCHEMA')" == 'phase3-angle-signing-receipt-v1' ]] ||
+  [[ "$(phase3_manifest_value "$receipt" 'SCHEMA')" == 'phase3-angle-signing-receipt-v2' ]] ||
     phase3_fail 'unsupported signing receipt schema'
   [[ "$(phase3_manifest_value "$receipt" 'TEST_APP')" == "$app" ]] ||
     phase3_fail 'signing receipt app path does not match'
@@ -543,6 +621,11 @@ phase3_validate_signed_test_copy() {
   manifest_sha256=$(phase3_hash "$manifest")
   [[ "$(phase3_manifest_value "$receipt" 'PREPARE_MANIFEST_SHA256')" == "$manifest_sha256" ]] ||
     phase3_fail 'signing receipt does not match the current preparation manifest'
+  signed_inventory=$(phase3_signed_libraries_inventory_path "$app")
+  phase3_verify_sidecar_hash "$signed_inventory" "$(phase3_signed_libraries_inventory_hash_path "$app")"
+  [[ "$(phase3_manifest_value "$receipt" 'SIGNED_LIBRARIES_INVENTORY_SHA256')" == "$(phase3_hash "$signed_inventory")" ]] ||
+    phase3_fail 'signing receipt does not match the signed Libraries inventory'
+  phase3_validate_manifest "$app" signed "$signed_inventory"
   phase3_run_codesign "$codesign_executable" --verify --deep --strict "$app" || phase3_fail 'test copy strict signature verification failed'
   phase3_run_codesign "$codesign_executable" -dvvv "$app" 2>&1 | grep -F 'Signature=adhoc' >/dev/null ||
     phase3_fail 'test copy is not currently ad-hoc signed'

@@ -116,6 +116,9 @@ manifest=$(phase3_manifest_path "$test_app_real")
 manifest_hash=$(phase3_manifest_hash_path "$test_app_real")
 receipt=$(phase3_receipt_path "$test_app_real")
 receipt_hash=$(phase3_receipt_hash_path "$test_app_real")
+signed_evidence_dir=$(phase3_receipt_evidence_dir "$test_app_real")
+signed_inventory=$(phase3_signed_libraries_inventory_path "$test_app_real")
+signed_inventory_hash=$(phase3_signed_libraries_inventory_hash_path "$test_app_real")
 
 if [[ "$dry_run" == true ]]; then
   printf 'dry-run: would clear xattrs and ad-hoc sign only this prepared test copy:\n'
@@ -131,7 +134,8 @@ for command in xattr shasum find file; do
   command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"
 done
 [[ -x "$codesign_executable" ]] || phase3_fail "required codesign executable is unavailable: $codesign_executable"
-[[ ! -e "$receipt" && ! -e "$receipt_hash" ]] || phase3_fail 'refusing to replace an existing signing receipt'
+[[ ! -e "$receipt" && ! -e "$receipt_hash" && ! -e "$signed_evidence_dir" && ! -L "$signed_evidence_dir" ]] ||
+  phase3_fail 'refusing to replace existing signing evidence or receipt'
 
 printf '%s\n' 'WARNING: this will remove extended attributes and replace Google Developer ID/notarized signatures with ad-hoc signatures on the test copy only.' >&2
 printf '%s\n' 'Do not use this copy for normal browsing, existing profiles, or ordinary Chrome use.' >&2
@@ -168,6 +172,14 @@ xattr -cr "$test_app_real"
 phase3_sign_nested_components "$codesign_executable" "$test_app_real" "$framework" "$main_executable" "$results_real"
 phase3_run_codesign "$codesign_executable" --verify --deep --strict "$test_app_real" || phase3_fail 'ad-hoc signed test copy failed strict verification'
 
+mkdir "$signed_evidence_dir"
+libraries_real=$(phase3_validate_libraries_directory "$framework/Libraries" "$framework")
+phase3_inventory_libraries "$libraries_real" "$signed_inventory"
+phase3_validate_signed_inventory \
+  "$(phase3_manifest_path "$test_app_real").evidence/libraries-post-install.txt" \
+  "$signed_inventory" "$signed_inventory"
+phase3_write_hash_file "$signed_inventory" "$signed_inventory_hash"
+
 phase3_sign_capture_signature "$codesign_executable" "$results_real/test-app-after" "$test_app_real"
 phase3_sign_capture_signature "$codesign_executable" "$results_real/main-after" "$main_executable"
 phase3_sign_capture_signature "$codesign_executable" "$results_real/framework-after" "$framework"
@@ -182,10 +194,11 @@ grep -F 'Signature=adhoc' "$results_real/test-app-after-details.txt" >/dev/null 
   phase3_fail 'test app is not reported as ad-hoc signed after signing'
 
 {
-  printf 'SCHEMA=phase3-angle-signing-receipt-v1\n'
+  printf 'SCHEMA=phase3-angle-signing-receipt-v2\n'
   printf 'TEST_APP=%s\n' "$test_app_real"
   printf 'PREPARE_MANIFEST_SHA256=%s\n' "$(phase3_hash "$manifest")"
   printf 'SIGNING_METHOD=ad-hoc-current-framework\n'
+  printf 'SIGNED_LIBRARIES_INVENTORY_SHA256=%s\n' "$(phase3_hash "$signed_inventory")"
   printf 'SIGNED_AT_UTC=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   printf 'STRICT_VERIFICATION=passed\n'
   printf 'RESULTS_DIRECTORY=%s\n' "$results_real"
