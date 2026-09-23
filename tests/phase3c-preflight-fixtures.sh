@@ -374,33 +374,33 @@ grep -F $'sign-dry-run\tfail\t42' "$sign_failure_results/preflight-step-journal.
 applications_source="$fixture/Applications/Google Chrome.app"
 mkdir -p "$(dirname "$applications_source")"
 cp -R "$source_app" "$applications_source"
-mkdir -p "$fixture/applications-source" "$fixture/phase3c"
-"$preflight" --source-app "$applications_source" --artifact-dir "$artifact_dir" --output-app "$fixture/applications-source-attempt-20260923-120000/output.app" --results-dir "$fixture/applications-source-attempt-20260923-120000/results" >/dev/null
+mkdir -p "$fixture/applications-source" "$fixture/self-process" "$fixture/phase3c"
+"$preflight" --source-app "$applications_source" --artifact-dir "$artifact_dir" --output-app "$fixture/applications-source/attempt-20260923-120000/output.app" --results-dir "$fixture/applications-source/attempt-20260923-120000/results" >/dev/null
 export PHASE3C_SOURCE_SELF_PROCESS=1
-"$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/self-process-attempt-20260923-120000/output.app" --results-dir "$fixture/self-process-attempt-20260923-120000/results" >/dev/null
+"$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/self-process/attempt-20260923-120000/output.app" --results-dir "$fixture/self-process/attempt-20260923-120000/results" >/dev/null
 unset PHASE3C_SOURCE_SELF_PROCESS
 success_log="$fixture/success-preflight.log"
-if ! bash -x "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/phase3c-preflight-attempt-20260923-120000/output.app" --results-dir "$fixture/phase3c-preflight-attempt-20260923-120000/results" > "$success_log" 2>&1; then
+if ! bash -x "$preflight" --source-app "$source_app" --artifact-dir "$artifact_dir" --output-app "$fixture/phase3c-preflight/attempt-20260923-120000/output.app" --results-dir "$fixture/phase3c-preflight/attempt-20260923-120000/results" > "$success_log" 2>&1; then
   cat "$success_log" >&2
   exit 1
 fi
-test -f "$fixture/phase3c-preflight-attempt-20260923-120000/output.app.phase3-angle-manifest"
-grep -F 'SCHEMA=phase3-angle-test-copy-v6' "$fixture/phase3c-preflight-attempt-20260923-120000/output.app.phase3-angle-manifest" >/dev/null
-grep -F "RELEASE_MANIFEST_SHA256=$(phase3_hash "$artifact_dir/ANGLE_RELEASE_MANIFEST")" "$fixture/phase3c-preflight-attempt-20260923-120000/output.app.phase3-angle-manifest" >/dev/null
-grep -F $'IwaKeyDistribution\tdir\t-' "$fixture/phase3c-preflight-attempt-20260923-120000/output.app.phase3-angle-manifest.evidence/libraries-source-baseline.txt" >/dev/null
-test -f "$fixture/phase3c-preflight-attempt-20260923-120000/output.app.phase3-angle-manifest.evidence/libraries-source-baseline.sha256"
-test -f "$fixture/phase3c-preflight-attempt-20260923-120000/output.app.phase3-angle-manifest.evidence/libraries-copy-baseline.sha256"
-test -f "$fixture/phase3c-preflight-attempt-20260923-120000/output.app.phase3-angle-manifest.evidence/libraries-post-install.sha256"
-test ! -e "$fixture/phase3c-preflight-attempt-20260923-120000/output.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/154.0.8037.57"
-test -d "$fixture/phase3c-preflight-attempt-20260923-120000/output.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/154.0.8037.58"
-test "$(readlink "$fixture/phase3c-preflight-attempt-20260923-120000/output.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current")" = 154.0.8037.58
-test -f "$fixture/phase3c-preflight-attempt-20260923-120000/output.app.phase3-angle-manifest.evidence/framework-versions-before.sha256"
-test -f "$fixture/phase3c-preflight-attempt-20260923-120000/output.app.phase3-angle-manifest.evidence/framework-removed-version-inventory.sha256"
-test -f "$fixture/phase3c-preflight-attempt-20260923-120000/output.app.phase3-angle-manifest.evidence/framework-versions-after.sha256"
-test -f "$fixture/phase3c-preflight-attempt-20260923-120000/results/sign-dry-run.txt"
-grep -F 'synthetic sign dry-run success' "$fixture/phase3c-preflight-attempt-20260923-120000/results/sign-dry-run.txt" >/dev/null
-journal="$fixture/phase3c-preflight-attempt-20260923-120000/results/preflight-step-journal.tsv"
-result="$fixture/phase3c-preflight-attempt-20260923-120000/results/preflight-final-result.txt"
+test -f "$fixture/phase3c-preflight/attempt-20260923-120000/output.app.phase3-angle-manifest"
+grep -F 'SCHEMA=phase3-angle-test-copy-v6' "$fixture/phase3c-preflight/attempt-20260923-120000/output.app.phase3-angle-manifest" >/dev/null
+grep -F "RELEASE_MANIFEST_SHA256=$(phase3_hash "$artifact_dir/ANGLE_RELEASE_MANIFEST")" "$fixture/phase3c-preflight/attempt-20260923-120000/output.app.phase3-angle-manifest" >/dev/null
+grep -F $'IwaKeyDistribution\tdir\t-' "$fixture/phase3c-preflight/attempt-20260923-120000/output.app.phase3-angle-manifest.evidence/libraries-source-baseline.txt" >/dev/null
+test -f "$fixture/phase3c-preflight/attempt-20260923-120000/output.app.phase3-angle-manifest.evidence/libraries-source-baseline.sha256"
+test -f "$fixture/phase3c-preflight/attempt-20260923-120000/output.app.phase3-angle-manifest.evidence/libraries-copy-baseline.sha256"
+test -f "$fixture/phase3c-preflight/attempt-20260923-120000/output.app.phase3-angle-manifest.evidence/libraries-post-install.sha256"
+test ! -e "$fixture/phase3c-preflight/attempt-20260923-120000/output.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/154.0.8037.57"
+test -d "$fixture/phase3c-preflight/attempt-20260923-120000/output.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/154.0.8037.58"
+test "$(readlink "$fixture/phase3c-preflight/attempt-20260923-120000/output.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/Current")" = 154.0.8037.58
+test -f "$fixture/phase3c-preflight/attempt-20260923-120000/output.app.phase3-angle-manifest.evidence/framework-versions-before.sha256"
+test -f "$fixture/phase3c-preflight/attempt-20260923-120000/output.app.phase3-angle-manifest.evidence/framework-removed-version-inventory.sha256"
+test -f "$fixture/phase3c-preflight/attempt-20260923-120000/output.app.phase3-angle-manifest.evidence/framework-versions-after.sha256"
+test -f "$fixture/phase3c-preflight/attempt-20260923-120000/results/sign-dry-run.txt"
+grep -F 'synthetic sign dry-run success' "$fixture/phase3c-preflight/attempt-20260923-120000/results/sign-dry-run.txt" >/dev/null
+journal="$fixture/phase3c-preflight/attempt-20260923-120000/results/preflight-step-journal.tsv"
+result="$fixture/phase3c-preflight/attempt-20260923-120000/results/preflight-final-result.txt"
 test -f "$journal"
 test -f "$result"
 grep -F 'INJECTED_INSPECT ' "$inspect_log" >/dev/null
