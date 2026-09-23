@@ -78,6 +78,13 @@ remains immutable. Preflight records read-only evidence, prepares once, validate
 the test-copy manifest/inventories, and calls signing only as `--dry-run`. Real
 signing, Chrome, and KOOV require separate human approval.
 
+Step 0 uses `ensure-angle-release-artifact.sh` to read source Chrome's version,
+reuse exactly one matching verified cache artifact, or dispatch and wait for the
+pinned build workflow before downloading and verifying a new artifact. It never
+modifies source Chrome. Dispatch and download are side effects and remain within
+an explicit Human-approved Step 0 invocation. Phase 3B CI uses only stubbed GitHub
+commands for this path.
+
 ## Safety Boundary
 
 - Never alter source Chrome, retained retry directories, saved evidence, or

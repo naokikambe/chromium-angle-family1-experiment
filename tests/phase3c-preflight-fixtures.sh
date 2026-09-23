@@ -426,4 +426,6 @@ grep -F 'phase3_sign_target "$codesign_executable" "$framework"' "$sign_script" 
 ! grep -F -- '--bundle-version=' "$sign_script" >/dev/null
 ! grep -F 'sign_command=("$codesign_executable" --force --sign - --deep "$test_app_real")' "$sign_script" >/dev/null
 grep -F "SIGNING_METHOD=ad-hoc-current-framework" "$sign_script" >/dev/null
+grep -F "SCHEMA=phase3-angle-signing-receipt-v2" "$sign_script" >/dev/null
+grep -F "SIGNED_LIBRARIES_INVENTORY_SHA256=" "$sign_script" >/dev/null
 printf '%s\n' 'phase3c preflight fixture tests passed'
