@@ -167,7 +167,7 @@ esac
 versions="$output/Contents/Frameworks/Google Chrome Framework.framework/Versions"
 case "${DITTO_VERSION_MUTATION:-}" in
   extra) mkdir "$versions/unexpected" ;;
-  missing-legacy) rm -rf "$versions/$PHASE3_FIXTURE_PREVIOUS_VERSION" ;;
+  missing-current) rm -rf "$versions/$PHASE3_FIXTURE_VERSION" ;;
   current-legacy) rm "$versions/Current"; ln -s "$PHASE3_FIXTURE_PREVIOUS_VERSION" "$versions/Current" ;;
 esac
 EOF
@@ -568,7 +568,7 @@ for baseline_mutation in missing sha link control-name control-link nested-missi
   assert_source_unchanged
 done
 
-for version_mutation in extra missing-legacy current-legacy; do
+for version_mutation in extra missing-current current-legacy; do
   version_output="$fixture/version ${version_mutation}/Google Chrome 154 ANGLE Test.app"
   mkdir -p "$(dirname "$version_output")"
   expect_fail env DITTO_VERSION_MUTATION="$version_mutation" "$prepare" "$source_app" "$artifact" "$version_output"
