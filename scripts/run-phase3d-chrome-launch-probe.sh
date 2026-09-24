@@ -1,25 +1,45 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+PHASE3_SCRIPT_NAME='run-phase3d-chrome-launch-probe'
+readonly PHASE3_SCRIPT_NAME
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/phase3-test-copy-common.sh"
+
 usage() {
-  printf 'usage: %s CHROME_VERSION RESULTS_DIRECTORY [--loader-trace]\n' "$0" >&2
+  printf 'usage: %s CHROME_VERSION RESULTS_DIRECTORY [--loader-trace] [--angle-artifact DIRECTORY]\n' "$0" >&2
   exit 64
 }
 
-[[ $# -ge 2 && $# -le 3 ]] || usage
+[[ $# -ge 2 ]] || usage
 chrome_version=$1
 results_dir=$2
+shift 2
 loader_trace=false
-if [[ $# -eq 3 ]]; then
-  [[ "$3" == '--loader-trace' ]] || usage
-  loader_trace=true
-fi
+angle_artifact_dir=''
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --loader-trace)
+      loader_trace=true
+      shift
+      ;;
+    --angle-artifact)
+      [[ $# -ge 2 && -n "$2" ]] || usage
+      angle_artifact_dir=$2
+      shift 2
+      ;;
+    *) usage ;;
+  esac
+done
 [[ "$chrome_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
   echo 'chrome_version must be four numeric components' >&2
   exit 64
 }
 [[ "$results_dir" == /* ]] || { echo 'results directory must be absolute' >&2; exit 64; }
 [[ ! -e "$results_dir" && ! -L "$results_dir" ]] || { echo 'results directory already exists' >&2; exit 1; }
+if [[ -n "$angle_artifact_dir" ]]; then
+  [[ "$angle_artifact_dir" == /* ]] || { echo 'ANGLE artifact directory must be absolute' >&2; exit 64; }
+  [[ -d "$angle_artifact_dir" ]] || { echo 'ANGLE artifact directory does not exist' >&2; exit 66; }
+fi
 mkdir -p "$results_dir"
 
 readonly EXPECTED_PLATFORM='mac-x64'
@@ -54,10 +74,110 @@ observation_complete=false
 infrastructure_failure=''
 log_stream_exit='not-started'
 browser_alive_at_deadline=false
+probe_mode='baseline'
+angle_artifact_validated=false
+angle_release_manifest_sha256=''
+angle_revision=''
+expected_libegl_sha256=''
+expected_libglesv2_sha256=''
+replacement_libraries_dir=''
+browser_angle_flags_observed=false
+gpu_angle_flags_observed=false
+libegl_dyld_load_observed=false
+libglesv2_dyld_load_observed=false
+libegl_gpu_dyld_load_observed=false
+libglesv2_gpu_dyld_load_observed=false
+libegl_process_map_observed=false
+libglesv2_process_map_observed=false
+gpu_disabled_fallback_observed=false
+egl_initialization_failure_observed=false
+dynamic_angle_outcome='not-requested'
+if [[ -n "$angle_artifact_dir" ]]; then
+  probe_mode='dynamic-angle'
+fi
 
 record_failure() {
   infrastructure_failure=$1
   printf 'probe infrastructure failure: %s\n' "$1" >&2
+}
+
+prepare_dynamic_angle_replacement() {
+  local framework versions_dir current_target concrete_version_dir library source_file destination_file
+  phase3_validate_release_manifest "$angle_artifact_dir"
+  [[ "$PHASE3_RELEASE_CHROME_VERSION" == "$chrome_version" ]] || {
+    record_failure "ANGLE release expects Chrome $PHASE3_RELEASE_CHROME_VERSION, found $chrome_version"
+    return 1
+  }
+  angle_artifact_validated=true
+  angle_release_manifest_sha256=$PHASE3_RELEASE_MANIFEST_SHA256
+  angle_revision=$PHASE3_RELEASE_ANGLE_REVISION
+  expected_libegl_sha256=$PHASE3_RELEASE_LIBEGL_SHA256
+  expected_libglesv2_sha256=$PHASE3_RELEASE_LIBGLESV2_SHA256
+
+  framework="$browser_app/Contents/Frameworks/Google Chrome for Testing Framework.framework"
+  versions_dir="$framework/Versions"
+  [[ -d "$framework" && -d "$versions_dir" ]] || {
+    record_failure 'Chrome for Testing Framework is missing'
+    return 1
+  }
+  [[ -L "$versions_dir/Current" ]] || {
+    record_failure 'Chrome for Testing Framework Current is not a symlink'
+    return 1
+  }
+  current_target=$(readlink "$versions_dir/Current") || {
+    record_failure 'could not read Chrome for Testing Framework Current symlink'
+    return 1
+  }
+  [[ "$current_target" == "$chrome_version" ]] || {
+    record_failure "CfT Framework Current expects $current_target, release expects $chrome_version"
+    return 1
+  }
+  concrete_version_dir="$versions_dir/$current_target"
+  [[ -d "$concrete_version_dir/Libraries" && ! -L "$concrete_version_dir/Libraries" ]] || {
+    record_failure 'concrete CfT Framework Libraries directory is missing or symlinked'
+    return 1
+  }
+  replacement_libraries_dir=$(cd "$concrete_version_dir/Libraries" && pwd -P) || {
+    record_failure 'could not resolve concrete CfT Libraries directory'
+    return 1
+  }
+
+  {
+    printf 'schema=phase3d-dynamic-angle-placement-v1\n'
+    printf 'chrome_version=%s\n' "$chrome_version"
+    printf 'framework_current_target=%s\n' "$current_target"
+    printf 'release_manifest_sha256=%s\n' "$angle_release_manifest_sha256"
+    printf 'angle_revision=%s\n' "$angle_revision"
+    printf 'artifact_name=%s\n' "$PHASE3_RELEASE_ARTIFACT_NAME"
+    printf 'build_run_id=%s\n' "$PHASE3_RELEASE_BUILD_RUN_ID"
+    printf 'libraries_directory=%s\n' "$replacement_libraries_dir"
+  } > "$results_dir/dynamic-angle-placement.txt"
+  install -m 0444 "$(phase3_release_manifest_path "$angle_artifact_dir")" "$results_dir/ANGLE_RELEASE_MANIFEST"
+  install -m 0444 "$(phase3_release_manifest_hash_path "$angle_artifact_dir")" "$results_dir/ANGLE_RELEASE_MANIFEST.sha256"
+
+  : > "$results_dir/replacement-library-inspection.txt"
+  for library in libEGL.dylib libGLESv2.dylib; do
+    source_file="$angle_artifact_dir/$library"
+    destination_file="$replacement_libraries_dir/$library"
+    [[ ! -e "$destination_file" && ! -L "$destination_file" ]] || {
+      record_failure "refusing existing CfT replacement target: $library"
+      return 1
+    }
+    install -m 0755 "$source_file" "$destination_file"
+    case "$library" in
+      libEGL.dylib) phase3_verify_hash "$destination_file" "$expected_libegl_sha256" ;;
+      libGLESv2.dylib) phase3_verify_hash "$destination_file" "$expected_libglesv2_sha256" ;;
+    esac
+    {
+      printf '== %s ==\n' "$destination_file"
+      shasum -a 256 "$destination_file"
+      file "$destination_file"
+      lipo -info "$destination_file"
+      otool -L "$destination_file"
+      codesign -dvvv "$destination_file" 2>&1 || true
+      codesign --verify --verbose=4 "$destination_file" 2>&1 || true
+    } >> "$results_dir/replacement-library-inspection.txt"
+  done
 }
 
 write_final_result() {
@@ -77,6 +197,23 @@ write_final_result() {
     printf 'GPU_COLLECTOR_FAILURE_COUNT=%s\n' "$gpu_collector_failure_count"
     printf 'FINAL_GPU_COMMAND=%s\n' "$final_gpu_command"
     printf 'LOADER_TRACE_REQUESTED=%s\n' "$loader_trace"
+    printf 'PROBE_MODE=%s\n' "$probe_mode"
+    printf 'ANGLE_ARTIFACT_VALIDATED=%s\n' "$angle_artifact_validated"
+    printf 'ANGLE_RELEASE_MANIFEST_SHA256=%s\n' "$angle_release_manifest_sha256"
+    printf 'ANGLE_REVISION=%s\n' "$angle_revision"
+    printf 'EXPECTED_LIBEGL_SHA256=%s\n' "$expected_libegl_sha256"
+    printf 'EXPECTED_LIBGLESV2_SHA256=%s\n' "$expected_libglesv2_sha256"
+    printf 'BROWSER_ANGLE_FLAGS_OBSERVED=%s\n' "$browser_angle_flags_observed"
+    printf 'GPU_ANGLE_FLAGS_OBSERVED=%s\n' "$gpu_angle_flags_observed"
+    printf 'LIBEGL_DYLD_LOAD_OBSERVED=%s\n' "$libegl_dyld_load_observed"
+    printf 'LIBGLESV2_DYLD_LOAD_OBSERVED=%s\n' "$libglesv2_dyld_load_observed"
+    printf 'LIBEGL_GPU_DYLD_LOAD_OBSERVED=%s\n' "$libegl_gpu_dyld_load_observed"
+    printf 'LIBGLESV2_GPU_DYLD_LOAD_OBSERVED=%s\n' "$libglesv2_gpu_dyld_load_observed"
+    printf 'LIBEGL_PROCESS_MAP_OBSERVED=%s\n' "$libegl_process_map_observed"
+    printf 'LIBGLESV2_PROCESS_MAP_OBSERVED=%s\n' "$libglesv2_process_map_observed"
+    printf 'GPU_DISABLED_FALLBACK_OBSERVED=%s\n' "$gpu_disabled_fallback_observed"
+    printf 'EGL_INITIALIZATION_FAILURE_OBSERVED=%s\n' "$egl_initialization_failure_observed"
+    printf 'DYNAMIC_ANGLE_OUTCOME=%s\n' "$dynamic_angle_outcome"
     printf 'OBSERVATION_COMPLETE=%s\n' "$observation_complete"
     printf 'LOG_STREAM_EXIT=%s\n' "$log_stream_exit"
     printf 'INFRASTRUCTURE_FAILURE=%s\n' "$infrastructure_failure"
@@ -86,6 +223,30 @@ write_final_result() {
 
 process_command_for_pid() {
   ps -ww -p "$1" -o command= 2>/dev/null || true
+}
+
+gpu_process_map_has_path() {
+  local needle=$1 evidence_file
+  while IFS= read -r -d '' evidence_file; do
+    if grep -F -- "$needle" "$evidence_file" >/dev/null; then
+      return 0
+    fi
+  done < <(find "$results_dir" -maxdepth 1 -type f \
+    \( -name 'gpu-*-lsof-*.txt' -o -name 'gpu-*-vmmap.txt' \) -print0)
+  return 1
+}
+
+gpu_dyld_has_path() {
+  local needle=$1 gpu_pid
+  while IFS=$'\t' read -r _ _ gpu_pid _; do
+    [[ "$gpu_pid" =~ ^[0-9]+$ ]] || continue
+    if awk -v marker="dyld[$gpu_pid]:" -v path="$needle" \
+      'index($0, marker) && index($0, path) {found=1} END {exit(found ? 0 : 1)}' \
+      "$results_dir/browser-stderr.txt"; then
+      return 0
+    fi
+  done < "$results_dir/gpu-pid-all-sources.tsv"
+  return 1
 }
 
 safe_test_process() {
@@ -328,7 +489,7 @@ stop_log_stream() {
 }
 trap finish_on_exit EXIT
 
-for command in curl jq unzip shasum codesign spctl system_profiler ioreg ps lsof vmmap log plutil xattr tail mkfifo env; do
+for command in curl jq unzip shasum codesign spctl system_profiler ioreg ps lsof vmmap log plutil xattr tail mkfifo env install readlink file lipo otool find; do
   command -v "$command" >/dev/null 2>&1 || { record_failure "required command unavailable: $command"; exit 1; }
 done
 
@@ -387,6 +548,12 @@ actual_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' 
 [[ "$actual_version" == "$chrome_version" ]] || { record_failure "CfT bundle version mismatch: $actual_version"; exit 1; }
 printf 'bundle_version=%s\n' "$actual_version" >> "$results_dir/probe-metadata.txt"
 printf 'loader_trace_requested=%s\n' "$loader_trace" >> "$results_dir/probe-metadata.txt"
+printf 'probe_mode=%s\n' "$probe_mode" >> "$results_dir/probe-metadata.txt"
+if [[ "$probe_mode" == dynamic-angle ]]; then
+  prepare_dynamic_angle_replacement || exit 1
+  printf 'angle_release_manifest_sha256=%s\nangle_revision=%s\n' \
+    "$angle_release_manifest_sha256" "$angle_revision" >> "$results_dir/probe-metadata.txt"
+fi
 
 sw_vers > "$results_dir/runner-sw-vers.txt" 2>&1 || true
 uname -a > "$results_dir/runner-uname.txt" 2>&1 || true
@@ -492,17 +659,37 @@ sample_session_processes &
 sampler_pid=$!
 start_stderr_observer
 sleep 0.1
+launch_args=(
+  "$browser_profile_arg"
+  --no-first-run
+  --no-default-browser-check
+  --disable-background-networking
+  --disable-sync
+  --enable-logging=stderr
+  --v=1
+)
+if [[ "$probe_mode" == dynamic-angle ]]; then
+  launch_args=(
+    --use-gl=angle
+    --use-angle=metal
+    --use-dynamic-angle
+    "${launch_args[@]}"
+  )
+fi
+launch_args+=(about:blank)
 launch_utc=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
-printf 'launch_utc=%s\nbrowser_command=%q --no-first-run --no-default-browser-check --disable-background-networking --disable-sync --enable-logging=stderr --v=1 about:blank\n' \
-  "$launch_utc" "$browser_executable" > "$results_dir/launch-command.txt"
-printf 'loader_trace=%s\n' "$loader_trace" >> "$results_dir/launch-command.txt"
+{
+  printf 'launch_utc=%s\n' "$launch_utc"
+  printf 'probe_mode=%s\n' "$probe_mode"
+  printf 'browser_command='
+  printf '%q ' "$browser_executable" "${launch_args[@]}"
+  printf '\nloader_trace=%s\n' "$loader_trace"
+} > "$results_dir/launch-command.txt"
 if [[ "$loader_trace" == true ]]; then
-  env DYLD_PRINT_LIBRARIES=1 "$browser_executable" "$browser_profile_arg" --no-first-run --no-default-browser-check \
-    --disable-background-networking --disable-sync --enable-logging=stderr --v=1 about:blank \
+  env DYLD_PRINT_LIBRARIES=1 "$browser_executable" "${launch_args[@]}" \
     > "$results_dir/browser-stdout.txt" 2> "$results_dir/browser-stderr.txt" &
 else
-  "$browser_executable" "$browser_profile_arg" --no-first-run --no-default-browser-check \
-    --disable-background-networking --disable-sync --enable-logging=stderr --v=1 about:blank \
+  "$browser_executable" "${launch_args[@]}" \
     > "$results_dir/browser-stdout.txt" 2> "$results_dir/browser-stderr.txt" &
 fi
 browser_pid=$!
@@ -554,6 +741,72 @@ grep -Eai 'ANGLE|SwiftShader|fallback|GPU process|GL_RENDERER|GL_VENDOR|command 
   > "$results_dir/gpu-switches-fallback.txt" || true
 grep -E 'dyld\[[0-9]+\].*(Libraries/(libEGL|libGLESv2)\.dylib|Google Chrome for Testing Framework)' \
   "$results_dir/browser-stderr.txt" > "$results_dir/dyld-library-loads.txt" || true
+if grep -F -- '--use-gl=disabled' "$results_dir/process-snapshots-during.txt" "$results_dir/browser-stderr.txt" >/dev/null; then
+  gpu_disabled_fallback_observed=true
+fi
+if grep -F 'Initialization of all (1) EGL display types failed' "$results_dir/browser-stderr.txt" >/dev/null; then
+  egl_initialization_failure_observed=true
+fi
+if [[ "$probe_mode" == dynamic-angle ]]; then
+  if grep -F -- '--use-gl=angle' "$browser_observations" >/dev/null &&
+    grep -F -- '--use-angle=metal' "$browser_observations" >/dev/null &&
+    grep -F -- '--use-dynamic-angle' "$browser_observations" >/dev/null; then
+    browser_angle_flags_observed=true
+  fi
+  if grep -F -- '--use-gl=angle' "$gpu_pid_events" >/dev/null &&
+    grep -F -- '--use-angle=metal' "$gpu_pid_events" >/dev/null; then
+    gpu_angle_flags_observed=true
+  fi
+  if grep -F "$replacement_libraries_dir/libEGL.dylib" "$results_dir/browser-stderr.txt" >/dev/null; then
+    libegl_dyld_load_observed=true
+  fi
+  if grep -F "$replacement_libraries_dir/libGLESv2.dylib" "$results_dir/browser-stderr.txt" >/dev/null; then
+    libglesv2_dyld_load_observed=true
+  fi
+  if gpu_dyld_has_path "$replacement_libraries_dir/libEGL.dylib"; then
+    libegl_gpu_dyld_load_observed=true
+  fi
+  if gpu_dyld_has_path "$replacement_libraries_dir/libGLESv2.dylib"; then
+    libglesv2_gpu_dyld_load_observed=true
+  fi
+  if gpu_process_map_has_path "$replacement_libraries_dir/libEGL.dylib"; then
+    libegl_process_map_observed=true
+  fi
+  if gpu_process_map_has_path "$replacement_libraries_dir/libGLESv2.dylib"; then
+    libglesv2_process_map_observed=true
+  fi
+  phase3_verify_hash "$replacement_libraries_dir/libEGL.dylib" "$expected_libegl_sha256"
+  phase3_verify_hash "$replacement_libraries_dir/libGLESv2.dylib" "$expected_libglesv2_sha256"
+  shasum -a 256 "$replacement_libraries_dir/libEGL.dylib" \
+    "$replacement_libraries_dir/libGLESv2.dylib" > "$results_dir/replacement-library-post-run.sha256"
+  if [[ "$libegl_gpu_dyld_load_observed" == true && "$libglesv2_gpu_dyld_load_observed" == true ]] ||
+    [[ "$libegl_process_map_observed" == true && "$libglesv2_process_map_observed" == true ]]; then
+    dynamic_angle_outcome='both-replacement-libraries-gpu-loaded'
+  elif [[ "$libegl_dyld_load_observed" == true && "$libglesv2_dyld_load_observed" == true ]]; then
+    dynamic_angle_outcome='both-replacement-libraries-dyld-loaded'
+  elif [[ "$libegl_dyld_load_observed" == true || "$libglesv2_dyld_load_observed" == true ]]; then
+    dynamic_angle_outcome='partial-replacement-library-dyld-load'
+  elif [[ "$gpu_angle_flags_observed" == true ]]; then
+    dynamic_angle_outcome='gpu-angle-flags-without-replacement-load'
+  elif [[ "$browser_angle_flags_observed" == true ]]; then
+    dynamic_angle_outcome='browser-angle-flags-only'
+  else
+    dynamic_angle_outcome='angle-flags-not-observed'
+  fi
+  {
+    printf 'outcome=%s\n' "$dynamic_angle_outcome"
+    printf 'browser_angle_flags_observed=%s\n' "$browser_angle_flags_observed"
+    printf 'gpu_angle_flags_observed=%s\n' "$gpu_angle_flags_observed"
+    printf 'libEGL_dyld_load_observed=%s\n' "$libegl_dyld_load_observed"
+    printf 'libGLESv2_dyld_load_observed=%s\n' "$libglesv2_dyld_load_observed"
+    printf 'libEGL_gpu_dyld_load_observed=%s\n' "$libegl_gpu_dyld_load_observed"
+    printf 'libGLESv2_gpu_dyld_load_observed=%s\n' "$libglesv2_gpu_dyld_load_observed"
+    printf 'libEGL_process_map_observed=%s\n' "$libegl_process_map_observed"
+    printf 'libGLESv2_process_map_observed=%s\n' "$libglesv2_process_map_observed"
+    printf 'gpu_disabled_fallback_observed=%s\n' "$gpu_disabled_fallback_observed"
+    printf 'egl_initialization_failure_observed=%s\n' "$egl_initialization_failure_observed"
+  } > "$results_dir/dynamic-angle-evidence.txt"
+fi
 ps -wwaxo pid=,ppid=,stat=,command= > "$results_dir/process-snapshot-after.txt" || {
   record_failure 'could not capture final process snapshot'
 }
