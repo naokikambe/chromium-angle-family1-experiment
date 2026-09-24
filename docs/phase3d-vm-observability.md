@@ -25,6 +25,40 @@ The workflow dispatch input is an exact four-component Chrome for Testing
 version.  It downloads only the matching official mac-x64 Chrome for Testing
 archive and records the archive SHA-256 and bundle version.
 
+## Dynamic ANGLE observation
+
+`.github/workflows/phase3d-dynamic-angle-vm.yml` is the formal replacement
+library observation.  Its required input is a successful ANGLE build workflow
+run ID.  The workflow downloads that run's artifact, validates
+`ANGLE_RELEASE_MANIFEST` and its sidecar, runs the full artifact verifier, and
+derives the exact Chrome version from the manifest.  It then downloads the
+matching Chrome for Testing bundle; a missing CfT release or any version,
+manifest, or dylib hash mismatch is fatal.
+
+Only the extracted, disposable CfT bundle under the runner temporary directory
+is modified.  The two verified dylibs are installed into the concrete
+`Versions/Current` Framework version after checking that `Current` resolves to
+the manifest Chrome version and that neither destination already exists.  No
+`/Applications` app, xattr, signing identity, or codesign mutation is used.
+
+The launch adds `--use-gl=angle`, `--use-angle=metal`, and
+`--use-dynamic-angle`.  The result distinguishes several boundaries rather
+than treating VM rendering as a pass requirement:
+
+- browser command-line receipt of all three requested switches;
+- GPU-process receipt of the GL and ANGLE switches;
+- exact replacement paths observed by dyld, both globally and correlated to
+  an observed GPU PID;
+- exact replacement paths observed in best-effort `lsof` or `vmmap` evidence;
+- EGL initialization failure and `--use-gl=disabled` fallback.
+
+`DYNAMIC_ANGLE_OUTCOME` summarizes the strongest observed boundary.  In
+descending order it reports both replacement libraries loaded by an observed
+GPU process, both seen by dyld without GPU attribution, a partial replacement
+load, GPU ANGLE flags without a replacement load, browser flags only, or no
+observed ANGLE flags.  A negative load observation is not silently converted
+into proof that dyld never considered the library.
+
 ## Baseline result and interpretation
 
 The first baseline probe used Chrome for Testing 154.0.8037.57 on
@@ -55,6 +89,15 @@ to have a captured command line, `lsof`, or `vmmap` record.
 `gpu-collector-status.tsv` records each best-effort collector outcome;
 `GPU_COLLECTOR_FAILURE_COUNT` reports its non-zero entries without converting a
 complete browser/process observation into an infrastructure failure.
+
+For the dynamic workflow, `dynamic-angle-placement.txt` binds the placement to
+the release manifest and concrete Framework version.
+`replacement-library-inspection.txt` records the installed files' hashes,
+Mach-O architecture, dependencies, and read-only signature state.
+`replacement-library-post-run.sha256` confirms that Chrome execution did not
+mutate either replacement.  `dynamic-angle-evidence.txt` and
+`authoritative-result.txt` contain the boundary booleans and summarized
+outcome.
 
 The optional `loader_trace` workflow input enables `DYLD_PRINT_LIBRARIES=1` for
 the isolated Chrome for Testing launch.  Its output is preserved in

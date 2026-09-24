@@ -48,5 +48,6 @@ grep -F 'cp "$crash_report" "$results_dir/new-crash-reports/" || true' "$probe" 
 grep -F 'lsof -nP -p' "$probe" >/dev/null
 grep -F 'vmmap "$pid"' "$probe" >/dev/null
 ! grep -E '(^|[[:space:]])sudo([[:space:]]|$)|fs_usage|dtruss|xattr[[:space:]]+-c|codesign[^\n]*--sign' "$probe" >/dev/null
-! grep -E -- '--use-dynamic-angle|--use-angle|--use-gl' "$probe" >/dev/null
+! grep -E -- '--angle-artifact|--use-dynamic-angle|--use-angle|--use-gl' "$workflow" >/dev/null
+grep -F -- '--angle-artifact' "$probe" >/dev/null
 printf '%s\n' 'phase3d Chrome launch probe static audit passed'
