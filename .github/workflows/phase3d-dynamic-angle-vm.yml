@@ -1,0 +1,87 @@
+name: Phase 3D dynamic ANGLE VM observation
+
+on:
+  workflow_dispatch:
+    inputs:
+      angle_build_run_id:
+        description: Successful ANGLE build workflow run ID
+        required: true
+        type: string
+      loader_trace:
+        description: Record dyld library-load diagnostics in browser stderr
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  dynamic-angle-observation:
+    name: dynamic-angle-cft-macos-intel
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    env:
+      ANGLE_BUILD_RUN_ID: ${{ inputs.angle_build_run_id }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out observation scripts
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Audit Phase 3D workflows and scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$ANGLE_BUILD_RUN_ID" =~ ^[0-9]+$ ]]
+          bash -n scripts/run-phase3d-chrome-launch-probe.sh
+          bash -n tests/phase3d-chrome-launch-probe-static.sh
+          bash -n tests/phase3d-dynamic-angle-vm-static.sh
+          tests/phase3d-chrome-launch-probe-static.sh
+          tests/phase3d-dynamic-angle-vm-static.sh
+          ruby -e 'require "yaml"; YAML.parse_file(".github/workflows/phase3d-dynamic-angle-vm.yml")'
+          git diff --check
+
+      - name: Download and verify release artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_parent="$RUNNER_TEMP/phase3d-angle-artifact-parent"
+          artifact_dir="$artifact_parent/artifact"
+          mkdir "$artifact_parent"
+          scripts/download-angle-artifact.sh "$ANGLE_BUILD_RUN_ID" "$artifact_dir"
+          bash scripts/verify-artifact.sh "$artifact_dir"
+          PHASE3_SCRIPT_NAME=phase3d-workflow
+          source scripts/phase3-test-copy-common.sh
+          phase3_validate_release_manifest "$artifact_dir"
+          {
+            printf 'ANGLE_ARTIFACT_DIR=%s\n' "$artifact_dir"
+            printf 'CHROME_VERSION=%s\n' "$PHASE3_RELEASE_CHROME_VERSION"
+          } >> "$GITHUB_ENV"
+
+      - name: Observe replacement ANGLE in isolated Chrome for Testing
+        shell: bash
+        run: |
+          set -euo pipefail
+          results_dir="$RUNNER_TEMP/phase3d-dynamic-angle-results"
+          probe_args=(
+            "$CHROME_VERSION"
+            "$results_dir"
+            --angle-artifact "$ANGLE_ARTIFACT_DIR"
+          )
+          if [[ "${{ inputs.loader_trace }}" == true ]]; then
+            probe_args+=(--loader-trace)
+          fi
+          scripts/run-phase3d-chrome-launch-probe.sh "${probe_args[@]}"
+
+      - name: Upload Phase 3D diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase3d-dynamic-angle-${{ inputs.angle_build_run_id }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/phase3d-dynamic-angle-results
+          if-no-files-found: error
+          retention-days: 14
