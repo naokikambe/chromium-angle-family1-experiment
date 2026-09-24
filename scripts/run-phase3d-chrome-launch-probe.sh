@@ -6,7 +6,7 @@ readonly PHASE3_SCRIPT_NAME
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/phase3-test-copy-common.sh"
 
 usage() {
-  printf 'usage: %s CHROME_VERSION RESULTS_DIRECTORY [--loader-trace] [--angle-artifact DIRECTORY]\n' "$0" >&2
+  printf 'usage: %s CHROME_VERSION RESULTS_DIRECTORY [--loader-trace] [--dynamic-angle-flags] [--angle-artifact DIRECTORY]\n' "$0" >&2
   exit 64
 }
 
@@ -16,6 +16,7 @@ results_dir=$2
 shift 2
 loader_trace=false
 angle_artifact_dir=''
+angle_flags_requested=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --loader-trace)
@@ -23,9 +24,14 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --angle-artifact)
+      angle_flags_requested=true
       [[ $# -ge 2 && -n "$2" ]] || usage
       angle_artifact_dir=$2
       shift 2
+      ;;
+    --dynamic-angle-flags)
+      angle_flags_requested=true
+      shift
       ;;
     *) usage ;;
   esac
@@ -94,6 +100,8 @@ egl_initialization_failure_observed=false
 dynamic_angle_outcome='not-requested'
 if [[ -n "$angle_artifact_dir" ]]; then
   probe_mode='dynamic-angle'
+elif [[ "$angle_flags_requested" == true ]]; then
+  probe_mode='stock-angle-flags'
 fi
 
 record_failure() {
@@ -198,6 +206,7 @@ write_final_result() {
     printf 'FINAL_GPU_COMMAND=%s\n' "$final_gpu_command"
     printf 'LOADER_TRACE_REQUESTED=%s\n' "$loader_trace"
     printf 'PROBE_MODE=%s\n' "$probe_mode"
+    printf 'ANGLE_FLAGS_REQUESTED=%s\n' "$angle_flags_requested"
     printf 'ANGLE_ARTIFACT_VALIDATED=%s\n' "$angle_artifact_validated"
     printf 'ANGLE_RELEASE_MANIFEST_SHA256=%s\n' "$angle_release_manifest_sha256"
     printf 'ANGLE_REVISION=%s\n' "$angle_revision"
@@ -668,7 +677,7 @@ launch_args=(
   --enable-logging=stderr
   --v=1
 )
-if [[ "$probe_mode" == dynamic-angle ]]; then
+if [[ "$angle_flags_requested" == true ]]; then
   launch_args=(
     --use-gl=angle
     --use-angle=metal

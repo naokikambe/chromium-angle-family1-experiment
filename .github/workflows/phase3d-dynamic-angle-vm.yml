@@ -66,6 +66,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          stock_results="$RUNNER_TEMP/phase3d-dynamic-angle-results/stock-control"
           results_dir="$RUNNER_TEMP/phase3d-dynamic-angle-results"
           probe_args=(
             "$CHROME_VERSION"
@@ -76,6 +77,44 @@ jobs:
             probe_args+=(--loader-trace)
           fi
           scripts/run-phase3d-chrome-launch-probe.sh "${probe_args[@]}"
+          stock_args=(
+            "$CHROME_VERSION"
+            "$stock_results"
+            --dynamic-angle-flags
+          )
+          if [[ "${{ inputs.loader_trace }}" == true ]]; then
+            stock_args+=(--loader-trace)
+          fi
+          scripts/run-phase3d-chrome-launch-probe.sh "${stock_args[@]}"
+
+          result_value() {
+            local result_file=$1 key=$2
+            awk -F= -v key="$key" '$1 == key { print substr($0, length(key) + 2); exit }' "$result_file"
+          }
+          dynamic_result="$results_dir/authoritative-result.txt"
+          stock_result="$stock_results/authoritative-result.txt"
+          dynamic_egl=$(result_value "$dynamic_result" EGL_INITIALIZATION_FAILURE_OBSERVED)
+          stock_egl=$(result_value "$stock_result" EGL_INITIALIZATION_FAILURE_OBSERVED)
+          dynamic_fallback=$(result_value "$dynamic_result" GPU_DISABLED_FALLBACK_OBSERVED)
+          stock_fallback=$(result_value "$stock_result" GPU_DISABLED_FALLBACK_OBSERVED)
+          if [[ "$dynamic_egl" == true && "$stock_egl" == true && \
+                "$dynamic_fallback" == true && "$stock_fallback" == true ]]; then
+            control_interpretation='same-egl-failure-and-gpu-fallback-with-stock-cft'
+          elif [[ "$dynamic_egl" == true || "$dynamic_fallback" == true ]]; then
+            control_interpretation='dynamic-angle-differs-from-stock-control'
+          else
+            control_interpretation='no-dynamic-angle-egl-or-fallback-signal'
+          fi
+          {
+            printf 'SCHEMA=phase3d-stock-control-comparison-v1\n'
+            printf 'DYNAMIC_RESULT=%s\n' "$dynamic_result"
+            printf 'STOCK_RESULT=%s\n' "$stock_result"
+            printf 'DYNAMIC_EGL_INITIALIZATION_FAILURE=%s\n' "$dynamic_egl"
+            printf 'STOCK_EGL_INITIALIZATION_FAILURE=%s\n' "$stock_egl"
+            printf 'DYNAMIC_GPU_DISABLED_FALLBACK=%s\n' "$dynamic_fallback"
+            printf 'STOCK_GPU_DISABLED_FALLBACK=%s\n' "$stock_fallback"
+            printf 'CONTROL_INTERPRETATION=%s\n' "$control_interpretation"
+          } > "$results_dir/stock-control-comparison.txt"
 
       - name: Upload Phase 3D diagnostics
         if: always()
