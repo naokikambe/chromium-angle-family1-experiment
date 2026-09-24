@@ -19,6 +19,8 @@ grep -F 'bash scripts/verify-artifact.sh "$artifact_dir"' "$workflow" >/dev/null
 grep -F 'phase3_validate_release_manifest "$artifact_dir"' "$workflow" >/dev/null
 grep -F -- '--angle-artifact "$ANGLE_ARTIFACT_DIR"' "$workflow" >/dev/null
 grep -F 'if: always()' "$workflow" >/dev/null
+grep -F -- '--dynamic-angle-flags' "$workflow" >/dev/null
+grep -F 'stock-control-comparison.txt' "$workflow" >/dev/null
 grep -F 'path: ${{ runner.temp }}/phase3d-dynamic-angle-results' "$workflow" >/dev/null
 ! grep -E 'pull_request(_target)?|^[[:space:]]+push:|id-token:|contents:[[:space:]]+write|actions:[[:space:]]+write|continue-on-error' "$workflow" >/dev/null
 
@@ -36,6 +38,7 @@ grep -F 'LIBGLESV2_GPU_DYLD_LOAD_OBSERVED=%s' "$probe" >/dev/null
 grep -F 'gpu_dyld_has_path' "$probe" >/dev/null
 grep -F 'DYNAMIC_ANGLE_OUTCOME=%s' "$probe" >/dev/null
 grep -F 'replacement-library-post-run.sha256' "$probe" >/dev/null
+grep -F 'ANGLE_FLAGS_REQUESTED=%s' "$probe" >/dev/null
 grep -F 'dynamic-angle-evidence.txt' "$probe" >/dev/null
 ! grep -E '(^|[[:space:]])sudo([[:space:]]|$)|xattr[[:space:]]+-c|codesign[^[:cntrl:]]*--sign|/Applications/Google Chrome\.app' "$workflow" "$probe" >/dev/null
 
