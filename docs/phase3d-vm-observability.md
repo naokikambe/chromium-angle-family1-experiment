@@ -52,6 +52,9 @@ counts:
 `gpu-pid-all-sources.tsv` is the deduplicated PID table.  A PID visible only in
 stderr is still valid evidence of a short-lived GPU attempt, but is not claimed
 to have a captured command line, `lsof`, or `vmmap` record.
+`gpu-collector-status.tsv` records each best-effort collector outcome;
+`GPU_COLLECTOR_FAILURE_COUNT` reports its non-zero entries without converting a
+complete browser/process observation into an infrastructure failure.
 
 The optional `loader_trace` workflow input enables `DYLD_PRINT_LIBRARIES=1` for
 the isolated Chrome for Testing launch.  Its output is preserved in
