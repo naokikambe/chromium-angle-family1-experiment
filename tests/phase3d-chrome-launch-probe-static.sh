@@ -7,6 +7,8 @@ probe="$repo_root/scripts/run-phase3d-chrome-launch-probe.sh"
 
 grep -F 'workflow_dispatch:' "$workflow" >/dev/null
 grep -F 'required: true' "$workflow" >/dev/null
+grep -F 'loader_trace:' "$workflow" >/dev/null
+grep -F 'default: true' "$workflow" >/dev/null
 grep -F 'runs-on: macos-15-intel' "$workflow" >/dev/null
 grep -F 'permissions:' "$workflow" >/dev/null
 grep -F 'contents: read' "$workflow" >/dev/null
@@ -21,6 +23,13 @@ grep -F 'path: ${{ runner.temp }}/phase3d-cft-launch-probe-results' "$workflow" 
 grep -F 'known-good-versions-with-downloads.json' "$probe" >/dev/null
 grep -F 'mac-x64' "$probe" >/dev/null
 grep -F 'gpu-pid-first-last.tsv' "$probe" >/dev/null
+grep -F 'gpu-pid-all-sources.tsv' "$probe" >/dev/null
+grep -F 'gpu-pid-events.tsv' "$probe" >/dev/null
+grep -F 'GPU_PID_COUNT_STDERR=%s' "$probe" >/dev/null
+grep -F 'start_stderr_observer' "$probe" >/dev/null
+grep -F 'watch_gpu_stderr' "$probe" >/dev/null
+grep -F 'DYLD_PRINT_LIBRARIES=1' "$probe" >/dev/null
+grep -F 'dyld-library-loads.txt' "$probe" >/dev/null
 grep -F 'authoritative-result.txt' "$probe" >/dev/null
 grep -F 'BROWSER_OBSERVED=%s' "$probe" >/dev/null
 grep -F 'BROWSER_ALIVE_AT_DEADLINE=%s' "$probe" >/dev/null

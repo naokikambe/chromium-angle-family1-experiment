@@ -2,13 +2,18 @@
 set -euo pipefail
 
 usage() {
-  printf 'usage: %s CHROME_VERSION RESULTS_DIRECTORY\n' "$0" >&2
+  printf 'usage: %s CHROME_VERSION RESULTS_DIRECTORY [--loader-trace]\n' "$0" >&2
   exit 64
 }
 
-[[ $# -eq 2 ]] || usage
+[[ $# -ge 2 && $# -le 3 ]] || usage
 chrome_version=$1
 results_dir=$2
+loader_trace=false
+if [[ $# -eq 3 ]]; then
+  [[ "$3" == '--loader-trace' ]] || usage
+  loader_trace=true
+fi
 [[ "$chrome_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
   echo 'chrome_version must be four numeric components' >&2
   exit 64
@@ -26,6 +31,10 @@ profile_dir=''
 browser_pid=''
 sampler_pid=''
 sampler_active=''
+stderr_watcher_pid=''
+stderr_watcher_active=''
+stderr_tail_pid=''
+stderr_event_fifo=''
 browser_executable=''
 browser_profile_arg=''
 browser_app=''
@@ -36,6 +45,8 @@ browser_observed=false
 browser_exit='not-started'
 gpu_seen=false
 gpu_pid_count=0
+gpu_pid_count_ps=0
+gpu_pid_count_stderr=0
 browser_pid_count=0
 final_gpu_command=''
 observation_complete=false
@@ -60,7 +71,10 @@ write_final_result() {
     printf 'BROWSER_PID_COUNT=%s\n' "$browser_pid_count"
     printf 'GPU_SEEN=%s\n' "$gpu_seen"
     printf 'GPU_PID_COUNT=%s\n' "$gpu_pid_count"
+    printf 'GPU_PID_COUNT_PROCESS_SAMPLER=%s\n' "$gpu_pid_count_ps"
+    printf 'GPU_PID_COUNT_STDERR=%s\n' "$gpu_pid_count_stderr"
     printf 'FINAL_GPU_COMMAND=%s\n' "$final_gpu_command"
+    printf 'LOADER_TRACE_REQUESTED=%s\n' "$loader_trace"
     printf 'OBSERVATION_COMPLETE=%s\n' "$observation_complete"
     printf 'LOG_STREAM_EXIT=%s\n' "$log_stream_exit"
     printf 'INFRASTRUCTURE_FAILURE=%s\n' "$infrastructure_failure"
@@ -86,6 +100,90 @@ safe_test_gpu_helper() {
   command_line=$(process_command_for_pid "$pid")
   [[ -n "$command_line" && "$command_line" == *"$browser_app/"* &&
     "$command_line" == *'--type=gpu-process'* ]]
+}
+
+capture_gpu_process_evidence() {
+  local pid=$1 source=$2 attempt
+  {
+    printf 'source=%s\n' "$source"
+    printf 'detected_utc=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    printf 'pid=%s\n' "$pid"
+    ps -ww -p "$pid" -o pid=,ppid=,stat=,etime=,command= 2>&1 || true
+  } > "$results_dir/gpu-$pid-detection.txt"
+
+  for attempt in 1 2 3; do
+    if safe_test_gpu_helper "$pid"; then
+      lsof -nP -p "$pid" > "$results_dir/gpu-$pid-lsof-$attempt.txt" 2>&1 || true
+    else
+      break
+    fi
+    sleep 0.05
+  done
+  if safe_test_gpu_helper "$pid"; then
+    vmmap "$pid" > "$results_dir/gpu-$pid-vmmap.txt" 2>&1 || true
+  fi
+}
+
+start_gpu_collector_once() {
+  local pid=$1 source=$2
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 0
+  if mkdir "$gpu_seen_dir/$pid" 2>/dev/null; then
+    capture_gpu_process_evidence "$pid" "$source" &
+    printf '%s\n' "$!" > "$gpu_collectors_dir/$pid.pid"
+  fi
+}
+
+watch_gpu_stderr() {
+  local line stamp pid
+  while IFS= read -r line; do
+    [[ -e "$stderr_watcher_active" ]] || break
+    if [[ "$line" =~ \[([0-9]+):[0-9]+: ]] &&
+      [[ "$line" == *'gpu-process'* || "$line" == *'EGL display'* ||
+         "$line" == *'GLDisplayEGL'* || "$line" == *'GPU process due to errors'* ||
+         "$line" == *'InitializeGLNoExtensionsOneOff'* ]]; then
+      pid=${BASH_REMATCH[1]}
+      stamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+      printf '%s\t%s\tstderr\t%s\n' "$stamp" "$pid" "$line" >> "$results_dir/gpu-pid-events.tsv"
+      start_gpu_collector_once "$pid" 'stderr'
+    fi
+  done
+}
+
+start_stderr_observer() {
+  stderr_event_fifo="$probe_tmp/browser-stderr-events.fifo"
+  mkfifo "$stderr_event_fifo"
+  stderr_watcher_active="$probe_tmp/stderr-watcher-active"
+  touch "$stderr_watcher_active"
+  tail -n 0 -F "$results_dir/browser-stderr.txt" > "$stderr_event_fifo" 2> "$results_dir/stderr-tail-errors.txt" &
+  stderr_tail_pid=$!
+  watch_gpu_stderr < "$stderr_event_fifo" &
+  stderr_watcher_pid=$!
+}
+
+stop_stderr_observer() {
+  local status=0 watcher_command tail_command
+  [[ -n "$stderr_watcher_active" ]] && rm -f "$stderr_watcher_active"
+  if [[ -n "$stderr_tail_pid" ]] && kill -0 "$stderr_tail_pid" 2>/dev/null; then
+    tail_command=$(process_command_for_pid "$stderr_tail_pid")
+    if [[ "$tail_command" == *'tail -n 0 -F'* && "$tail_command" == *"$results_dir/browser-stderr.txt"* ]]; then
+      kill -TERM "$stderr_tail_pid" 2>/dev/null || true
+    else
+      record_failure 'could not verify stderr tail process for cleanup'
+      status=1
+    fi
+  fi
+  if [[ -n "$stderr_watcher_pid" ]]; then
+    watcher_command=$(process_command_for_pid "$stderr_watcher_pid")
+    [[ -n "$watcher_command" ]] || true
+    wait "$stderr_watcher_pid" 2>/dev/null || status=1
+    stderr_watcher_pid=''
+  fi
+  if [[ -n "$stderr_tail_pid" ]]; then
+    wait "$stderr_tail_pid" 2>/dev/null || true
+    stderr_tail_pid=''
+  fi
+  stderr_watcher_active=''
+  return "$status"
 }
 
 safe_test_bundle_helper() {
@@ -181,6 +279,10 @@ cleanup_test_processes() {
 finish_on_exit() {
   local status=$?
   trap - EXIT
+  if ! stop_stderr_observer; then
+    record_failure 'stderr GPU observer failed during exit cleanup'
+    status=1
+  fi
   if [[ -n "$sampler_active" ]]; then
     : > "$sampler_active"
     rm -f "$sampler_active"
@@ -224,7 +326,7 @@ stop_log_stream() {
 }
 trap finish_on_exit EXIT
 
-for command in curl jq unzip shasum codesign spctl system_profiler ioreg ps lsof vmmap log plutil xattr; do
+for command in curl jq unzip shasum codesign spctl system_profiler ioreg ps lsof vmmap log plutil xattr tail mkfifo env; do
   command -v "$command" >/dev/null 2>&1 || { record_failure "required command unavailable: $command"; exit 1; }
 done
 
@@ -282,6 +384,7 @@ actual_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' 
 }
 [[ "$actual_version" == "$chrome_version" ]] || { record_failure "CfT bundle version mismatch: $actual_version"; exit 1; }
 printf 'bundle_version=%s\n' "$actual_version" >> "$results_dir/probe-metadata.txt"
+printf 'loader_trace_requested=%s\n' "$loader_trace" >> "$results_dir/probe-metadata.txt"
 
 sw_vers > "$results_dir/runner-sw-vers.txt" 2>&1 || true
 uname -a > "$results_dir/runner-uname.txt" 2>&1 || true
@@ -332,6 +435,8 @@ mkdir "$gpu_seen_dir"
 mkdir "$gpu_collectors_dir"
 gpu_observations="$results_dir/gpu-observations.tsv"
 : > "$gpu_observations"
+gpu_pid_events="$results_dir/gpu-pid-events.tsv"
+: > "$gpu_pid_events"
 browser_observations="$results_dir/browser-observations.tsv"
 : > "$browser_observations"
 
@@ -351,21 +456,8 @@ sample_session_processes() {
       fi
       if [[ "$command_line" == *"$browser_app/"* && "$command_line" == *'--type=gpu-process'* ]]; then
         printf '%s\t%s\t%s\t%s\t%s\n' "$stamp" "$pid" "$ppid" "$stat" "$command_line" >> "$gpu_observations"
-        if mkdir "$gpu_seen_dir/$pid" 2>/dev/null; then
-          (
-            local attempt
-            for attempt in 1 2 3; do
-              if safe_test_gpu_helper "$pid"; then
-                lsof -nP -p "$pid" > "$results_dir/gpu-$pid-lsof-$attempt.txt" 2>&1 || true
-              else
-                break
-              fi
-              sleep 0.1
-            done
-            if safe_test_gpu_helper "$pid"; then vmmap "$pid" > "$results_dir/gpu-$pid-vmmap.txt" 2>&1 || true; fi
-          ) &
-          echo "$!" > "$gpu_collectors_dir/$pid.pid"
-        fi
+        printf '%s\t%s\tprocess-sampler\t%s\n' "$stamp" "$pid" "$command_line" >> "$gpu_pid_events"
+        start_gpu_collector_once "$pid" 'process-sampler'
       elif [[ "$command_line" == *"$browser_executable"* && "$command_line" != *'--type='* ]]; then
         printf '%s\t%s\t%s\t%s\t%s\n' "$stamp" "$pid" "$ppid" "$stat" "$command_line" >> "$browser_observations"
       fi
@@ -383,15 +475,25 @@ sample_session_processes() {
 }
 
 : > "$results_dir/process-snapshots-during.txt"
+ : > "$results_dir/browser-stderr.txt"
+ : > "$results_dir/browser-stdout.txt"
 sample_session_processes &
 sampler_pid=$!
+start_stderr_observer
 sleep 0.1
 launch_utc=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 printf 'launch_utc=%s\nbrowser_command=%q --no-first-run --no-default-browser-check --disable-background-networking --disable-sync --enable-logging=stderr --v=1 about:blank\n' \
   "$launch_utc" "$browser_executable" > "$results_dir/launch-command.txt"
-"$browser_executable" "$browser_profile_arg" --no-first-run --no-default-browser-check \
-  --disable-background-networking --disable-sync --enable-logging=stderr --v=1 about:blank \
-  > "$results_dir/browser-stdout.txt" 2> "$results_dir/browser-stderr.txt" &
+printf 'loader_trace=%s\n' "$loader_trace" >> "$results_dir/launch-command.txt"
+if [[ "$loader_trace" == true ]]; then
+  env DYLD_PRINT_LIBRARIES=1 "$browser_executable" "$browser_profile_arg" --no-first-run --no-default-browser-check \
+    --disable-background-networking --disable-sync --enable-logging=stderr --v=1 about:blank \
+    > "$results_dir/browser-stdout.txt" 2> "$results_dir/browser-stderr.txt" &
+else
+  "$browser_executable" "$browser_profile_arg" --no-first-run --no-default-browser-check \
+    --disable-background-networking --disable-sync --enable-logging=stderr --v=1 about:blank \
+    > "$results_dir/browser-stdout.txt" 2> "$results_dir/browser-stderr.txt" &
+fi
 browser_pid=$!
 browser_started=true
 printf 'launch_pid=%s\n' "$browser_pid" >> "$results_dir/launch-command.txt"
@@ -419,11 +521,16 @@ sampler_status=$?
 set -e
 sampler_pid=''
 [[ "$sampler_status" -eq 0 ]] || record_failure "process sampler failed with status $sampler_status"
+stop_stderr_observer || record_failure 'stderr GPU observer failed'
 awk -F '\t' 'NF >= 5 {pid=$2; if (!(pid in first)) {first[pid]=$1; order[++n]=pid} last[pid]=$1; ppid[pid]=$3; stat[pid]=$4; command[pid]=$5} END {for (i=1;i<=n;i++) {pid=order[i]; print first[pid] "\t" last[pid] "\t" pid "\t" ppid[pid] "\t" stat[pid] "\t" command[pid]}}' \
   "$gpu_observations" > "$results_dir/gpu-pid-first-last.tsv"
 awk -F '\t' 'NF >= 5 {pid=$2; if (!(pid in first)) {first[pid]=$1; order[++n]=pid} last[pid]=$1; ppid[pid]=$3; stat[pid]=$4; command[pid]=$5} END {for (i=1;i<=n;i++) {pid=order[i]; print first[pid] "\t" last[pid] "\t" pid "\t" ppid[pid] "\t" stat[pid] "\t" command[pid]}}' \
   "$browser_observations" > "$results_dir/browser-pid-first-last.tsv"
-gpu_pid_count=$(awk 'END {print NR+0}' "$results_dir/gpu-pid-first-last.tsv")
+awk -F '\t' 'NF >= 4 {pid=$2; source=$3; if (!(pid in first)) {first[pid]=$1; order[++n]=pid} last[pid]=$1; sources[pid]=sources[pid] (sources[pid] ? "," : "") source; evidence[pid]++} END {for (i=1;i<=n;i++) {pid=order[i]; print first[pid] "\t" last[pid] "\t" pid "\t" sources[pid] "\t" evidence[pid]}}' \
+  "$gpu_pid_events" > "$results_dir/gpu-pid-all-sources.tsv"
+gpu_pid_count=$(awk 'END {print NR+0}' "$results_dir/gpu-pid-all-sources.tsv")
+gpu_pid_count_ps=$(awk 'END {print NR+0}' "$results_dir/gpu-pid-first-last.tsv")
+gpu_pid_count_stderr=$(awk -F '\t' '$3 == "stderr" {seen[$2]=1} END {for (pid in seen) count++; print count+0}' "$gpu_pid_events")
 browser_pid_count=$(awk 'END {print NR+0}' "$results_dir/browser-pid-first-last.tsv")
 [[ "$gpu_pid_count" -gt 0 ]] && gpu_seen=true
 if [[ "$gpu_pid_count" -gt 0 ]]; then
@@ -433,6 +540,8 @@ fi
 grep -Eai 'ANGLE|SwiftShader|fallback|GPU process|GL_RENDERER|GL_VENDOR|command line' \
   "$results_dir/browser-stdout.txt" "$results_dir/browser-stderr.txt" "$results_dir/process-snapshots-during.txt" \
   > "$results_dir/gpu-switches-fallback.txt" || true
+grep -E 'dyld\[[0-9]+\].*(Libraries/(libEGL|libGLESv2)\.dylib|Google Chrome for Testing Framework)' \
+  "$results_dir/browser-stderr.txt" > "$results_dir/dyld-library-loads.txt" || true
 ps -wwaxo pid=,ppid=,stat=,command= > "$results_dir/process-snapshot-after.txt" || {
   record_failure 'could not capture final process snapshot'
 }
