@@ -7,6 +7,11 @@ on:
         description: Exact Chrome for Testing version (four numeric components)
         required: true
         type: string
+      loader_trace:
+        description: Record dyld library-load diagnostics in browser stderr
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -41,7 +46,11 @@ jobs:
         run: |
           set -euo pipefail
           probe_results="$RUNNER_TEMP/phase3d-cft-launch-probe-results"
-          scripts/run-phase3d-chrome-launch-probe.sh "$CHROME_VERSION" "$probe_results"
+          probe_args=("$CHROME_VERSION" "$probe_results")
+          if [[ "${{ inputs.loader_trace }}" == true ]]; then
+            probe_args+=(--loader-trace)
+          fi
+          scripts/run-phase3d-chrome-launch-probe.sh "${probe_args[@]}"
 
       - name: Upload probe diagnostics
         if: always()
