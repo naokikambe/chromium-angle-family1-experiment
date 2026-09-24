@@ -25,7 +25,9 @@ grep -F 'mac-x64' "$probe" >/dev/null
 grep -F 'gpu-pid-first-last.tsv' "$probe" >/dev/null
 grep -F 'gpu-pid-all-sources.tsv' "$probe" >/dev/null
 grep -F 'gpu-pid-events.tsv' "$probe" >/dev/null
+grep -F 'gpu-collector-status.tsv' "$probe" >/dev/null
 grep -F 'GPU_PID_COUNT_STDERR=%s' "$probe" >/dev/null
+grep -F 'GPU_COLLECTOR_FAILURE_COUNT=%s' "$probe" >/dev/null
 grep -F 'start_stderr_observer' "$probe" >/dev/null
 grep -F 'watch_gpu_stderr' "$probe" >/dev/null
 grep -F 'DYLD_PRINT_LIBRARIES=1' "$probe" >/dev/null
@@ -41,7 +43,7 @@ grep -F 'wait "$collector_pid"' "$probe" >/dev/null
 grep -F 'xattr -lr' "$probe" >/dev/null
 grep -F '/Library/Logs/DiagnosticReports' "$probe" >/dev/null
 grep -F 'crash-report-snapshot-errors.txt' "$probe" >/dev/null
-grep -F "record_failure 'process sampler or GPU evidence collector failed during exit cleanup'" "$probe" >/dev/null
+! grep -F "record_failure 'process sampler or GPU evidence collector failed during exit cleanup'" "$probe" >/dev/null
 grep -F 'cp "$crash_report" "$results_dir/new-crash-reports/" || true' "$probe" >/dev/null
 grep -F 'lsof -nP -p' "$probe" >/dev/null
 grep -F 'vmmap "$pid"' "$probe" >/dev/null

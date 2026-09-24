@@ -47,6 +47,7 @@ gpu_seen=false
 gpu_pid_count=0
 gpu_pid_count_ps=0
 gpu_pid_count_stderr=0
+gpu_collector_failure_count=0
 browser_pid_count=0
 final_gpu_command=''
 observation_complete=false
@@ -73,6 +74,7 @@ write_final_result() {
     printf 'GPU_PID_COUNT=%s\n' "$gpu_pid_count"
     printf 'GPU_PID_COUNT_PROCESS_SAMPLER=%s\n' "$gpu_pid_count_ps"
     printf 'GPU_PID_COUNT_STDERR=%s\n' "$gpu_pid_count_stderr"
+    printf 'GPU_COLLECTOR_FAILURE_COUNT=%s\n' "$gpu_collector_failure_count"
     printf 'FINAL_GPU_COMMAND=%s\n' "$final_gpu_command"
     printf 'LOADER_TRACE_REQUESTED=%s\n' "$loader_trace"
     printf 'OBSERVATION_COMPLETE=%s\n' "$observation_complete"
@@ -437,6 +439,8 @@ gpu_observations="$results_dir/gpu-observations.tsv"
 : > "$gpu_observations"
 gpu_pid_events="$results_dir/gpu-pid-events.tsv"
 : > "$gpu_pid_events"
+gpu_collector_status="$results_dir/gpu-collector-status.tsv"
+: > "$gpu_collector_status"
 browser_observations="$results_dir/browser-observations.tsv"
 : > "$browser_observations"
 
@@ -464,14 +468,21 @@ sample_session_processes() {
     done < "$process_file"
     sleep "$SAMPLE_INTERVAL_SECONDS"
   done
-  local collector_pid_file collector_pid wait_status=0
+  local collector_pid_file collector_pid collector_status
   for collector_pid_file in "$gpu_collectors_dir"/*.pid; do
     [[ -f "$collector_pid_file" ]] || continue
     collector_pid=$(cat "$collector_pid_file")
-    [[ "$collector_pid" =~ ^[0-9]+$ ]] || { wait_status=1; continue; }
-    wait "$collector_pid" || wait_status=1
+    if [[ ! "$collector_pid" =~ ^[0-9]+$ ]]; then
+      printf '%s\tinvalid-pid-file\t1\n' "$(basename "$collector_pid_file")" >> "$results_dir/gpu-collector-status.tsv"
+      continue
+    fi
+    set +e
+    wait "$collector_pid"
+    collector_status=$?
+    set -e
+    printf '%s\t%s\t%s\n' "${collector_pid_file##*/}" "$collector_pid" "$collector_status" >> "$results_dir/gpu-collector-status.tsv"
   done
-  return "$wait_status"
+  return 0
 }
 
 : > "$results_dir/process-snapshots-during.txt"
@@ -531,6 +542,7 @@ awk -F '\t' 'NF >= 4 {pid=$2; source=$3; if (!(pid in first)) {first[pid]=$1; or
 gpu_pid_count=$(awk 'END {print NR+0}' "$results_dir/gpu-pid-all-sources.tsv")
 gpu_pid_count_ps=$(awk 'END {print NR+0}' "$results_dir/gpu-pid-first-last.tsv")
 gpu_pid_count_stderr=$(awk -F '\t' '$3 == "stderr" {seen[$2]=1} END {for (pid in seen) count++; print count+0}' "$gpu_pid_events")
+gpu_collector_failure_count=$(awk -F '\t' '$3 != 0 {count++} END {print count+0}' "$gpu_collector_status")
 browser_pid_count=$(awk 'END {print NR+0}' "$results_dir/browser-pid-first-last.tsv")
 [[ "$gpu_pid_count" -gt 0 ]] && gpu_seen=true
 if [[ "$gpu_pid_count" -gt 0 ]]; then
