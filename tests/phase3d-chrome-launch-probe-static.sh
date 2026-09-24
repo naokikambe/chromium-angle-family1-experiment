@@ -14,6 +14,9 @@ grep -F '11bd71901bbe5b1630ceea73d27597364c9af683' "$workflow" >/dev/null
 grep -F 'ea165f8d65b6e75b540449e92b4886f43607fa02' "$workflow" >/dev/null
 grep -F 'persist-credentials: false' "$workflow" >/dev/null
 grep -F 'if: always()' "$workflow" >/dev/null
+grep -F 'probe_results="$RUNNER_TEMP/phase3d-cft-launch-probe-results"' "$workflow" >/dev/null
+grep -F 'path: ${{ runner.temp }}/phase3d-cft-launch-probe-results' "$workflow" >/dev/null
+! grep -F 'PROBE_RESULTS: ${{ runner.temp }}' "$workflow" >/dev/null
 ! grep -E 'pull_request(_target)?|^[[:space:]]+push:|secrets\.|id-token:|contents:[[:space:]]+write|continue-on-error' "$workflow" >/dev/null
 grep -F 'known-good-versions-with-downloads.json' "$probe" >/dev/null
 grep -F 'mac-x64' "$probe" >/dev/null
