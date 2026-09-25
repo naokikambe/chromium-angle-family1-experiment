@@ -9,11 +9,16 @@ phase3_run_main() {
 local codesign_executable=$1
 shift
 [[ -x "$codesign_executable" ]] || phase3_fail "required codesign executable is unavailable: $codesign_executable"
-[[ $# -eq 3 ]] || { printf 'usage: %s CASE_B|CASE_C TEST_CHROME_APP RESULTS_DIRECTORY\n' "$0" >&2; exit 64; }
+[[ $# -ge 3 && $# -le 4 ]] || { printf 'usage: %s CASE_B|CASE_C TEST_CHROME_APP RESULTS_DIRECTORY [--diagnostic-gpu-startup]\n' "$0" >&2; exit 64; }
 phase3_reject_root
 test_case=$1
 test_app=$2
 results_dir=$3
+diagnostic_gpu_startup=false
+if [[ $# -eq 4 ]]; then
+  [[ "$4" == '--diagnostic-gpu-startup' ]] || phase3_fail "unsupported option: $4"
+  diagnostic_gpu_startup=true
+fi
 case "$test_case" in CASE_B|CASE_C) ;; *) phase3_fail 'case must be CASE_B or CASE_C' ;; esac
 for command in lipo shasum ps awk; do command -v "$command" >/dev/null 2>&1 || phase3_fail "required command is unavailable: $command"; done
 [[ -d "$test_app" ]] || phase3_fail "test app does not exist: $test_app"
@@ -59,6 +64,18 @@ command=(
   --enable-logging=stderr
   "--user-data-dir=$profile_dir"
 )
+if [[ "$diagnostic_gpu_startup" == true ]]; then
+  # Use Chrome's own trace and VLOG facilities rather than DYLD_* variables.
+  # Hardened Runtime can ignore DYLD_* unless a separately granted entitlement
+  # allows them, whereas these flags leave the signed code unchanged.
+  startup_trace="$results_real/chrome-gpu-startup-trace.json"
+  command+=(
+    '--vmodule=gl_display=2,gl_initializer_mac=2'
+    '--trace-startup=gpu,disabled-by-default-gpu.angle'
+    "--trace-startup-file=$startup_trace"
+    '--trace-startup-duration=15'
+  )
+fi
 if [[ "$test_case" == 'CASE_C' ]]; then
   command+=(--disable-angle-features=requireGpuFamily2)
 fi
@@ -72,6 +89,10 @@ fi
   printf 'libEGL_sha256=%s\n' "$PHASE3_RELEASE_LIBEGL_SHA256"
   printf 'libGLESv2_sha256=%s\n' "$PHASE3_RELEASE_LIBGLESV2_SHA256"
   printf 'user_data_dir=%s\n' "$profile_dir"
+  printf 'diagnostic_gpu_startup=%s\n' "$diagnostic_gpu_startup"
+  if [[ "$diagnostic_gpu_startup" == true ]]; then
+    printf 'chrome_gpu_startup_trace=%s\n' "$startup_trace"
+  fi
   printf 'command='
   printf '%q ' "${command[@]}"
   printf '\n'
