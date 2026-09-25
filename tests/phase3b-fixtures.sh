@@ -794,10 +794,17 @@ mv "$inventory.backup" "$inventory"
 process_snapshot="$fixture/process-snapshot.txt"
 printf '111 fixture caller argument only: %s\n' "$output_signed" > "$process_snapshot"
 export PHASE3_FIXTURE_PS_SNAPSHOT="$process_snapshot"
-"$run" CASE_B "$output_signed" "$fixture/case-b"
+"$run" CASE_B "$output_signed" "$fixture/case-b" --diagnostic-gpu-startup
 "$run" CASE_C "$output_signed" "$fixture/case-c"
 ! grep -F -- '--disable-angle-features=requireGpuFamily2' "$fixture/case-b/run-metadata.txt"
 grep -F -- '--disable-angle-features=requireGpuFamily2' "$fixture/case-c/run-metadata.txt" >/dev/null
+grep -Fx 'diagnostic_gpu_startup=true' "$fixture/case-b/run-metadata.txt" >/dev/null
+grep -F -- '--vmodule=gl_display=2,gl_initializer_mac=2' "$fixture/case-b/run-metadata.txt" >/dev/null
+grep -F -- '--trace-startup=gpu,disabled-by-default-gpu.angle' "$fixture/case-b/run-metadata.txt" >/dev/null
+grep -F -- '--trace-startup-file=' "$fixture/case-b/run-metadata.txt" >/dev/null
+grep -F -- '--trace-startup-duration=15' "$fixture/case-b/run-metadata.txt" >/dev/null
+grep -Fx 'diagnostic_gpu_startup=false' "$fixture/case-c/run-metadata.txt" >/dev/null
+expect_fail "$run" CASE_B "$output_signed" "$fixture/case-invalid-diagnostic-option" --unexpected-option
 printf '222 %s --type=gpu-process\n' "$output_signed/Contents/MacOS/Google Chrome" > "$process_snapshot"
 expect_fail "$run" CASE_B "$output_signed" "$fixture/case-already-running"
 

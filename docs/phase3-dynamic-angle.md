@@ -101,6 +101,23 @@ fixture execution is prohibited. CI success is required before requesting a new
 human-approved real-device preflight. CI success alone does not establish that
 the GPU process loads both external dylibs or that KOOV works.
 
+### GPU-startup diagnostic mode
+
+`run-dynamic-angle-test.sh` accepts the explicit optional
+`--diagnostic-gpu-startup` flag for a separately approved diagnostic Case B or
+Case C attempt. It adds Chrome VLOG selection for `gl_display` and
+`gl_initializer_mac`, and writes a 15-second Chrome GPU startup trace directly
+to the case results directory. The selected mode and trace path are recorded in
+`run-metadata.txt`; the normal case does not enable it.
+
+This mode does not alter the signed test-copy bytes or add a dyld entitlement.
+In particular, it deliberately does not rely on `DYLD_*` environment variables:
+the Hardened Runtime may ignore those variables without the
+`allow-dyld-environment-variables` entitlement. The trace and `stderr.log` can
+show EGL/GPU initialization failures, but do not prove external ANGLE loading.
+`lsof` or `vmmap` naming both test-copy dylib absolute paths remains the required
+load proof.
+
 ## Legacy artifacts
 
 The artifact built for Chrome `154.0.8037.45` (run `35515036255`, Chromium
