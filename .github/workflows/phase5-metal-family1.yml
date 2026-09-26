@@ -1,0 +1,173 @@
+name: Phase 5 Metal Family 1 test stub
+
+on:
+  workflow_dispatch:
+    inputs:
+      angle_revision:
+        description: Exact 40-character ANGLE revision for the pinned Phase 5 stub source
+        required: true
+        type: string
+
+concurrency:
+  group: phase5-metal-family1-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  metal-family1-test-stub:
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    env:
+      ANGLE_REPOSITORY: https://chromium.googlesource.com/angle/angle.git
+      DEPOT_TOOLS_REPOSITORY: https://chromium.googlesource.com/chromium/tools/depot_tools.git
+      DEPOT_TOOLS_REVISION: 0306e4682b4ac35287c726fa35a983157a625902
+      PATCH_PATH: patches/phase5-metal-family1-test-stub.patch
+      ANGLE_REVISION: ${{ inputs.angle_revision }}
+    steps:
+      - name: Check out workflow repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Initialize diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "DIAG_DIR=$RUNNER_TEMP/phase5-metal-family1-test-stub" >> "$GITHUB_ENV"
+          echo "ANGLE_ROOT=$RUNNER_TEMP/phase5-angle-source" >> "$GITHUB_ENV"
+          echo "DEPOT_TOOLS_ROOT=$RUNNER_TEMP/phase5-depot-tools" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/phase5-metal-family1-test-stub"
+          printf '%s\n' not-started > "$RUNNER_TEMP/phase5-metal-family1-test-stub/test-result.txt"
+
+      - name: Static workflow and patch audit
+        shell: bash
+        run: bash tests/phase5-metal-family1-static.sh .github/workflows/phase5-metal-family1.yml "$PATCH_PATH"
+
+      - name: Validate exact source input
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$ANGLE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          test "$ANGLE_REVISION" = 1ff8799c596d4fc9acea28343610b1f33650a6fa
+          printf 'ANGLE_REVISION=%s\n' "$ANGLE_REVISION" | tee "$DIAG_DIR/source-input.txt"
+
+      - name: Fetch exact ANGLE source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init "$ANGLE_ROOT"
+          git -C "$ANGLE_ROOT" remote add origin "$ANGLE_REPOSITORY"
+          git -C "$ANGLE_ROOT" fetch --depth=1 origin "$ANGLE_REVISION"
+          git -C "$ANGLE_ROOT" switch --detach FETCH_HEAD
+          test "$(git -C "$ANGLE_ROOT" rev-parse HEAD)" = "$ANGLE_REVISION"
+
+      - name: Bootstrap minimal standalone checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init "$DEPOT_TOOLS_ROOT"
+          git -C "$DEPOT_TOOLS_ROOT" remote add origin "$DEPOT_TOOLS_REPOSITORY"
+          git -C "$DEPOT_TOOLS_ROOT" fetch --depth=1 origin "$DEPOT_TOOLS_REVISION"
+          git -C "$DEPOT_TOOLS_ROOT" switch --detach FETCH_HEAD
+          test "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)" = "$DEPOT_TOOLS_REVISION"
+          printf '%s\n' "$DEPOT_TOOLS_ROOT" >> "$GITHUB_PATH"
+          "$DEPOT_TOOLS_ROOT/ensure_bootstrap"
+          cd "$ANGLE_ROOT"
+          python3 scripts/bootstrap.py
+          gclient sync --no-history
+
+      - name: Apply and verify Phase 5 stub patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = a1a950d225ef0f1fcfb84cdd7042d386addc40bc4aea276dc165d9820ba42385
+          git -C "$ANGLE_ROOT" apply --unidiff-zero --check "$GITHUB_WORKSPACE/$PATCH_PATH"
+          git -C "$ANGLE_ROOT" apply --unidiff-zero "$GITHUB_WORKSPACE/$PATCH_PATH"
+          expected=$(printf '%s\n' \
+            gni/angle.gni \
+            src/libANGLE/renderer/metal/BUILD.gn \
+            src/libANGLE/renderer/metal/DisplayMtl.h \
+            src/libANGLE/renderer/metal/DisplayMtl.mm \
+            src/tests/angle_unittests.gni \
+            src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm)
+          actual=$(git -C "$ANGLE_ROOT" status --short | sed 's/^.. //' | LC_ALL=C sort)
+          test "$actual" = "$(printf '%s\n' "$expected" | LC_ALL=C sort)"
+          {
+            printf 'SOURCE_REVISION=%s\n' "$(git -C "$ANGLE_ROOT" rev-parse HEAD)"
+            printf 'PATCH_SHA256=%s\n' "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')"
+            git -C "$ANGLE_ROOT" status --short
+          } > "$DIAG_DIR/source-state.txt"
+
+      - name: Build and test stub
+        timeout-minutes: 45
+        shell: bash
+        run: |
+          set -uo pipefail
+          printf '%s\n' not-run > "$DIAG_DIR/test-result.txt"
+          cd "$ANGLE_ROOT"
+          mkdir -p out/Phase5
+          cat > out/Phase5/args.gn <<'EOF'
+          is_debug = false
+          is_component_build = false
+          target_cpu = "x64"
+          use_system_xcode = true
+          clang_use_chrome_plugins = false
+          angle_enable_metal = true
+          angle_enable_metal_family1_test_stub = true
+          angle_build_tests = true
+          angle_enable_gl = false
+          angle_enable_vulkan = false
+          angle_enable_null = false
+          angle_enable_wgpu = false
+          angle_enable_cl = false
+          build_angle_deqp_tests = false
+          EOF
+          shasum -a 256 out/Phase5/args.gn > "$DIAG_DIR/gn-args.sha256"
+          gn gen out/Phase5 > "$DIAG_DIR/gn-stdout.log" 2> "$DIAG_DIR/gn-stderr.log"
+          { xcrun clang --version; xcodebuild -version; gn --version; ninja --version; } > "$DIAG_DIR/build-metadata.txt" 2>&1
+          ninja -C out/Phase5 angle_unittests > "$DIAG_DIR/build-stdout.log" 2> "$DIAG_DIR/build-stderr.log"
+          set +e
+          out/Phase5/angle_unittests --gtest_filter=DisplayMtlFamily1Test.* > "$DIAG_DIR/test-stdout.log" 2> "$DIAG_DIR/test-stderr.log"
+          test_rc=$?
+          set -e
+          printf '%s\n' "$test_rc" > "$DIAG_DIR/test-result.txt"
+          test "$test_rc" -eq 0
+
+      - name: Write diagnostic manifest
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$DIAG_DIR"
+          gn_args_sha256=not-generated
+          if [[ -f "$DIAG_DIR/gn-args.sha256" ]]; then
+            gn_args_sha256=$(awk '{print $1}' "$DIAG_DIR/gn-args.sha256")
+          fi
+          {
+            printf 'SCHEMA=phase5-metal-family1-test-stub-v1\n'
+            printf 'ARTIFACT_NAME=angle-metal-family1-test-stub-%s\n' "$GITHUB_RUN_ID"
+            printf 'ANGLE_REVISION=%s\n' "$ANGLE_REVISION"
+            printf 'PATCH_SHA256=%s\n' "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')"
+            printf 'GN_ARGS_SHA256=%s\n' "$gn_args_sha256"
+            printf 'TEST_FILTER=DisplayMtlFamily1Test.*\n'
+          } > "$DIAG_DIR/manifest.txt"
+          shasum -a 256 "$DIAG_DIR/manifest.txt" > "$DIAG_DIR/manifest.sha256"
+          (
+            cd "$DIAG_DIR"
+            find . -type f \
+              ! -name artifact-files.sha256 \
+              ! -name artifact.sha256 \
+              -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256
+          ) > "$DIAG_DIR/artifact-files.sha256"
+          shasum -a 256 "$DIAG_DIR/artifact-files.sha256" > "$DIAG_DIR/artifact.sha256"
+
+      - name: Upload stub diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: angle-metal-family1-test-stub-${{ github.run_id }}
+          path: ${{ runner.temp }}/phase5-metal-family1-test-stub
+          if-no-files-found: error
+          retention-days: 14
