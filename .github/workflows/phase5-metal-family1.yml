@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = a1a950d225ef0f1fcfb84cdd7042d386addc40bc4aea276dc165d9820ba42385
+          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = 444c5a5606cc05f7e4cd0c1445f26e4a040356f2a90752d80e9dcf38d14ddeb2
           git -C "$ANGLE_ROOT" apply --unidiff-zero --check "$GITHUB_WORKSPACE/$PATCH_PATH"
           git -C "$ANGLE_ROOT" apply --unidiff-zero "$GITHUB_WORKSPACE/$PATCH_PATH"
           expected=$(printf '%s\n' \

@@ -213,7 +213,7 @@ index 71f0c61..5bd3c7c 100644
 +#endif
 diff --git a/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm b/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm
 new file mode 100644
-index 0000000..b9dbc4a
+index 0000000..b5733c3
 --- /dev/null
 +++ b/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm
 @@ -0,0 +1,115 @@
@@ -252,8 +252,8 @@ index 0000000..b9dbc4a
 +        EGL_NONE,
 +    };
 +
-+    EGLDisplay display = eglGetPlatformDisplay(EGL_PLATFORM_ANGLE_ANGLE,
-+                                                EGL_DEFAULT_DISPLAY, attributes);
++    EGLDisplay display = eglGetPlatformDisplay(
++        EGL_PLATFORM_ANGLE_ANGLE, reinterpret_cast<void *>(EGL_DEFAULT_DISPLAY), attributes);
 +    if (display == EGL_NO_DISPLAY)
 +    {
 +        return EGL_NO_DISPLAY;
@@ -267,7 +267,7 @@ index 0000000..b9dbc4a
 +    Family1ProfileScope profile;
 +    EGLDisplay display = CreateMetalDisplay(disableFamily2Requirement, stage);
 +    ASSERT_NE(display, EGL_NO_DISPLAY);
-+    EXPECT_EQ(eglInitialize(display, nullptr, nullptr), EGL_FALSE);
++    EXPECT_EQ(eglInitialize(display, nullptr, nullptr), static_cast<EGLBoolean>(EGL_FALSE));
 +    EXPECT_EQ(eglGetError(), EGL_NOT_INITIALIZED);
 +    EXPECT_EQ(DisplayMtl::getFamily1TestStage(), stage);
 +    eglTerminate(display);
@@ -304,7 +304,7 @@ index 0000000..b9dbc4a
 +    Family1ProfileScope profile;
 +    EGLDisplay display = CreateMetalDisplay(true, DisplayMtl::Family1TestStage::None);
 +    ASSERT_NE(display, EGL_NO_DISPLAY);
-+    ASSERT_EQ(eglInitialize(display, nullptr, nullptr), EGL_TRUE);
++    ASSERT_EQ(eglInitialize(display, nullptr, nullptr), static_cast<EGLBoolean>(EGL_TRUE));
 +    EXPECT_EQ(DisplayMtl::getFamily1TestStage(), DisplayMtl::Family1TestStage::Success);
 +
 +    auto *impl = static_cast<egl::Display *>(display)->getImplementation();
