@@ -25,6 +25,8 @@ grep -F 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' "$wor
 grep -F 'persist-credentials: false' "$workflow" >/dev/null
 grep -F 'permissions:' "$workflow" >/dev/null
 grep -F 'contents: read' "$workflow" >/dev/null
+grep -F 'DEPOT_TOOLS_UPDATE: "0"' "$workflow" >/dev/null
+grep -F 'export PATH="$DEPOT_TOOLS_ROOT:$PATH"' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub.patch' "$workflow" >/dev/null
 grep -F 'a1a950d225ef0f1fcfb84cdd7042d386addc40bc4aea276dc165d9820ba42385' "$workflow" >/dev/null
 grep -F 'apply --unidiff-zero --check' "$workflow" >/dev/null
