@@ -1,7 +1,7 @@
 # Phase 5: Metal Family 1 capability stub (VM-first)
 
 作成日: 2026-09-26  
-状態: 設計確認済み・未実装
+状態: 設計確認済み・admission record確認済み・未実装
 
 ## 結論
 
@@ -11,18 +11,22 @@ GitHub Actions の macOS Intel VMで、Intel HD Graphics 5000そのものを再�
 
 ## Phase 5開始条件と一次記録
 
-実装またはCI実行を開始する前に、次の入場記録を埋める。値が未確定の項目は推測で補わず、成功runと保存済みartifactを確認してから記録する。
+実装またはCI実行を開始する前に、次の入場記録を埋める。値が未確定の項目は推測で補わず、成功runと保存済みartifactを確認してから記録する。親エージェントによる読み取り専用のdiagnostics artifact検証により、以下の記録は完了した。
 
 | 項目 | 記録する値 |
 | --- | --- |
-| Phase 3B synthetic fixture 成功run | run ID / artifact名 / 判定 |
-| Phase 3C synthetic preflight fixture 成功run | run ID / artifact名 / 判定 |
-| Phase 3D VM観測 成功run | run ID / artifact名 / 判定 |
-| release manifest SHA-256 | SHA-256 |
-| 使用artifact名 | 完全なartifact名 |
-| ANGLE revision | `ANGLE_REVISION`の完全な値 |
+| Phase 3B synthetic fixture 成功run | `36241793357` / success / commit `3b116228de6c2af80b14cdfb36ff6fec1af6db38` / diagnostics `phase3b-synthetic-fixture-diagnostics-36241793357` / archive SHA-256 `2299e7085280d7ef80bec61f4f4a0d3de26cef8a1e7680eb3f633b4e4646ccab` / `fixture-exit-status.txt=0`, `phase3b-fixture-exit-status.txt=0`, `release-artifact-exit-status.txt=0` |
+| Phase 3C synthetic preflight fixture 成功run | `36241795968` / success / commit `3b116228de6c2af80b14cdfb36ff6fec1af6db38` / diagnostics `phase3c-preflight-synthetic-diagnostics-36241795968` / archive SHA-256 `d33c4e301f023ce9870e2a8faba139fb9415c5109aca9584d080ad661ac9ec03` / exit status `0` |
+| Phase 3D VM観測 成功run | `36071196477` / success / commit `e9002f5ba7f70ec6b23f6b82453c9580a33a399b` / diagnostics `phase3d-dynamic-angle-36065655290-36071196477` / archive SHA-256 `8f142e7503555fe3d9a75f0716daf8777509b28089e17b1bb4a8cfef7aabe298` |
+| release manifest | schema `angle-release-v1` / Chrome `154.0.8037.57` / manifest SHA-256 `ed01fc7c8a1634193cebc7e016be2fddd4a1d0094e7a77abdc98798d6b078c4f` / sidecar validation success |
+| 選択したANGLE artifact | `angle-macos-x86_64-chrome-154.0.8037.57-angle-1ff8799c-36065655290` / build run `36065655290` |
+| ANGLE revision | `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
+
+選択したartifactのdylib SHA-256は、`libEGL.dylib`が`f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`、`libGLESv2.dylib`が`9506dcc5ac798befddbab3a9e76a3ce21117d4ef1a8457ed0fcf064dbbbd6dd7`である。
 
 `phase-status.md`と`phase3d-vm-observability.md`の記述が一致しない場合、GitHub Actionsの実runと保存artifactを一次情報として照合し、Phase 5実行前に両文書を同じ状態へ更新する。run ID、manifest digest、artifact名、revisionを未確認のまま固定値として書かない。
+
+このadmission recordはPhase 5のソース実装を開始するために完了した。ただし、Actions dispatch、新規artifact download、署名、Chrome起動、実機操作を許可するものではない。
 
 ## ソースコードによる裏取り
 
@@ -42,7 +46,7 @@ Chrome 154のrelease manifestで固定したANGLE revisionを最終対象とす�
 - [ANGLE DisplayMtl.mm, revision 97a4891213554c6ae278ee621a75736df4939529](https://chromium.googlesource.com/angle/angle/+/97a4891213554c6ae278ee621a75736df4939529/src/libANGLE/renderer/metal/DisplayMtl.mm)
 - [ANGLE DisplayMtl.mm, revision d33a22228ee2999ab5e2d2eda4d405c5768555d2](https://chromium.googlesource.com/angle/angle/+/d33a22228ee2999ab5e2d2eda4d405c5768555d2/src/libANGLE/renderer/metal/DisplayMtl.mm)
 
-上記は構造確認用の一次ソースである。`1ff8799c596d4fc9acea28343610b1f33650a6fa`は既存文書に記載された候補revisionに過ぎず、今回のrun-metadata確認で現行artifactの値として検証されたものではない。Phase 5の実装前に、最終選択したrelease manifestの`ANGLE_REVISION`で同じ箇所を再確認し、admission recordへ記録する。別revisionの差分を黙って混在させない。
+上記は構造確認用の一次ソースである。最終選択したrelease manifestの`ANGLE_REVISION`は`1ff8799c596d4fc9acea28343610b1f33650a6fa`であり、manifest sidecarの検証成功とともにadmission recordへ記録した。別revisionの差分を黙って混在させない。
 
 ## VMで検証するプロファイル
 

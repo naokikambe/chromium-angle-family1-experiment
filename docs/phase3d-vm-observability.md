@@ -9,30 +9,38 @@ identity, or test Bluetooth, USB, KOOV, or a normal browsing profile.
 
 ## Primary record
 
-The parent-verified public GitHub Actions metadata records a successful Phase 3D
-dynamic ANGLE VM observation run. This is a run-status record only; it does not
-silently add claims about release-manifest contents, artifact contents, or the
-ANGLE revision.
+The parent-verified public GitHub Actions metadata and read-only diagnostics
+artifact review record a successful Phase 3D dynamic ANGLE VM observation run.
+The review also verifies the selected release manifest, artifact identity, and
+ANGLE revision listed below; it does not merge the separate 3B/3C diagnostics
+artifacts into this record.
 
 | 項目 | 記録 |
 | --- | --- |
 | run | `36071196477` / success |
 | commit | `e9002f5ba7f70ec6b23f6b82453c9580a33a399b` |
-| artifact | `phase3d-dynamic-angle-36065655290-36071196477`（未期限） |
+| artifact | `phase3d-dynamic-angle-36065655290-36071196477`（未期限） / archive SHA-256 `8f142e7503555fe3d9a75f0716daf8777509b28089e17b1bb4a8cfef7aabe298` |
 | 一次記録 | [GitHub Actions run](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36071196477) |
+| release manifest | schema `angle-release-v1` / Chrome `154.0.8037.57` / SHA-256 `ed01fc7c8a1634193cebc7e016be2fddd4a1d0094e7a77abdc98798d6b078c4f` / sidecar validation success |
+| 選択ANGLE artifact | `angle-macos-x86_64-chrome-154.0.8037.57-angle-1ff8799c-36065655290` / build run `36065655290` |
+| ANGLE revision | `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
 
 同じ確認で、Phase 3B synthetic fixture run `36241793357` とPhase 3C
 synthetic preflight fixture run `36241795968` も成功として記録されている。
 それぞれのdiagnostics artifactは
 `phase3b-synthetic-fixture-diagnostics-36241793357` と
 `phase3c-preflight-synthetic-diagnostics-36241795968` であり、Phase 3D
-artifactと同一物とは扱わない。release-manifest SHA-256、artifact内容、
-artifactのANGLE revisionはこのmetadata確認では未検証である。
+artifactと同一物とは扱わない。3B diagnostics archiveのSHA-256は
+`2299e7085280d7ef80bec61f4f4a0d3de26cef8a1e7680eb3f633b4e4646ccab`、3Cは
+`d33c4e301f023ce9870e2a8faba139fb9415c5109aca9584d080ad661ac9ec03`であり、
+それぞれのfixture exit statusは`0`である。
 
 この成功runは実機作業、署名、ローカルChrome起動、artifact取得・置換を
 承認するものではない。Phase 5 implementationは、Phase 5 planに定めた
 3B/3C/3D run、manifest SHA-256、artifact名、ANGLE revision等の詳細な
-admission recordを満たすまで開始しない。
+admission recordはソース実装開始に必要な範囲で完了している。ただし、
+この記録は新規Actions dispatch、artifact download、署名、Chrome起動、
+実機操作を承認するものではない。
 
 ## Purpose
 
