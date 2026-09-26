@@ -107,18 +107,21 @@ test-onlyの内部診断に、次の停止段階を一度だけ記録する。
 - 全段階成功 → `initialize()`成功
 - Family 1で公開されるcapabilityがプロファイルと一致
 
-capabilityの期待値は固定revisionのソース監査で埋める。推測値は記載しない。
+固定revision `1ff8799c596d4fc9acea28343610b1f33650a6fa`のソース監査を完了した。以下はFamily 1プロファイルのテストoracleであり、実機の完全再現値ではない。
 
 | 確認対象 | 固定する期待値・確認箇所 |
 | --- | --- |
 | 対象API | EGL初期化、GLES capability生成、Metal renderer capability |
-| 最大GLES version | `getMaxSupportedESVersion()`の戻り値（監査後に記入） |
-| 必須extension | `generateExtensions()`の生成結果（監査後に列挙） |
-| 禁止extension | Family 1で公開してはならない拡張（監査後に列挙） |
-| config | `generateConfigs()`の生成結果（監査後に列挙） |
-| vendor | IntelはNVIDIA拒否分岐を通らないプロファイルとして使用（実機の完全再現値とは扱わない） |
+| 最大GLES version | `getMaxSupportedESVersion()`は`mtl::kMaxSupportedGLVersion`を返し、固定revisionの定義ではGLES 3.0。Family 1は`supportsEitherGPUFamily(4, 1)`を満たす。 |
+| EGL config | `generateConfigs()`はconformant/renderableな`EGL_OPENGL_ES2_BIT`および`EGL_OPENGL_ES3_BIT_KHR`、`EGL_WINDOW_BIT \| EGL_PBUFFER_BIT`、sample count 0/4の2 variantと、監査済みのdepth/stencil組合せを生成する。 |
+| EGL display extensions | `generateExtensions()`が直接設定する次のEGL display extension fieldsを要求する：`createContextRobustness`、`iosurfaceClientBuffer`、`surfacelessContext`、`noConfigContext`、`displayTextureShareGroup`、`displaySemaphoreShareGroup`、`mtlTextureClientBuffer`、`waitUntilWorkScheduled`、`fenceSync`、`waitSync`、`robustResourceInitializationANGLE`、`image`、`imageBase`、`metalCreateContextOwnershipIdentityANGLE`、`mtlSyncSharedEventANGLE`、`mtlSyncCommandsScheduledANGLE`。Intel/non-NVIDIA profileでは`hasEvents`が有効なため、`fenceSync`/`waitSync`を必須とする。これはnative GL extension全体との同値性を主張しない。 |
+| Family 1で無効なcapability | Apple GPU familyを持たないプロファイルでは、ソース条件上`compressedTextureEtcANGLE`、`textureCompressionAstcSliced3dKHR`、`textureCompressionAstcHdrKHR`、`multisampledRenderToTextureEXT`はfalse（capability生成まで到達するテストで確認）。 |
+| native caps | `supportsEitherGPUFamily(2, 1)`を満たすため`maxDrawBuffers`と`maxColorAttachments`は`mtl::kMaxRenderTargets`（8）。max color target bitsはMac/catalyst値とするが、数値はここでは推測しない。 |
+| vendor | Intelは`isIntel`専用workaroundを適用し、NVIDIA拒否分岐には入らない。これはプロファイル述語であり、デバイスのエミュレーションではない。 |
 
-テストでは`getMaxSupportedESVersion()`、`generateConfigs()`、`generateExtensions()`およびMetal renderer capabilityの結果を、上表の監査済み値と比較する。vendor値だけを根拠にIntel実機との同一性を主張しない。
+テストでは`getMaxSupportedESVersion()`、`generateConfigs()`、`generateExtensions()`およびMetal renderer capabilityの結果を、上表の監査済み値と比較する。Apple GPU familyはどれも設定しない。vendor値だけを根拠にIntel実機との同一性を主張しない。
+
+既存の`EGLFeatureControlTest`はend-to-endのfeature overrideテストであり、新しいcompile-time-only profileの証明には使わない。実装時は`src/tests/angle_unittests.gni`の`angle_unittests_msl_sources`（`angle_enable_metal`時）へMetal専用sourceを追加し、`src/tests/BUILD.gn`から`angle_unittests`へ統合する方針とする。これは実装待ちであり、通常buildや公開APIの変更を意味しない。
 
 ### 5C: Phase 3Dへの接続
 
