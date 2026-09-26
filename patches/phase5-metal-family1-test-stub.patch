@@ -1,0 +1,411 @@
+diff --git a/gni/angle.gni b/gni/angle.gni
+index bde26da..87656c4 100644
+--- a/gni/angle.gni
++++ b/gni/angle.gni
+@@ -249,6 +249,9 @@ declare_args() {
+ 
+   angle_enable_metal = is_apple
+ 
++  # Compile the Metal Family 1 capability profile only into macOS Metal test builds.
++  angle_enable_metal_family1_test_stub = false
++
+   # Enables the OpenCL pass-through back end
+   angle_enable_cl_passthrough = angle_enable_cl
+ 
+diff --git a/src/libANGLE/renderer/metal/BUILD.gn b/src/libANGLE/renderer/metal/BUILD.gn
+index 8e4c836..923d878 100644
+--- a/src/libANGLE/renderer/metal/BUILD.gn
++++ b/src/libANGLE/renderer/metal/BUILD.gn
+@@ -13,9 +13,14 @@ if (metal_internal_shader_compilation_supported) {
+ 
+ assert(is_mac || is_ios)
+ assert(angle_enable_metal)
++assert(!angle_enable_metal_family1_test_stub ||
++       (is_mac && angle_enable_metal && angle_build_tests))
+ 
+ config("angle_metal_backend_config") {
+   defines = [ "ANGLE_ENABLE_METAL" ]
++  if (angle_enable_metal_family1_test_stub) {
++    defines += [ "ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB" ]
++  }
+   ldflags = [
+     "-weak_framework",
+     "Metal",
+diff --git a/src/libANGLE/renderer/metal/DisplayMtl.h b/src/libANGLE/renderer/metal/DisplayMtl.h
+index f5da632..6fe3c52 100644
+--- a/src/libANGLE/renderer/metal/DisplayMtl.h
++++ b/src/libANGLE/renderer/metal/DisplayMtl.h
+@@ -43,6 +43,25 @@ struct DefaultShaderAsyncInfoMtl;
+ class DisplayMtl : public DisplayImpl
+ {
+   public:
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++    enum class Family1TestStage
++    {
++        None,
++        Device,
++        FeatureGate,
++        CommandQueue,
++        FormatTable,
++        ShaderLibrary,
++        RenderUtils,
++        Success,
++    };
++
++    static void enableFamily1TestProfile();
++    static void clearFamily1TestProfile();
++    static void setFamily1TestForcedStopStage(Family1TestStage stage);
++    static Family1TestStage getFamily1TestStage();
++#endif
++
+     DisplayMtl(const egl::DisplayState &state);
+     ~DisplayMtl() override;
+ 
+diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/metal/DisplayMtl.mm
+index 71f0c61..5bd3c7c 100644
+--- a/src/libANGLE/renderer/metal/DisplayMtl.mm
++++ b/src/libANGLE/renderer/metal/DisplayMtl.mm
+@@ -42,6 +42,56 @@
+ namespace rx
+ {
+ 
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++namespace
++{
++struct Family1TestState
++{
++    bool enabled = false;
++    DisplayMtl::Family1TestStage forcedStage = DisplayMtl::Family1TestStage::None;
++    DisplayMtl::Family1TestStage observedStage = DisplayMtl::Family1TestStage::None;
++};
++
++thread_local Family1TestState gFamily1TestState;
++
++void RecordFamily1TestStage(DisplayMtl::Family1TestStage stage)
++{
++    if (gFamily1TestState.observedStage == DisplayMtl::Family1TestStage::None)
++    {
++        gFamily1TestState.observedStage = stage;
++    }
++}
++
++bool ShouldStopAtFamily1TestStage(DisplayMtl::Family1TestStage stage)
++{
++    return gFamily1TestState.enabled && gFamily1TestState.forcedStage == stage;
++}
++}  // namespace
++
++void DisplayMtl::enableFamily1TestProfile()
++{
++    gFamily1TestState.enabled       = true;
++    gFamily1TestState.forcedStage  = Family1TestStage::None;
++    gFamily1TestState.observedStage = Family1TestStage::None;
++}
++
++void DisplayMtl::clearFamily1TestProfile()
++{
++    gFamily1TestState = Family1TestState();
++}
++
++void DisplayMtl::setFamily1TestForcedStopStage(Family1TestStage stage)
++{
++    gFamily1TestState.forcedStage  = stage;
++    gFamily1TestState.observedStage = Family1TestStage::None;
++}
++
++DisplayMtl::Family1TestStage DisplayMtl::getFamily1TestStage()
++{
++    return gFamily1TestState.observedStage;
++}
++#endif
++
+ static EGLint GetDepthSize(GLint internalformat)
+ {
+     switch (internalformat)
+@@ -129,34 +179,122 @@ bool IsMetalDisplayAvailable()
+         // If we can't create a device, fail initialization.
+         if (!mMetalDevice.get())
+         {
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++            RecordFamily1TestStage(Family1TestStage::Device);
++#endif
++            return angle::Result::Stop;
++        }
++
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++        if (ShouldStopAtFamily1TestStage(Family1TestStage::Device))
++        {
++            RecordFamily1TestStage(Family1TestStage::Device);
+             return angle::Result::Stop;
+         }
++#endif
+ 
+         mMetalDeviceVendorId = mtl::GetDeviceVendorId(mMetalDevice);
+ 
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++        if (gFamily1TestState.enabled)
++        {
++            mMetalDeviceVendorId = angle::kVendorID_Intel;
++        }
++#endif
++
+         mCapsInitialized = false;
+ 
+         initializeFeatures();
+ 
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++        if (ShouldStopAtFamily1TestStage(Family1TestStage::FeatureGate))
++        {
++            RecordFamily1TestStage(Family1TestStage::FeatureGate);
++            return angle::Result::Stop;
++        }
++#endif
++
+         if (mFeatures.requireGpuFamily2.enabled && !supportsEitherGPUFamily(1, 2))
+         {
+             ANGLE_MTL_LOG("Could not initialize: Metal device does not support Mac GPU family 2.");
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++            RecordFamily1TestStage(Family1TestStage::FeatureGate);
++#endif
+             return angle::Result::Stop;
+         }
+ 
+         if (mFeatures.disableMetalOnNvidia.enabled && isNVIDIA())
+         {
+             ANGLE_MTL_LOG("Could not initialize: Metal not supported on NVIDIA GPUs.");
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++            RecordFamily1TestStage(Family1TestStage::FeatureGate);
++#endif
+             return angle::Result::Stop;
+         }
+ 
+         mCmdQueue = angle::adoptObjCPtr([mMetalDevice newCommandQueue]);
+ 
+-        ANGLE_TRY(mFormatTable.initialize(this));
+-        ANGLE_TRY(initializeShaderLibrary());
++        if (!mCmdQueue)
++        {
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++            RecordFamily1TestStage(Family1TestStage::CommandQueue);
++#endif
++            return angle::Result::Stop;
++        }
++
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++        if (ShouldStopAtFamily1TestStage(Family1TestStage::CommandQueue))
++        {
++            RecordFamily1TestStage(Family1TestStage::CommandQueue);
++            return angle::Result::Stop;
++        }
++#endif
++
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++        if (ShouldStopAtFamily1TestStage(Family1TestStage::FormatTable))
++        {
++            RecordFamily1TestStage(Family1TestStage::FormatTable);
++            return angle::Result::Stop;
++        }
++#endif
++        angle::Result formatResult = mFormatTable.initialize(this);
++        if (formatResult != angle::Result::Continue)
++        {
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++            RecordFamily1TestStage(Family1TestStage::FormatTable);
++#endif
++            return formatResult;
++        }
++
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++        if (ShouldStopAtFamily1TestStage(Family1TestStage::ShaderLibrary))
++        {
++            RecordFamily1TestStage(Family1TestStage::ShaderLibrary);
++            return angle::Result::Stop;
++        }
++#endif
++        angle::Result shaderResult = initializeShaderLibrary();
++        if (shaderResult != angle::Result::Continue)
++        {
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++            RecordFamily1TestStage(Family1TestStage::ShaderLibrary);
++#endif
++            return shaderResult;
++        }
+ 
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++        if (ShouldStopAtFamily1TestStage(Family1TestStage::RenderUtils))
++        {
++            RecordFamily1TestStage(Family1TestStage::RenderUtils);
++            return angle::Result::Stop;
++        }
++#endif
+         mUtils = std::make_unique<mtl::RenderUtils>();
+ 
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++        RecordFamily1TestStage(Family1TestStage::Success);
++#endif
++
+         return angle::Result::Continue;
+     }
+ }
+@@ -1362,11 +1500,23 @@ bool IsMetalDisplayAvailable()
+ 
+ bool DisplayMtl::supportsAppleGPUFamily(uint8_t iOSFamily) const
+ {
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++    if (gFamily1TestState.enabled)
++    {
++        return false;
++    }
++#endif
+     return mtl::SupportsAppleGPUFamily(getMetalDevice(), iOSFamily);
+ }
+ 
+ bool DisplayMtl::supportsMacGPUFamily(uint8_t macFamily) const
+ {
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++    if (gFamily1TestState.enabled)
++    {
++        return macFamily == 1;
++    }
++#endif
+     return mtl::SupportsMacGPUFamily(getMetalDevice(), macFamily);
+ }
+ 
+diff --git a/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm b/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm
+new file mode 100644
+index 0000000..b9dbc4a
+--- /dev/null
++++ b/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm
+@@ -0,0 +1,115 @@
++// Copyright 2026 The ANGLE Project Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#include <gtest/gtest.h>
++
++#include "EGL/egl.h"
++#include "EGL/eglext.h"
++#include "EGL/eglext_angle.h"
++#include "libANGLE/Display.h"
++#include "libANGLE/renderer/metal/DisplayMtl.h"
++
++namespace rx
++{
++namespace
++{
++class Family1ProfileScope final
++{
++  public:
++    Family1ProfileScope() { DisplayMtl::enableFamily1TestProfile(); }
++    ~Family1ProfileScope() { DisplayMtl::clearFamily1TestProfile(); }
++};
++
++EGLDisplay CreateMetalDisplay(bool disableFamily2Requirement, DisplayMtl::Family1TestStage stage)
++{
++    DisplayMtl::setFamily1TestForcedStopStage(stage);
++    const char *disabledFeatures[] = {"requireGpuFamily2", nullptr};
++    EGLAttrib attributes[]         = {
++        EGL_PLATFORM_ANGLE_TYPE_ANGLE,
++        EGL_PLATFORM_ANGLE_TYPE_METAL_ANGLE,
++        EGL_FEATURE_OVERRIDES_DISABLED_ANGLE,
++        reinterpret_cast<EGLAttrib>(disableFamily2Requirement ? disabledFeatures : nullptr),
++        EGL_NONE,
++    };
++
++    EGLDisplay display = eglGetPlatformDisplay(EGL_PLATFORM_ANGLE_ANGLE,
++                                                EGL_DEFAULT_DISPLAY, attributes);
++    if (display == EGL_NO_DISPLAY)
++    {
++        return EGL_NO_DISPLAY;
++    }
++
++    return display;
++}
++
++void ExpectForcedStop(bool disableFamily2Requirement, DisplayMtl::Family1TestStage stage)
++{
++    Family1ProfileScope profile;
++    EGLDisplay display = CreateMetalDisplay(disableFamily2Requirement, stage);
++    ASSERT_NE(display, EGL_NO_DISPLAY);
++    EXPECT_EQ(eglInitialize(display, nullptr, nullptr), EGL_FALSE);
++    EXPECT_EQ(eglGetError(), EGL_NOT_INITIALIZED);
++    EXPECT_EQ(DisplayMtl::getFamily1TestStage(), stage);
++    eglTerminate(display);
++}
++}  // namespace
++
++TEST(DisplayMtlFamily1Test, DeviceStage)
++{
++    ExpectForcedStop(false, DisplayMtl::Family1TestStage::Device);
++}
++
++TEST(DisplayMtlFamily1Test, FeatureGateStage)
++{
++    ExpectForcedStop(false, DisplayMtl::Family1TestStage::FeatureGate);
++}
++
++TEST(DisplayMtlFamily1Test, LaterInitializationStages)
++{
++    constexpr DisplayMtl::Family1TestStage kStages[] = {
++        DisplayMtl::Family1TestStage::CommandQueue,
++        DisplayMtl::Family1TestStage::FormatTable,
++        DisplayMtl::Family1TestStage::ShaderLibrary,
++        DisplayMtl::Family1TestStage::RenderUtils,
++    };
++
++    for (DisplayMtl::Family1TestStage stage : kStages)
++    {
++        ExpectForcedStop(true, stage);
++    }
++}
++
++TEST(DisplayMtlFamily1Test, SuccessCapabilities)
++{
++    Family1ProfileScope profile;
++    EGLDisplay display = CreateMetalDisplay(true, DisplayMtl::Family1TestStage::None);
++    ASSERT_NE(display, EGL_NO_DISPLAY);
++    ASSERT_EQ(eglInitialize(display, nullptr, nullptr), EGL_TRUE);
++    EXPECT_EQ(DisplayMtl::getFamily1TestStage(), DisplayMtl::Family1TestStage::Success);
++
++    auto *impl = static_cast<egl::Display *>(display)->getImplementation();
++    auto *mtl  = static_cast<DisplayMtl *>(impl);
++    const egl::DisplayExtensions &extensions = static_cast<egl::Display *>(display)->getExtensions();
++    EXPECT_EQ(mtl->getMaxSupportedESVersion(), gl::Version(3, 0));
++    EXPECT_EQ(mtl->getNativeCaps().maxDrawBuffers, 8);
++    EXPECT_EQ(mtl->getNativeCaps().maxColorAttachments, 8);
++    EXPECT_TRUE(extensions.createContextRobustness);
++    EXPECT_TRUE(extensions.iosurfaceClientBuffer);
++    EXPECT_TRUE(extensions.surfacelessContext);
++    EXPECT_TRUE(extensions.noConfigContext);
++    EXPECT_TRUE(extensions.displayTextureShareGroup);
++    EXPECT_TRUE(extensions.displaySemaphoreShareGroup);
++    EXPECT_TRUE(extensions.mtlTextureClientBuffer);
++    EXPECT_TRUE(extensions.waitUntilWorkScheduled);
++    EXPECT_TRUE(extensions.fenceSync);
++    EXPECT_TRUE(extensions.waitSync);
++    EXPECT_TRUE(extensions.robustResourceInitializationANGLE);
++    EXPECT_TRUE(extensions.image);
++    EXPECT_TRUE(extensions.imageBase);
++    EXPECT_TRUE(extensions.metalCreateContextOwnershipIdentityANGLE);
++    EXPECT_TRUE(extensions.mtlSyncSharedEventANGLE);
++    EXPECT_TRUE(extensions.mtlSyncCommandsScheduledANGLE);
++    eglTerminate(display);
++}
++}  // namespace rx
+diff --git a/src/tests/angle_unittests.gni b/src/tests/angle_unittests.gni
+index c834278..ca235dc 100644
+--- a/src/tests/angle_unittests.gni
++++ b/src/tests/angle_unittests.gni
+@@ -140,6 +140,12 @@ angle_unittests_msl_sources = [
+   "../tests/compiler_tests/MSLOutput_test.cpp",
+ ]
+ 
++if (angle_enable_metal_family1_test_stub) {
++  angle_unittests_msl_sources += [
++    "../libANGLE/renderer/metal/DisplayMtlFamily1Test.mm",
++  ]
++}
++
+ angle_unittests_wgsl_sources = [ "../tests/compiler_tests/WGSLOutput_test.cpp" ]
+ 
+ angle_unittests_sources += [ "compiler_tests/ImmutableString_test_autogen.cpp" ]
