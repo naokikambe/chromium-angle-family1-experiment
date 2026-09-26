@@ -213,10 +213,10 @@ index 71f0c61..5bd3c7c 100644
 +#endif
 diff --git a/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm b/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm
 new file mode 100644
-index 0000000..b5733c3
+index 0000000..d449ee9
 --- /dev/null
 +++ b/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm
-@@ -0,0 +1,115 @@
+@@ -0,0 +1,120 @@
 +// Copyright 2026 The ANGLE Project Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -244,13 +244,18 @@ index 0000000..b5733c3
 +{
 +    DisplayMtl::setFamily1TestForcedStopStage(stage);
 +    const char *disabledFeatures[] = {"requireGpuFamily2", nullptr};
-+    EGLAttrib attributes[]         = {
++    EGLAttrib attributes[] = {
 +        EGL_PLATFORM_ANGLE_TYPE_ANGLE,
 +        EGL_PLATFORM_ANGLE_TYPE_METAL_ANGLE,
-+        EGL_FEATURE_OVERRIDES_DISABLED_ANGLE,
-+        reinterpret_cast<EGLAttrib>(disableFamily2Requirement ? disabledFeatures : nullptr),
++        EGL_NONE,
++        EGL_NONE,
 +        EGL_NONE,
 +    };
++    if (disableFamily2Requirement)
++    {
++        attributes[2] = EGL_FEATURE_OVERRIDES_DISABLED_ANGLE;
++        attributes[3] = reinterpret_cast<EGLAttrib>(disabledFeatures);
++    }
 +
 +    EGLDisplay display = eglGetPlatformDisplay(
 +        EGL_PLATFORM_ANGLE_ANGLE, reinterpret_cast<void *>(EGL_DEFAULT_DISPLAY), attributes);
