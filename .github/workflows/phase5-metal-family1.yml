@@ -23,6 +23,7 @@ jobs:
       ANGLE_REPOSITORY: https://chromium.googlesource.com/angle/angle.git
       DEPOT_TOOLS_REPOSITORY: https://chromium.googlesource.com/chromium/tools/depot_tools.git
       DEPOT_TOOLS_REVISION: 0306e4682b4ac35287c726fa35a983157a625902
+      DEPOT_TOOLS_UPDATE: "0"
       PATCH_PATH: patches/phase5-metal-family1-test-stub.patch
       ANGLE_REVISION: ${{ inputs.angle_revision }}
     steps:
@@ -72,6 +73,7 @@ jobs:
           git -C "$DEPOT_TOOLS_ROOT" fetch --depth=1 origin "$DEPOT_TOOLS_REVISION"
           git -C "$DEPOT_TOOLS_ROOT" switch --detach FETCH_HEAD
           test "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)" = "$DEPOT_TOOLS_REVISION"
+          export PATH="$DEPOT_TOOLS_ROOT:$PATH"
           printf '%s\n' "$DEPOT_TOOLS_ROOT" >> "$GITHUB_PATH"
           "$DEPOT_TOOLS_ROOT/ensure_bootstrap"
           cd "$ANGLE_ROOT"
