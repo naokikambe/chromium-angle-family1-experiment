@@ -45,12 +45,12 @@ for new real-device work. Any separately approved historical device-test record 
 
 ## Phase 3の一次記録（2026-09-26確認）
 
-親エージェントが確認した公開GitHub Actionsのrun metadataを記録する。ここで示す成功はsynthetic fixtureまたはVM観測runの成功であり、release manifestの内容、artifact内容、ANGLE revisionの検証結果を含まない。
+親エージェントが確認した公開GitHub Actionsのrun metadataと、読み取り専用で取得したdiagnostics artifactの検証結果を記録する。3B/3C/3Dのrunはそれぞれ別artifactであり、3B/3Cのdiagnostics成功と、3Dで選択されたrelease manifest/artifactの検証結果を混同しない。
 
 | 対象 | run | commit | diagnostics / artifact | 一次記録 |
 | --- | --- | --- | --- | --- |
-| Phase 3B synthetic fixture | `36241793357` / success | `3b116228de6c2af80b14cdfb36ff6fec1af6db38` | `phase3b-synthetic-fixture-diagnostics-36241793357`（未期限） | [Actions run](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36241793357) |
-| Phase 3C synthetic preflight fixture | `36241795968` / success | `3b116228de6c2af80b14cdfb36ff6fec1af6db38` | `phase3c-preflight-synthetic-diagnostics-36241795968`（未期限） | [Actions run](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36241795968) |
-| Phase 3D dynamic ANGLE VM observation | `36071196477` / success | `e9002f5ba7f70ec6b23f6b82453c9580a33a399b` | `phase3d-dynamic-angle-36065655290-36071196477`（未期限） | [Actions run](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36071196477) |
+| Phase 3B synthetic fixture | `36241793357` / success | `3b116228de6c2af80b14cdfb36ff6fec1af6db38` | `phase3b-synthetic-fixture-diagnostics-36241793357` / archive SHA-256 `2299e7085280d7ef80bec61f4f4a0d3de26cef8a1e7680eb3f633b4e4646ccab` / exit `0` | [Actions run](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36241793357) |
+| Phase 3C synthetic preflight fixture | `36241795968` / success | `3b116228de6c2af80b14cdfb36ff6fec1af6db38` | `phase3c-preflight-synthetic-diagnostics-36241795968` / archive SHA-256 `d33c4e301f023ce9870e2a8faba139fb9415c5109aca9584d080ad661ac9ec03` / exit `0` | [Actions run](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36241795968) |
+| Phase 3D dynamic ANGLE VM observation | `36071196477` / success | `e9002f5ba7f70ec6b23f6b82453c9580a33a399b` | `phase3d-dynamic-angle-36065655290-36071196477` / archive SHA-256 `8f142e7503555fe3d9a75f0716daf8777509b28089e17b1bb4a8cfef7aabe298` | [Actions run](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36071196477) |
 
-この確認ではrelease-manifest SHA-256、artifact内容、artifactに含まれるANGLE revisionは取得していない。Phase 5の開始には、これらを含む詳細なadmission recordの確認が別途必要である。
+Phase 3D diagnostics artifactの`ANGLE_RELEASE_MANIFEST`はsidecar検証に成功した。schemaは`angle-release-v1`、Chromeは`154.0.8037.57`、manifest SHA-256は`ed01fc7c8a1634193cebc7e016be2fddd4a1d0094e7a77abdc98798d6b078c4f`、選択artifactは`angle-macos-x86_64-chrome-154.0.8037.57-angle-1ff8799c-36065655290`、ANGLE revisionは`1ff8799c596d4fc9acea28343610b1f33650a6fa`、build runは`36065655290`である。これにより、Phase 5の詳細なadmission recordはソース実装開始に必要な範囲で完了した。ただし、新規Actions dispatch、artifact download、署名、Chrome起動、実機操作を承認するものではない。
