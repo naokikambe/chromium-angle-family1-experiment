@@ -118,6 +118,38 @@ show EGL/GPU initialization failures, but do not prove external ANGLE loading.
 `lsof` or `vmmap` naming both test-copy dylib absolute paths remains the required
 load proof.
 
+## Phase 3 results and transition to Family 1 work
+
+The release-manifest workflow was exercised with Chrome `154.0.8037.58`.
+The selected artifact recorded matching Chrome, Chromium, and ANGLE revisions,
+and its manifest, sidecar, and two dylib hashes passed verification. Phase 3B
+and Phase 3C synthetic fixture workflows passed, including release-manifest,
+current-only Framework, attempt-root, signing, and diagnostic-mode assertions.
+
+The Phase 3D VM observation also passed its intended scope: the dynamic-replace
+case showed the external ANGLE libraries in the GPU process, while the stock
+control did not. This proves the dynamic loading and propagation path in the
+VM; it does not prove successful Metal initialization on the target Mac.
+
+On the Intel Mac, a test copy was prepared and Apple Development signed with
+strict verification passing. The Keychain prompt was declined intentionally.
+Chrome itself launched, but repeated GPU processes failed with
+`Initialization of all (1) EGL display types failed`, followed by
+`GLDisplayEGL::Initialize failed` and GPU-process exit. The same EGL failure was
+reproduced with the unmodified installed Chrome using the same ANGLE/Metal
+startup switches. Therefore the current evidence attributes the failure to
+the pre-existing Chrome/ANGLE Metal initialization path on this Intel HD
+Graphics 5000 / Metal Family 1 environment, not to test-copy signing or the
+dynamic replacement mechanism.
+
+The real-device run did not establish external dylib loading: the short-lived
+GPU processes were not captured while their libraries were mapped. It also did
+not launch KOOV. Those are unresolved observations, not evidence that dynamic
+ANGLE was absent. The next work is therefore Phase 5: make the smallest
+explicitly opt-in ANGLE change that permits or adapts Metal Family 1
+initialization, preserve Family 2+ behavior, validate it in CI and the VM,
+and only then repeat the approved real-device test.
+
 ## Legacy artifacts
 
 The artifact built for Chrome `154.0.8037.45` (run `35515036255`, Chromium
