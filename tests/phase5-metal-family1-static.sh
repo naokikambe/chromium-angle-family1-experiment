@@ -7,7 +7,7 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 test "$(shasum -a 256 "$patch" | awk '{print $1}')" = \
-  deb591ecd2dd2e897815dfd2c3b13982eaa212e08a9382bc7d65bb493b4e7d76
+  a1a950d225ef0f1fcfb84cdd7042d386addc40bc4aea276dc165d9820ba42385
 grep -F 'angle_enable_metal_family1_test_stub = false' "$patch" >/dev/null
 grep -F 'ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB' "$patch" >/dev/null
 grep -F 'thread_local Family1TestState' "$patch" >/dev/null
@@ -26,7 +26,8 @@ grep -F 'persist-credentials: false' "$workflow" >/dev/null
 grep -F 'permissions:' "$workflow" >/dev/null
 grep -F 'contents: read' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub.patch' "$workflow" >/dev/null
-grep -F 'deb591ecd2dd2e897815dfd2c3b13982eaa212e08a9382bc7d65bb493b4e7d76' "$workflow" >/dev/null
+grep -F 'a1a950d225ef0f1fcfb84cdd7042d386addc40bc4aea276dc165d9820ba42385' "$workflow" >/dev/null
+grep -F 'apply --unidiff-zero --check' "$workflow" >/dev/null
 grep -F '1ff8799c596d4fc9acea28343610b1f33650a6fa' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub-v1' "$workflow" >/dev/null
 grep -F 'angle-metal-family1-test-stub-' "$workflow" >/dev/null
