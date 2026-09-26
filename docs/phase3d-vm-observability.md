@@ -1,9 +1,38 @@
 # Phase 3D: macOS VM observability boundary
 
+更新日: 2026-09-26
+
 Phase 3D is a GitHub-hosted macOS Intel observation stage.  It is deliberately
 separate from the user-owned-device Phase 3C and Case B/C procedures.  It does
 not authorize a local Chrome launch, modify `/Applications`, use a signing
 identity, or test Bluetooth, USB, KOOV, or a normal browsing profile.
+
+## Primary record
+
+The parent-verified public GitHub Actions metadata records a successful Phase 3D
+dynamic ANGLE VM observation run. This is a run-status record only; it does not
+silently add claims about release-manifest contents, artifact contents, or the
+ANGLE revision.
+
+| 項目 | 記録 |
+| --- | --- |
+| run | `36071196477` / success |
+| commit | `e9002f5ba7f70ec6b23f6b82453c9580a33a399b` |
+| artifact | `phase3d-dynamic-angle-36065655290-36071196477`（未期限） |
+| 一次記録 | [GitHub Actions run](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36071196477) |
+
+同じ確認で、Phase 3B synthetic fixture run `36241793357` とPhase 3C
+synthetic preflight fixture run `36241795968` も成功として記録されている。
+それぞれのdiagnostics artifactは
+`phase3b-synthetic-fixture-diagnostics-36241793357` と
+`phase3c-preflight-synthetic-diagnostics-36241795968` であり、Phase 3D
+artifactと同一物とは扱わない。release-manifest SHA-256、artifact内容、
+artifactのANGLE revisionはこのmetadata確認では未検証である。
+
+この成功runは実機作業、署名、ローカルChrome起動、artifact取得・置換を
+承認するものではない。Phase 5 implementationは、Phase 5 planに定めた
+3B/3C/3D run、manifest SHA-256、artifact名、ANGLE revision等の詳細な
+admission recordを満たすまで開始しない。
 
 ## Purpose
 
