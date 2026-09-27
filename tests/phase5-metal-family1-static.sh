@@ -7,7 +7,7 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 test "$(shasum -a 256 "$patch" | awk '{print $1}')" = \
-  203d8164c9d4904f900ec251fb7beec4ad1cfd7c09742c93074b9ef22577cb2d
+  bfa14e68a7ee0beb9c9cff7482bcb7a3bee29198d265410ef18c9cc6ecadee81
 grep -F 'angle_enable_metal_family1_test_stub = false' "$patch" >/dev/null
 grep -F 'ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB' "$patch" >/dev/null
 grep -F 'thread_local Family1TestState' "$patch" >/dev/null
@@ -36,7 +36,7 @@ grep -F 'contents: read' "$workflow" >/dev/null
 grep -F 'DEPOT_TOOLS_UPDATE: "0"' "$workflow" >/dev/null
 grep -F 'export PATH="$DEPOT_TOOLS_ROOT:$PATH"' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub.patch' "$workflow" >/dev/null
-grep -F '203d8164c9d4904f900ec251fb7beec4ad1cfd7c09742c93074b9ef22577cb2d' "$workflow" >/dev/null
+grep -F 'bfa14e68a7ee0beb9c9cff7482bcb7a3bee29198d265410ef18c9cc6ecadee81' "$workflow" >/dev/null
 grep -F 'apply --unidiff-zero --check' "$workflow" >/dev/null
 grep -F '1ff8799c596d4fc9acea28343610b1f33650a6fa' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub-v1' "$workflow" >/dev/null
@@ -71,6 +71,7 @@ grep -F 'GN_ARGS_SHA256=' "$workflow" >/dev/null
 ! grep -E '(^|[^A-Za-z])(sudo|codesign|xattr|security|gh |git push|force-push|secrets\.|id-token|contents: write)([^A-Za-z]|$)' "$workflow" >/dev/null
 
 for path in \
+  BUILD.gn \
   gni/angle.gni \
   src/libANGLE/renderer/metal/BUILD.gn \
   src/libANGLE/renderer/metal/DisplayMtl.h \
