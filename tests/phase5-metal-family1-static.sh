@@ -7,13 +7,15 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 test "$(shasum -a 256 "$patch" | awk '{print $1}')" = \
-  559ae200d9d9e93dd045f56e58c68e3280b7913a5494f43afdc1664e8f6d4d36
+  cf5a986d6a74e5a6b1f524ca994eebf374a4e0d0860767d04aceeca2108a7a79
 grep -F 'angle_enable_metal_family1_test_stub = false' "$patch" >/dev/null
 grep -F 'ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB' "$patch" >/dev/null
 grep -F 'thread_local Family1TestState' "$patch" >/dev/null
 grep -F 'if (!mCmdQueue)' "$patch" >/dev/null
 grep -F 'DisplayMtlFamily1Test' "$patch" >/dev/null
-grep -F 'import("../../gni/angle.gni")' "$patch" >/dev/null
+grep -F 'angle_metal_family1_test_stub' "$patch" >/dev/null
+grep -F '"$angle_root:libEGL"' "$patch" >/dev/null
+grep -F 'data_deps = [ "$angle_root:angle" ]' "$patch" >/dev/null
 ! grep -Ei 'getenv|command.line|--use-angle|--use-gl' "$patch" >/dev/null
 
 grep -F 'workflow_dispatch:' "$workflow" >/dev/null
@@ -29,14 +31,14 @@ grep -F 'contents: read' "$workflow" >/dev/null
 grep -F 'DEPOT_TOOLS_UPDATE: "0"' "$workflow" >/dev/null
 grep -F 'export PATH="$DEPOT_TOOLS_ROOT:$PATH"' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub.patch' "$workflow" >/dev/null
-grep -F '559ae200d9d9e93dd045f56e58c68e3280b7913a5494f43afdc1664e8f6d4d36' "$workflow" >/dev/null
+grep -F 'cf5a986d6a74e5a6b1f524ca994eebf374a4e0d0860767d04aceeca2108a7a79' "$workflow" >/dev/null
 grep -F 'apply --unidiff-zero --check' "$workflow" >/dev/null
 grep -F '1ff8799c596d4fc9acea28343610b1f33650a6fa' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub-v1' "$workflow" >/dev/null
 grep -F 'angle-metal-family1-test-stub-' "$workflow" >/dev/null
 grep -F 'angle_enable_metal_family1_test_stub = true' "$workflow" >/dev/null
 grep -F 'angle_build_tests = true' "$workflow" >/dev/null
-grep -F 'ninja -C out/Phase5 angle_end2end_tests' "$workflow" >/dev/null
+grep -F 'ninja -C out/Phase5 angle_metal_family1_test_stub' "$workflow" >/dev/null
 grep -F -- '--gtest_filter=DisplayMtlFamily1Test.*' "$workflow" >/dev/null
 grep -F 'test-result.txt' "$workflow" >/dev/null
 grep -F 'manifest.sha256' "$workflow" >/dev/null
@@ -50,8 +52,9 @@ for path in \
   src/libANGLE/renderer/metal/BUILD.gn \
   src/libANGLE/renderer/metal/DisplayMtl.h \
   src/libANGLE/renderer/metal/DisplayMtl.mm \
-  src/tests/angle_end2end_tests.gni \
-  src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm; do
+  src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm \
+  src/tests/BUILD.gn \
+  src/tests/DisplayMtlFamily1TestMain.cpp; do
   grep -F "$path" "$workflow" >/dev/null
 done
 

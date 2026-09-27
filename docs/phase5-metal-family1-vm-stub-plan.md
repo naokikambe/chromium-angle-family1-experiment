@@ -121,7 +121,7 @@ test-onlyの内部診断に、次の停止段階を一度だけ記録する。
 
 テストでは`getMaxSupportedESVersion()`、`generateConfigs()`、`generateExtensions()`およびMetal renderer capabilityの結果を、上表の監査済み値と比較する。Apple GPU familyはどれも設定しない。vendor値だけを根拠にIntel実機との同一性を主張しない。
 
-既存の`EGLFeatureControlTest`はend-to-endのfeature overrideテストであり、新しいcompile-time-only profileの証明には使わない。初期案では`src/tests/angle_unittests.gni`の`angle_unittests_msl_sources`へMetal専用sourceを追加して`angle_unittests`で実行する方針だった。しかしCI run `36278046375`および`36280291932`で、パッチのコンパイル・リンクには成功した一方、static unit-test binaryでは`eglGetPlatformDisplay()`が`EGL_NO_DISPLAY`を返し、初期化stageへ到達できないことを確認した。これはstub profileの失敗ではなく、EGL displayを作成するrunnerではないというharness不適合である。したがって専用sourceは`src/tests/angle_end2end_tests.gni`の`angle_end2end_tests_sources`へ、同じ`angle_enable_metal_family1_test_stub` compile-time条件下で追加し、`angle_end2end_tests --gtest_filter=DisplayMtlFamily1Test.*`だけを実行する。通常build・公開API・runtime選択経路は変更しない。
+既存の`EGLFeatureControlTest`はend-to-endのfeature overrideテストであり、新しいcompile-time-only profileの証明には使わない。初期案では`src/tests/angle_unittests.gni`の`angle_unittests_msl_sources`へMetal専用sourceを追加して`angle_unittests`で実行する方針だった。しかしCI run `36278046375`および`36280291932`で、パッチのコンパイル・リンクには成功した一方、static unit-test binaryでは`eglGetPlatformDisplay()`が`EGL_NO_DISPLAY`を返し、初期化stageへ到達できないことを確認した。さらにfull `angle_end2end_tests`はCI run `36290795681`で1621/1646 objectのコンパイル後に固定45分timeoutへ到達した。これはstub profileの失敗ではなく、runnerまたはtarget規模の問題である。したがって専用sourceは、`$angle_root:libEGL`へ直接linkし、EGL runtimeを`data_deps = [ "$angle_root:angle" ]`で提供する専用target `angle_metal_family1_test_stub`へ、同じ`angle_enable_metal_family1_test_stub` compile-time条件下で追加し、`angle_metal_family1_test_stub --gtest_filter=DisplayMtlFamily1Test.*`だけを実行する。通常build・公開API・runtime選択経路は変更しない。
 
 ### 5C: Phase 3Dへの接続
 
@@ -145,7 +145,7 @@ macos-15-intel
 
 runnerは`macos-15-intel`に固定する。初回の専用workflowはjob timeoutを60分、ANGLE build/test step timeoutを45分に固定する。stub-enabled artifactと通常artifactを分離し、専用artifactのmanifest schemaは`phase5-metal-family1-test-stub-v1`、名前は`angle-metal-family1-test-stub-<run-id>`とする。stage診断、test result、compiler/build metadata、GN args／manifest／artifactのSHA-256を保存する。初回workflowはstub buildとtargeted EGL testだけを対象とし、VM観測（Chrome/GPUログを含む）は人の承認を得た後に別段階として追加する。workflow dispatch、CI artifact取得、実機操作は従来どおり別途承認が必要であり、このプランの文書修正だけでは実行許可を与えない。
 
-CIのGN生成で、`angle_end2end_tests.gni`がcompile-time-onlyの`angle_enable_metal_family1_test_stub`を参照するため、`../../gni/angle.gni`を明示的にimportする必要があることを確認した。これはGN引数の可視性を補う修正であり、通常buildのruntime選択経路は追加しない。
+CIのGN生成で、試行した`angle_end2end_tests.gni`経路ではcompile-time-onlyの`angle_enable_metal_family1_test_stub`の可視性に明示的importが必要なことを確認した。この経路は45分timeoutのため廃止し、専用targetは既に`gni/angle.gni`をimportする`src/tests/BUILD.gn`内で条件付ける。通常buildのruntime選択経路は追加しない。
 
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 
