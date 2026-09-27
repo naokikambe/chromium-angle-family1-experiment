@@ -163,6 +163,8 @@ CI run `36314480823`ではbridgeのC ABI symbolsが未定義のままlinkに失�
 
 CI run `36349844094`では、このpreflight自体がGN生成時に`defines +=`を`defines = []`宣言より先に評価して停止した。さらに適用後の行位置確認で、同じblockが`public_deps`配列内へ入る可能性を検出した。patchではbackend target-local defineを`defines = []`の直後、`public_deps = [`の前へ明示的context付きで配置し、config側のdefineと併存させた。これはテスト実行前の構成エラーであり、source/build targetの実行結果を意味しない。
 
+CI run `36351199352`ではBridge objectの5 symbolsは`T`だったが、libEGL dylibのexportには存在しなかった。`ANGLE_EXPORT`が固定revisionの内部configで空定義にされ得るため、stub専用header/sourceでは明示的なdefault-visibility macroを宣言・定義へ付与した。通常buildではheader/source自体がtargetへ入らず、通常export setは変更しない。
+
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 
 ## 実機へ進む条件
