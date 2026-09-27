@@ -25,6 +25,10 @@ index 8e4c836..15cb0dd 100644
 +    ]
 +  }
 +
++  if (angle_enable_metal_family1_test_stub) {
++    defines += [ "ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB" ]
++  }
++
 diff --git a/src/libANGLE/renderer/metal/DisplayMtl.h b/src/libANGLE/renderer/metal/DisplayMtl.h
 index f5da632..97d10e3 100644
 --- a/src/libANGLE/renderer/metal/DisplayMtl.h
@@ -153,7 +157,9 @@ index 71f0c61..319f46a 100644
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +            RecordFamily1TestStage(Family1TestStage::FeatureGate);
 +#endif
-@@ -155,2 +247,31 @@ bool IsMetalDisplayAvailable()
+@@ -153,4 +245,33 @@ bool IsMetalDisplayAvailable()
+         mCmdQueue = angle::adoptObjCPtr([mMetalDevice newCommandQueue]);
+
 -        ANGLE_TRY(mFormatTable.initialize(this));
 -        ANGLE_TRY(initializeShaderLibrary());
 +        if (!mCmdQueue)

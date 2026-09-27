@@ -7,7 +7,7 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 test "$(shasum -a 256 "$patch" | awk '{print $1}')" = \
-  6b42993a72b508cae6c6e687c8369ddbf48ab7c4431c49dbd4234c636ce9dbc9
+  1c72f38d833e6934e0971af3c3cbdd45e4ed83e2b8a773d7b0905aa964585699
 grep -F 'angle_enable_metal_family1_test_stub = false' "$patch" >/dev/null
 grep -F 'ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB' "$patch" >/dev/null
 grep -F 'thread_local Family1TestState' "$patch" >/dev/null
@@ -19,6 +19,7 @@ grep -F '"$angle_root:libEGL"' "$patch" >/dev/null
 grep -F 'data_deps = [ "$angle_root:angle" ]' "$patch" >/dev/null
 grep -F 'ANGLE_MetalFamily1TestGetSnapshot' "$patch" >/dev/null
 grep -F 'DisplayMtlFamily1TestBridge.mm' "$patch" >/dev/null
+grep -F 'defines += [ "ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB" ]' "$patch" >/dev/null
 test "$(sed -n '/^diff --git a\/src\/libANGLE\/renderer\/metal\/DisplayMtlFamily1Test.mm/,/^diff --git /p' "$patch" | grep -F '+}  // namespace' | wc -l | tr -d ' ')" -eq 1
 ! grep -Ei 'getenv|command.line|--use-angle|--use-gl' "$patch" >/dev/null
 
@@ -35,7 +36,7 @@ grep -F 'contents: read' "$workflow" >/dev/null
 grep -F 'DEPOT_TOOLS_UPDATE: "0"' "$workflow" >/dev/null
 grep -F 'export PATH="$DEPOT_TOOLS_ROOT:$PATH"' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub.patch' "$workflow" >/dev/null
-grep -F '6b42993a72b508cae6c6e687c8369ddbf48ab7c4431c49dbd4234c636ce9dbc9' "$workflow" >/dev/null
+grep -F '1c72f38d833e6934e0971af3c3cbdd45e4ed83e2b8a773d7b0905aa964585699' "$workflow" >/dev/null
 grep -F 'apply --unidiff-zero --check' "$workflow" >/dev/null
 grep -F '1ff8799c596d4fc9acea28343610b1f33650a6fa' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub-v1' "$workflow" >/dev/null

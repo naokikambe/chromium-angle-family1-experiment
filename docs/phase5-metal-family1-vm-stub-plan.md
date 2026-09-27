@@ -155,6 +155,8 @@ CI run `36297447447`では1411 objectsのcompile後に、`libEGL`が内部C++ sy
 
 CI run `36304800477`では、`DisplayMtlFamily1Test.mm`の匿名namespace閉じ括弧が重複してbuildが停止し、testは実行されなかった。patchではglobal `TEST`宣言前のnamespace閉じ括弧を1つだけ残すよう対象行を修正し、静的監査でこの構造を確認する。新規source fileのhunkから1行を削除するため、hunk行数も`+1,119`から`+1,118`へ更新する。これを更新しないpatchは`git apply`でcorruptと判定されるため、固定revisionに対する`git apply --check`をcommit前検証に含める。
 
+CI run `36314480823`ではbridgeのC ABI symbolsが未定義のままlinkに失敗し、testは実行されなかった。原因はbridge sourceにstub defineがowning targetへ適用されていなかったことであり、patchでは`angle_metal_backend`自身へ同じcompile-time defineを追加してbridge definitionsを有効化する。通常buildでは引き続き無効である。固定revisionへのpatchは`git apply --unidiff-zero --check`で適用可能であることを確認する。
+
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 
 ## 実機へ進む条件
