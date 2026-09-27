@@ -7,7 +7,7 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 test "$(shasum -a 256 "$patch" | awk '{print $1}')" = \
-  10180cb6214b50ac88f8968320547d20625ff1e60e44a1e021b97b7fbb33302a
+  0c9170c897551a79faeca5cbae55a22413c62a689689c08f4a65f19fe9f13805
 grep -F 'angle_enable_metal_family1_test_stub = false' "$patch" >/dev/null
 grep -F 'ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB' "$patch" >/dev/null
 grep -F 'thread_local Family1TestState' "$patch" >/dev/null
@@ -36,7 +36,7 @@ grep -F 'contents: read' "$workflow" >/dev/null
 grep -F 'DEPOT_TOOLS_UPDATE: "0"' "$workflow" >/dev/null
 grep -F 'export PATH="$DEPOT_TOOLS_ROOT:$PATH"' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub.patch' "$workflow" >/dev/null
-grep -F '10180cb6214b50ac88f8968320547d20625ff1e60e44a1e021b97b7fbb33302a' "$workflow" >/dev/null
+grep -F '0c9170c897551a79faeca5cbae55a22413c62a689689c08f4a65f19fe9f13805' "$workflow" >/dev/null
 grep -F 'apply --unidiff-zero --check' "$workflow" >/dev/null
 grep -F '1ff8799c596d4fc9acea28343610b1f33650a6fa' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub-v1' "$workflow" >/dev/null
