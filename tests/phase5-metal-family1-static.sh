@@ -7,7 +7,7 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 test "$(shasum -a 256 "$patch" | awk '{print $1}')" = \
-  0c9170c897551a79faeca5cbae55a22413c62a689689c08f4a65f19fe9f13805
+  203d8164c9d4904f900ec251fb7beec4ad1cfd7c09742c93074b9ef22577cb2d
 grep -F 'angle_enable_metal_family1_test_stub = false' "$patch" >/dev/null
 grep -F 'ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB' "$patch" >/dev/null
 grep -F 'thread_local Family1TestState' "$patch" >/dev/null
@@ -36,7 +36,7 @@ grep -F 'contents: read' "$workflow" >/dev/null
 grep -F 'DEPOT_TOOLS_UPDATE: "0"' "$workflow" >/dev/null
 grep -F 'export PATH="$DEPOT_TOOLS_ROOT:$PATH"' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub.patch' "$workflow" >/dev/null
-grep -F '0c9170c897551a79faeca5cbae55a22413c62a689689c08f4a65f19fe9f13805' "$workflow" >/dev/null
+grep -F '203d8164c9d4904f900ec251fb7beec4ad1cfd7c09742c93074b9ef22577cb2d' "$workflow" >/dev/null
 grep -F 'apply --unidiff-zero --check' "$workflow" >/dev/null
 grep -F '1ff8799c596d4fc9acea28343610b1f33650a6fa' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub-v1' "$workflow" >/dev/null
@@ -55,6 +55,7 @@ grep -F "sed -n '/--- metal backend defines ---/,\$p'" "$workflow" >/dev/null
 grep -F 'bridge_object=obj/src/libANGLE/renderer/metal/angle_metal_backend/DisplayMtlFamily1TestBridge.o' "$workflow" >/dev/null
 grep -F 'ninja -C out/Phase5 "$bridge_object"' "$workflow" >/dev/null
 grep -F 'nm -gU' "$workflow" >/dev/null
+grep -F 'ANGLE_METAL_FAMILY1_TEST_EXPORT' "$patch" >/dev/null
 grep -F 'ninja -C out/Phase5 libEGL' "$workflow" >/dev/null
 grep -F 'gn desc out/Phase5 //:libEGL outputs' "$workflow" >/dev/null
 grep -F 'libegl-outputs.log' "$workflow" >/dev/null

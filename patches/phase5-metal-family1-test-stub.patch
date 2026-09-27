@@ -371,7 +371,7 @@ new file mode 100644
 index 0000000..be0abd9
 --- /dev/null
 +++ b/src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.h
-@@ -0,0 +1,57 @@
+@@ -0,0 +1,63 @@
 +// Copyright 2026 The ANGLE Project Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -382,6 +382,12 @@ index 0000000..be0abd9
 +#include <stdint.h>
 +
 +#include "export.h"
++
++#if defined(__GNUC__)
++#    define ANGLE_METAL_FAMILY1_TEST_EXPORT __attribute__((visibility("default")))
++#else
++#    define ANGLE_METAL_FAMILY1_TEST_EXPORT
++#endif
 +
 +typedef enum ANGLE_MetalFamily1TestStage
 +{
@@ -421,11 +427,11 @@ index 0000000..be0abd9
 +} ANGLE_MetalFamily1TestSnapshot;
 +
 +extern "C" {
-+ANGLE_EXPORT void ANGLE_MetalFamily1TestEnableProfile();
-+ANGLE_EXPORT void ANGLE_MetalFamily1TestClearProfile();
-+ANGLE_EXPORT void ANGLE_MetalFamily1TestSetForcedStopStage(ANGLE_MetalFamily1TestStage stage);
-+ANGLE_EXPORT ANGLE_MetalFamily1TestStage ANGLE_MetalFamily1TestGetStage();
-+ANGLE_EXPORT ANGLE_MetalFamily1TestSnapshot ANGLE_MetalFamily1TestGetSnapshot();
++ANGLE_METAL_FAMILY1_TEST_EXPORT void ANGLE_MetalFamily1TestEnableProfile();
++ANGLE_METAL_FAMILY1_TEST_EXPORT void ANGLE_MetalFamily1TestClearProfile();
++ANGLE_METAL_FAMILY1_TEST_EXPORT void ANGLE_MetalFamily1TestSetForcedStopStage(ANGLE_MetalFamily1TestStage stage);
++ANGLE_METAL_FAMILY1_TEST_EXPORT ANGLE_MetalFamily1TestStage ANGLE_MetalFamily1TestGetStage();
++ANGLE_METAL_FAMILY1_TEST_EXPORT ANGLE_MetalFamily1TestSnapshot ANGLE_MetalFamily1TestGetSnapshot();
 +}
 +
 +#endif  // LIBANGLE_RENDERER_METAL_DISPLAYMTLFAMILY1TESTBRIDGE_H_
@@ -447,28 +453,28 @@ index 0000000..7f365fe
 +
 +extern "C" {
 +
-+void ANGLE_MetalFamily1TestEnableProfile()
++ANGLE_METAL_FAMILY1_TEST_EXPORT void ANGLE_MetalFamily1TestEnableProfile()
 +{
 +    rx::DisplayMtl::enableFamily1TestProfile();
 +}
 +
-+void ANGLE_MetalFamily1TestClearProfile()
++ANGLE_METAL_FAMILY1_TEST_EXPORT void ANGLE_MetalFamily1TestClearProfile()
 +{
 +    rx::DisplayMtl::clearFamily1TestProfile();
 +}
 +
-+void ANGLE_MetalFamily1TestSetForcedStopStage(ANGLE_MetalFamily1TestStage stage)
++ANGLE_METAL_FAMILY1_TEST_EXPORT void ANGLE_MetalFamily1TestSetForcedStopStage(ANGLE_MetalFamily1TestStage stage)
 +{
 +    rx::DisplayMtl::setFamily1TestForcedStopStage(
 +        static_cast<rx::DisplayMtl::Family1TestStage>(stage));
 +}
 +
-+ANGLE_MetalFamily1TestStage ANGLE_MetalFamily1TestGetStage()
++ANGLE_METAL_FAMILY1_TEST_EXPORT ANGLE_MetalFamily1TestStage ANGLE_MetalFamily1TestGetStage()
 +{
 +    return static_cast<ANGLE_MetalFamily1TestStage>(rx::DisplayMtl::getFamily1TestStage());
 +}
 +
-+ANGLE_MetalFamily1TestSnapshot ANGLE_MetalFamily1TestGetSnapshot()
++ANGLE_METAL_FAMILY1_TEST_EXPORT ANGLE_MetalFamily1TestSnapshot ANGLE_MetalFamily1TestGetSnapshot()
 +{
 +    ANGLE_MetalFamily1TestSnapshot snapshot = {};
 +    snapshot.stage = static_cast<int>(rx::DisplayMtl::getFamily1TestStage());
