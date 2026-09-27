@@ -153,6 +153,8 @@ CI run `36297447447`では1411 objectsのcompile後に、`libEGL`が内部C++ sy
 
 固定revisionの`gl::Version`には`major`/`minor` public fieldがなく、`getMajor()`/`getMinor()` accessorを使う必要があることをCI run `36302295123`のbridge compileで確認した。bridge snapshotはこの固定revision APIに合わせる。
 
+CI run `36304800477`では、`DisplayMtlFamily1Test.mm`の匿名namespace閉じ括弧が重複してbuildが停止し、testは実行されなかった。patchではglobal `TEST`宣言前のnamespace閉じ括弧を1つだけ残すよう対象行を修正し、静的監査でこの構造を確認する。新規source fileのhunkから1行を削除するため、hunk行数も`+1,119`から`+1,118`へ更新する。これを更新しないpatchは`git apply`でcorruptと判定されるため、固定revisionに対する`git apply --check`をcommit前検証に含める。
+
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 
 ## 実機へ進む条件
