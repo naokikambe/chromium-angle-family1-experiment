@@ -337,13 +337,14 @@ index 0000000..d449ee9
 +    eglTerminate(display);
 +}
 +}  // namespace rx
-diff --git a/src/tests/angle_unittests.gni b/src/tests/angle_unittests.gni
-index c834278..ca235dc 100644
---- a/src/tests/angle_unittests.gni
-+++ b/src/tests/angle_unittests.gni
-@@ -142,0 +143,6 @@ angle_unittests_msl_sources = [
+diff --git a/src/tests/angle_end2end_tests.gni b/src/tests/angle_end2end_tests.gni
+index 44ad854..3107480 100644
+--- a/src/tests/angle_end2end_tests.gni
++++ b/src/tests/angle_end2end_tests.gni
+@@ -237,0 +238,7 @@ angle_end2end_tests_sources = [
++
 +if (angle_enable_metal_family1_test_stub) {
-+  angle_unittests_msl_sources += [
++  angle_end2end_tests_sources += [
 +    "../libANGLE/renderer/metal/DisplayMtlFamily1Test.mm",
 +  ]
 +}

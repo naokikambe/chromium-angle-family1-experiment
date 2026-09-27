@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = 59bad583f01e7ea68f3452bf69ee75996e1abb5014473af6c3a03427b23ff787
+          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = c8303c677ef310de20212a0ac5ac9057f71d4954f32f5c2d6b5497a156417df3
           git -C "$ANGLE_ROOT" apply --unidiff-zero --check "$GITHUB_WORKSPACE/$PATCH_PATH"
           git -C "$ANGLE_ROOT" apply --unidiff-zero "$GITHUB_WORKSPACE/$PATCH_PATH"
           expected=$(printf '%s\n' \
@@ -92,7 +92,7 @@ jobs:
             src/libANGLE/renderer/metal/BUILD.gn \
             src/libANGLE/renderer/metal/DisplayMtl.h \
             src/libANGLE/renderer/metal/DisplayMtl.mm \
-            src/tests/angle_unittests.gni \
+            src/tests/angle_end2end_tests.gni \
             src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm)
           actual=$(git -C "$ANGLE_ROOT" status --short | sed 's/^.. //' | LC_ALL=C sort)
           test "$actual" = "$(printf '%s\n' "$expected" | LC_ALL=C sort)"
@@ -129,9 +129,9 @@ jobs:
           shasum -a 256 out/Phase5/args.gn > "$DIAG_DIR/gn-args.sha256"
           gn gen out/Phase5 > "$DIAG_DIR/gn-stdout.log" 2> "$DIAG_DIR/gn-stderr.log"
           { xcrun clang --version; xcodebuild -version; gn --version; ninja --version; } > "$DIAG_DIR/build-metadata.txt" 2>&1
-          ninja -C out/Phase5 angle_unittests > "$DIAG_DIR/build-stdout.log" 2> "$DIAG_DIR/build-stderr.log"
+          ninja -C out/Phase5 angle_end2end_tests > "$DIAG_DIR/build-stdout.log" 2> "$DIAG_DIR/build-stderr.log"
           set +e
-          out/Phase5/angle_unittests --gtest_filter=DisplayMtlFamily1Test.* > "$DIAG_DIR/test-stdout.log" 2> "$DIAG_DIR/test-stderr.log"
+          out/Phase5/angle_end2end_tests --gtest_filter=DisplayMtlFamily1Test.* > "$DIAG_DIR/test-stdout.log" 2> "$DIAG_DIR/test-stderr.log"
           test_rc=$?
           set -e
           printf '%s\n' "$test_rc" > "$DIAG_DIR/test-result.txt"

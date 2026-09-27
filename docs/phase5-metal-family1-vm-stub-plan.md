@@ -121,7 +121,7 @@ test-onlyの内部診断に、次の停止段階を一度だけ記録する。
 
 テストでは`getMaxSupportedESVersion()`、`generateConfigs()`、`generateExtensions()`およびMetal renderer capabilityの結果を、上表の監査済み値と比較する。Apple GPU familyはどれも設定しない。vendor値だけを根拠にIntel実機との同一性を主張しない。
 
-既存の`EGLFeatureControlTest`はend-to-endのfeature overrideテストであり、新しいcompile-time-only profileの証明には使わない。実装時は`src/tests/angle_unittests.gni`の`angle_unittests_msl_sources`（`angle_enable_metal`時）へMetal専用sourceを追加し、`src/tests/BUILD.gn`から`angle_unittests`へ統合する方針とする。これは実装待ちであり、通常buildや公開APIの変更を意味しない。
+既存の`EGLFeatureControlTest`はend-to-endのfeature overrideテストであり、新しいcompile-time-only profileの証明には使わない。初期案では`src/tests/angle_unittests.gni`の`angle_unittests_msl_sources`へMetal専用sourceを追加して`angle_unittests`で実行する方針だった。しかしCI run `36278046375`および`36280291932`で、パッチのコンパイル・リンクには成功した一方、static unit-test binaryでは`eglGetPlatformDisplay()`が`EGL_NO_DISPLAY`を返し、初期化stageへ到達できないことを確認した。これはstub profileの失敗ではなく、EGL displayを作成するrunnerではないというharness不適合である。したがって専用sourceは`src/tests/angle_end2end_tests.gni`の`angle_end2end_tests_sources`へ、同じ`angle_enable_metal_family1_test_stub` compile-time条件下で追加し、`angle_end2end_tests --gtest_filter=DisplayMtlFamily1Test.*`だけを実行する。通常build・公開API・runtime選択経路は変更しない。
 
 ### 5C: Phase 3Dへの接続
 
@@ -138,12 +138,12 @@ Phase 3Dへ曖昧に接続せず、Phase 5専用workflow（`.github/workflows/ph
 macos-15-intel
  ├─ source/static audit
  ├─ ANGLE stub build
- ├─ ANGLE unit tests
+ ├─ ANGLE targeted EGL tests
  ├─ optional VM observation
  └─ diagnostics upload
 ```
 
-runnerは`macos-15-intel`に固定する。初回の専用workflowはjob timeoutを60分、ANGLE build/test step timeoutを45分に固定する。stub-enabled artifactと通常artifactを分離し、専用artifactのmanifest schemaは`phase5-metal-family1-test-stub-v1`、名前は`angle-metal-family1-test-stub-<run-id>`とする。stage診断、test result、compiler/build metadata、GN args／manifest／artifactのSHA-256を保存する。初回workflowはstub buildとunit testだけを対象とし、VM観測（Chrome/GPUログを含む）は人の承認を得た後に別段階として追加する。workflow dispatch、CI artifact取得、実機操作は従来どおり別途承認が必要であり、このプランの文書修正だけでは実行許可を与えない。
+runnerは`macos-15-intel`に固定する。初回の専用workflowはjob timeoutを60分、ANGLE build/test step timeoutを45分に固定する。stub-enabled artifactと通常artifactを分離し、専用artifactのmanifest schemaは`phase5-metal-family1-test-stub-v1`、名前は`angle-metal-family1-test-stub-<run-id>`とする。stage診断、test result、compiler/build metadata、GN args／manifest／artifactのSHA-256を保存する。初回workflowはstub buildとtargeted EGL testだけを対象とし、VM観測（Chrome/GPUログを含む）は人の承認を得た後に別段階として追加する。workflow dispatch、CI artifact取得、実機操作は従来どおり別途承認が必要であり、このプランの文書修正だけでは実行許可を与えない。
 
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 
@@ -152,7 +152,7 @@ Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での
 次の条件を満たすまで、実機の署名・起動・KOOV操作は行わない。
 
 1. release manifestのANGLE revisionに対するソース差分確認が完了
-2. Family 1プロファイルの単体テストがCIで成功
+2. Family 1プロファイルのtargeted EGL testがCIで成功
 3. 各初期化停止段階を再現できる
 4. production pathがstub無効時に変わらないことを確認
 5. Phase 3B/3C/3DのCI結果とartifactを保存
