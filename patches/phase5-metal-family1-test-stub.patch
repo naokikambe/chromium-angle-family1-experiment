@@ -240,7 +240,7 @@ new file mode 100644
 index 0000000..990662f
 --- /dev/null
 +++ b/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm
-@@ -0,0 +1,119 @@
+@@ -0,0 +1,118 @@
 +// Copyright 2026 The ANGLE Project Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -359,7 +359,6 @@ index 0000000..990662f
 +    EXPECT_TRUE(snapshot.mtlSyncCommandsScheduledANGLE);
 +    eglTerminate(display);
 +}
-+}  // namespace
 diff --git a/src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.h b/src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.h
 new file mode 100644
 index 0000000..be0abd9
