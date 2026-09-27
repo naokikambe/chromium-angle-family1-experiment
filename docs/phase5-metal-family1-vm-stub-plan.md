@@ -149,6 +149,8 @@ CIのGN生成で、試行した`angle_end2end_tests.gni`経路ではcompile-time
 
 専用targetのfocused build（CI run `36295094316`）は1411 objectsまで進み、共有loaderが`EGL_EGL_PROTOTYPES=0`を伝播するため、EGL関数prototypeが未宣言になることを確認した。専用targetは`$angle_root:libEGL`へ直接linkするため、test source内でEGL header include前に`EGL_EGL_PROTOTYPES`を1へ復元する。これはcompile-timeの宣言修正であり、runtime選択経路や公開APIを追加しない。
 
+CI run `36297447447`では1411 objectsのcompile後に、`libEGL`が内部C++ symbols（stub制御、native caps、EGL display extensions）をexportしないためlinkに失敗した。このため、stub build時の`libEGL`にだけ、必要なstage制御とcapability snapshotを返すtest-only C ABI bridgeをdefault visibilityで追加し、test sourceは通常のEGL C APIとbridgeだけを呼ぶ。bridgeは通常build・通常artifact・公開headerには含めず、runtime CLI/environment選択も提供しない。
+
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 
 ## 実機へ進む条件
