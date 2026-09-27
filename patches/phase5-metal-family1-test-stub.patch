@@ -17,6 +17,17 @@ index 8e4c836..15cb0dd 100644
 +  if (angle_enable_metal_family1_test_stub) {
 +    defines += [ "ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB" ]
 +  }
+@@ -151,0 +157,10 @@ angle_source_set("angle_metal_backend") {
++  if (angle_enable_metal_family1_test_stub) {
++    sources += [
++      "DisplayMtlFamily1TestBridge.h",
++      "DisplayMtlFamily1TestBridge.mm",
++    ]
++  }
++
++  if (angle_enable_metal_family1_test_stub) {
++    defines += [ "ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB" ]
++  }
 diff --git a/src/libANGLE/renderer/metal/DisplayMtl.h b/src/libANGLE/renderer/metal/DisplayMtl.h
 index f5da632..97d10e3 100644
 --- a/src/libANGLE/renderer/metal/DisplayMtl.h
@@ -358,7 +369,7 @@ new file mode 100644
 index 0000000..be0abd9
 --- /dev/null
 +++ b/src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.h
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,57 @@
 +// Copyright 2026 The ANGLE Project Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -407,7 +418,6 @@ index 0000000..be0abd9
 +    uint8_t mtlSyncCommandsScheduledANGLE;
 +} ANGLE_MetalFamily1TestSnapshot;
 +
-+#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +extern "C" {
 +ANGLE_EXPORT void ANGLE_MetalFamily1TestEnableProfile();
 +ANGLE_EXPORT void ANGLE_MetalFamily1TestClearProfile();
@@ -415,7 +425,6 @@ index 0000000..be0abd9
 +ANGLE_EXPORT ANGLE_MetalFamily1TestStage ANGLE_MetalFamily1TestGetStage();
 +ANGLE_EXPORT ANGLE_MetalFamily1TestSnapshot ANGLE_MetalFamily1TestGetSnapshot();
 +}
-+#endif
 +
 +#endif  // LIBANGLE_RENDERER_METAL_DISPLAYMTLFAMILY1TESTBRIDGE_H_
 diff --git a/src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.mm b/src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.mm
@@ -500,7 +509,7 @@ diff --git a/src/tests/BUILD.gn b/src/tests/BUILD.gn
 index 79f77bd..0f0f760 100644
 --- a/src/tests/BUILD.gn
 +++ b/src/tests/BUILD.gn
-@@ -403,0 +404,27 @@ if (is_win || is_linux || is_chromeos || is_android || is_fuchsia || is_apple) {
+@@ -403,0 +404,25 @@ if (is_win || is_linux || is_chromeos || is_android || is_fuchsia || is_apple) {
 +if (angle_enable_metal_family1_test_stub) {
 +  angle_test("angle_metal_family1_test_stub") {
 +    include_dirs = [ "." ]
@@ -508,9 +517,7 @@ index 79f77bd..0f0f760 100644
 +      "DisplayMtlFamily1TestMain.cpp",
 +      "../libANGLE/renderer/metal/DisplayMtlFamily1Test.mm",
 +      "../libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.h",
-+      "../libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.mm",
 +    ]
-+    defines = [ "ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB" ]
 +    configs += [ "${angle_root}:libANGLE_config" ]
 +    deps = [
 +      ":angle_common_test_utils_shared",
