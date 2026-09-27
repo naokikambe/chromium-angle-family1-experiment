@@ -147,6 +147,8 @@ runnerは`macos-15-intel`に固定する。初回の専用workflowはjob timeout
 
 CIのGN生成で、試行した`angle_end2end_tests.gni`経路ではcompile-time-onlyの`angle_enable_metal_family1_test_stub`の可視性に明示的importが必要なことを確認した。この経路は45分timeoutのため廃止し、専用targetは既に`gni/angle.gni`をimportする`src/tests/BUILD.gn`内で条件付ける。通常buildのruntime選択経路は追加しない。
 
+専用targetのfocused build（CI run `36295094316`）は1411 objectsまで進み、共有loaderが`EGL_EGL_PROTOTYPES=0`を伝播するため、EGL関数prototypeが未宣言になることを確認した。専用targetは`$angle_root:libEGL`へ直接linkするため、test source内でEGL header include前に`EGL_EGL_PROTOTYPES`を1へ復元する。これはcompile-timeの宣言修正であり、runtime選択経路や公開APIを追加しない。
+
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 
 ## 実機へ進む条件
