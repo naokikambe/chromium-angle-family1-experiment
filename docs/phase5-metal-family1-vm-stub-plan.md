@@ -151,6 +151,8 @@ CIのGN生成で、試行した`angle_end2end_tests.gni`経路ではcompile-time
 
 CI run `36297447447`では1411 objectsのcompile後に、`libEGL`が内部C++ symbols（stub制御、native caps、EGL display extensions）をexportしないためlinkに失敗した。このため、stub build時の`libEGL`にだけ、必要なstage制御とcapability snapshotを返すtest-only C ABI bridgeをdefault visibilityで追加し、test sourceは通常のEGL C APIとbridgeだけを呼ぶ。bridgeは通常build・通常artifact・公開headerには含めず、runtime CLI/environment選択も提供しない。
 
+固定revisionの`gl::Version`には`major`/`minor` public fieldがなく、`getMajor()`/`getMinor()` accessorを使う必要があることをCI run `36302295123`のbridge compileで確認した。bridge snapshotはこの固定revision APIに合わせる。
+
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 
 ## 実機へ進む条件
