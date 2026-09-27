@@ -17,13 +17,15 @@ index 8e4c836..15cb0dd 100644
 +  if (angle_enable_metal_family1_test_stub) {
 +    defines += [ "ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB" ]
 +  }
-@@ -151,0 +157,10 @@ angle_source_set("angle_metal_backend") {
+@@ -151,0 +157,6 @@ angle_source_set("angle_metal_backend") {
 +  if (angle_enable_metal_family1_test_stub) {
 +    sources += [
 +      "DisplayMtlFamily1TestBridge.h",
 +      "DisplayMtlFamily1TestBridge.mm",
 +    ]
 +  }
+@@ -170,1 +176,5 @@ angle_source_set("angle_metal_backend") {
+   defines = []
 +
 +  if (angle_enable_metal_family1_test_stub) {
 +    defines += [ "ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB" ]
