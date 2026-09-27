@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = 559ae200d9d9e93dd045f56e58c68e3280b7913a5494f43afdc1664e8f6d4d36
+          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = cf5a986d6a74e5a6b1f524ca994eebf374a4e0d0860767d04aceeca2108a7a79
           git -C "$ANGLE_ROOT" apply --unidiff-zero --check "$GITHUB_WORKSPACE/$PATCH_PATH"
           git -C "$ANGLE_ROOT" apply --unidiff-zero "$GITHUB_WORKSPACE/$PATCH_PATH"
           expected=$(printf '%s\n' \
@@ -92,8 +92,9 @@ jobs:
             src/libANGLE/renderer/metal/BUILD.gn \
             src/libANGLE/renderer/metal/DisplayMtl.h \
             src/libANGLE/renderer/metal/DisplayMtl.mm \
-            src/tests/angle_end2end_tests.gni \
-            src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm)
+            src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm \
+            src/tests/BUILD.gn \
+            src/tests/DisplayMtlFamily1TestMain.cpp)
           actual=$(git -C "$ANGLE_ROOT" status --short | sed 's/^.. //' | LC_ALL=C sort)
           test "$actual" = "$(printf '%s\n' "$expected" | LC_ALL=C sort)"
           {
@@ -129,9 +130,9 @@ jobs:
           shasum -a 256 out/Phase5/args.gn > "$DIAG_DIR/gn-args.sha256"
           gn gen out/Phase5 > "$DIAG_DIR/gn-stdout.log" 2> "$DIAG_DIR/gn-stderr.log"
           { xcrun clang --version; xcodebuild -version; gn --version; ninja --version; } > "$DIAG_DIR/build-metadata.txt" 2>&1
-          ninja -C out/Phase5 angle_end2end_tests > "$DIAG_DIR/build-stdout.log" 2> "$DIAG_DIR/build-stderr.log"
+          ninja -C out/Phase5 angle_metal_family1_test_stub > "$DIAG_DIR/build-stdout.log" 2> "$DIAG_DIR/build-stderr.log"
           set +e
-          out/Phase5/angle_end2end_tests --gtest_filter=DisplayMtlFamily1Test.* > "$DIAG_DIR/test-stdout.log" 2> "$DIAG_DIR/test-stderr.log"
+          out/Phase5/angle_metal_family1_test_stub --gtest_filter=DisplayMtlFamily1Test.* > "$DIAG_DIR/test-stdout.log" 2> "$DIAG_DIR/test-stderr.log"
           test_rc=$?
           set -e
           printf '%s\n' "$test_rc" > "$DIAG_DIR/test-result.txt"
