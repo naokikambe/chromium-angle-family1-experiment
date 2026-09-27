@@ -7,7 +7,7 @@ index bde26da..87656c4 100644
 +  angle_enable_metal_family1_test_stub = false
 +
 diff --git a/src/libANGLE/renderer/metal/BUILD.gn b/src/libANGLE/renderer/metal/BUILD.gn
-index 8e4c836..923d878 100644
+index 8e4c836..15cb0dd 100644
 --- a/src/libANGLE/renderer/metal/BUILD.gn
 +++ b/src/libANGLE/renderer/metal/BUILD.gn
 @@ -15,0 +16,2 @@ assert(angle_enable_metal)
@@ -17,11 +17,19 @@ index 8e4c836..923d878 100644
 +  if (angle_enable_metal_family1_test_stub) {
 +    defines += [ "ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB" ]
 +  }
+@@ -151,0 +157,7 @@ angle_source_set("angle_metal_backend") {
++  if (angle_enable_metal_family1_test_stub) {
++    sources += [
++      "DisplayMtlFamily1TestBridge.h",
++      "DisplayMtlFamily1TestBridge.mm",
++    ]
++  }
++
 diff --git a/src/libANGLE/renderer/metal/DisplayMtl.h b/src/libANGLE/renderer/metal/DisplayMtl.h
-index f5da632..6fe3c52 100644
+index f5da632..97d10e3 100644
 --- a/src/libANGLE/renderer/metal/DisplayMtl.h
 +++ b/src/libANGLE/renderer/metal/DisplayMtl.h
-@@ -45,0 +46,19 @@ class DisplayMtl : public DisplayImpl
+@@ -45,0 +46,20 @@ class DisplayMtl : public DisplayImpl
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +    enum class Family1TestStage
 +    {
@@ -39,19 +47,21 @@ index f5da632..6fe3c52 100644
 +    static void clearFamily1TestProfile();
 +    static void setFamily1TestForcedStopStage(Family1TestStage stage);
 +    static Family1TestStage getFamily1TestStage();
++    static DisplayMtl *getFamily1TestDisplay();
 +#endif
 +
 diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/metal/DisplayMtl.mm
-index 71f0c61..5bd3c7c 100644
+index 71f0c61..319f46a 100644
 --- a/src/libANGLE/renderer/metal/DisplayMtl.mm
 +++ b/src/libANGLE/renderer/metal/DisplayMtl.mm
-@@ -44,0 +45,50 @@
+@@ -44,0 +45,56 @@
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +namespace
 +{
 +struct Family1TestState
 +{
 +    bool enabled = false;
++    DisplayMtl *display = nullptr;
 +    DisplayMtl::Family1TestStage forcedStage = DisplayMtl::Family1TestStage::None;
 +    DisplayMtl::Family1TestStage observedStage = DisplayMtl::Family1TestStage::None;
 +};
@@ -94,22 +104,31 @@ index 71f0c61..5bd3c7c 100644
 +{
 +    return gFamily1TestState.observedStage;
 +}
++
++DisplayMtl *DisplayMtl::getFamily1TestDisplay()
++{
++    return gFamily1TestState.display;
++}
 +#endif
 +
-@@ -131,0 +182,10 @@ bool IsMetalDisplayAvailable()
+@@ -131,0 +188,3 @@ bool IsMetalDisplayAvailable()
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +            RecordFamily1TestStage(Family1TestStage::Device);
 +#endif
-+            return angle::Result::Stop;
-+        }
+@@ -134,0 +194,12 @@ bool IsMetalDisplayAvailable()
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++        gFamily1TestState.display = this;
++#endif
 +
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +        if (ShouldStopAtFamily1TestStage(Family1TestStage::Device))
 +        {
 +            RecordFamily1TestStage(Family1TestStage::Device);
-@@ -133,0 +194 @@ bool IsMetalDisplayAvailable()
++            return angle::Result::Stop;
++        }
 +#endif
-@@ -136,0 +198,7 @@ bool IsMetalDisplayAvailable()
++
+@@ -136,0 +208,7 @@ bool IsMetalDisplayAvailable()
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +        if (gFamily1TestState.enabled)
 +        {
@@ -117,7 +136,7 @@ index 71f0c61..5bd3c7c 100644
 +        }
 +#endif
 +
-@@ -140,0 +209,8 @@ bool IsMetalDisplayAvailable()
+@@ -140,0 +219,8 @@ bool IsMetalDisplayAvailable()
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +        if (ShouldStopAtFamily1TestStage(Family1TestStage::FeatureGate))
 +        {
@@ -126,15 +145,15 @@ index 71f0c61..5bd3c7c 100644
 +        }
 +#endif
 +
-@@ -143,0 +220,3 @@ bool IsMetalDisplayAvailable()
+@@ -143,0 +230,3 @@ bool IsMetalDisplayAvailable()
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +            RecordFamily1TestStage(Family1TestStage::FeatureGate);
 +#endif
-@@ -149,0 +229,3 @@ bool IsMetalDisplayAvailable()
+@@ -149,0 +239,3 @@ bool IsMetalDisplayAvailable()
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +            RecordFamily1TestStage(Family1TestStage::FeatureGate);
 +#endif
-@@ -155,2 +237,31 @@ bool IsMetalDisplayAvailable()
+@@ -155,2 +247,31 @@ bool IsMetalDisplayAvailable()
 -        ANGLE_TRY(mFormatTable.initialize(this));
 -        ANGLE_TRY(initializeShaderLibrary());
 +        if (!mCmdQueue)
@@ -168,7 +187,7 @@ index 71f0c61..5bd3c7c 100644
 +#endif
 +            return formatResult;
 +        }
-@@ -157,0 +269,23 @@ bool IsMetalDisplayAvailable()
+@@ -157,0 +279,23 @@ bool IsMetalDisplayAvailable()
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +        if (ShouldStopAtFamily1TestStage(Family1TestStage::ShaderLibrary))
 +        {
@@ -192,19 +211,24 @@ index 71f0c61..5bd3c7c 100644
 +            return angle::Result::Stop;
 +        }
 +#endif
-@@ -159,0 +294,4 @@ bool IsMetalDisplayAvailable()
+@@ -159,0 +304,4 @@ bool IsMetalDisplayAvailable()
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +        RecordFamily1TestStage(Family1TestStage::Success);
 +#endif
 +
-@@ -1364,0 +1503,6 @@ bool IsMetalDisplayAvailable()
+@@ -175,0 +324,4 @@ bool IsMetalDisplayAvailable()
++
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++    gFamily1TestState.display = nullptr;
++#endif
+@@ -1364,0 +1517,6 @@ bool IsMetalDisplayAvailable()
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +    if (gFamily1TestState.enabled)
 +    {
 +        return false;
 +    }
 +#endif
-@@ -1369,0 +1514,6 @@ bool IsMetalDisplayAvailable()
+@@ -1369,0 +1528,6 @@ bool IsMetalDisplayAvailable()
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +    if (gFamily1TestState.enabled)
 +    {
@@ -213,10 +237,10 @@ index 71f0c61..5bd3c7c 100644
 +#endif
 diff --git a/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm b/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm
 new file mode 100644
-index 0000000..00ef597
+index 0000000..990662f
 --- /dev/null
 +++ b/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm
-@@ -0,0 +1,124 @@
+@@ -0,0 +1,119 @@
 +// Copyright 2026 The ANGLE Project Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -230,23 +254,20 @@ index 0000000..00ef597
 +#include "EGL/egl.h"
 +#include "EGL/eglext.h"
 +#include "EGL/eglext_angle.h"
-+#include "libANGLE/Display.h"
-+#include "libANGLE/renderer/metal/DisplayMtl.h"
++#include "libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.h"
 +
-+namespace rx
-+{
 +namespace
 +{
 +class Family1ProfileScope final
 +{
 +  public:
-+    Family1ProfileScope() { DisplayMtl::enableFamily1TestProfile(); }
-+    ~Family1ProfileScope() { DisplayMtl::clearFamily1TestProfile(); }
++    Family1ProfileScope() { ANGLE_MetalFamily1TestEnableProfile(); }
++    ~Family1ProfileScope() { ANGLE_MetalFamily1TestClearProfile(); }
 +};
 +
-+EGLDisplay CreateMetalDisplay(bool disableFamily2Requirement, DisplayMtl::Family1TestStage stage)
++EGLDisplay CreateMetalDisplay(bool disableFamily2Requirement, ANGLE_MetalFamily1TestStage stage)
 +{
-+    DisplayMtl::setFamily1TestForcedStopStage(stage);
++    ANGLE_MetalFamily1TestSetForcedStopStage(stage);
 +    const char *disabledFeatures[] = {"requireGpuFamily2", nullptr};
 +    EGLAttrib attributes[] = {
 +        EGL_PLATFORM_ANGLE_TYPE_ANGLE,
@@ -271,38 +292,38 @@ index 0000000..00ef597
 +    return display;
 +}
 +
-+void ExpectForcedStop(bool disableFamily2Requirement, DisplayMtl::Family1TestStage stage)
++void ExpectForcedStop(bool disableFamily2Requirement, ANGLE_MetalFamily1TestStage stage)
 +{
 +    Family1ProfileScope profile;
 +    EGLDisplay display = CreateMetalDisplay(disableFamily2Requirement, stage);
 +    ASSERT_NE(display, EGL_NO_DISPLAY);
 +    EXPECT_EQ(eglInitialize(display, nullptr, nullptr), static_cast<EGLBoolean>(EGL_FALSE));
 +    EXPECT_EQ(eglGetError(), EGL_NOT_INITIALIZED);
-+    EXPECT_EQ(DisplayMtl::getFamily1TestStage(), stage);
++    EXPECT_EQ(ANGLE_MetalFamily1TestGetStage(), stage);
 +    eglTerminate(display);
 +}
 +}  // namespace
 +
 +TEST(DisplayMtlFamily1Test, DeviceStage)
 +{
-+    ExpectForcedStop(false, DisplayMtl::Family1TestStage::Device);
++    ExpectForcedStop(false, ANGLE_METAL_FAMILY1_TEST_STAGE_DEVICE);
 +}
 +
 +TEST(DisplayMtlFamily1Test, FeatureGateStage)
 +{
-+    ExpectForcedStop(false, DisplayMtl::Family1TestStage::FeatureGate);
++    ExpectForcedStop(false, ANGLE_METAL_FAMILY1_TEST_STAGE_FEATURE_GATE);
 +}
 +
 +TEST(DisplayMtlFamily1Test, LaterInitializationStages)
 +{
-+    constexpr DisplayMtl::Family1TestStage kStages[] = {
-+        DisplayMtl::Family1TestStage::CommandQueue,
-+        DisplayMtl::Family1TestStage::FormatTable,
-+        DisplayMtl::Family1TestStage::ShaderLibrary,
-+        DisplayMtl::Family1TestStage::RenderUtils,
++    constexpr ANGLE_MetalFamily1TestStage kStages[] = {
++        ANGLE_METAL_FAMILY1_TEST_STAGE_COMMAND_QUEUE,
++        ANGLE_METAL_FAMILY1_TEST_STAGE_FORMAT_TABLE,
++        ANGLE_METAL_FAMILY1_TEST_STAGE_SHADER_LIBRARY,
++        ANGLE_METAL_FAMILY1_TEST_STAGE_RENDER_UTILS,
 +    };
 +
-+    for (DisplayMtl::Family1TestStage stage : kStages)
++    for (ANGLE_MetalFamily1TestStage stage : kStages)
 +    {
 +        ExpectForcedStop(true, stage);
 +    }
@@ -311,36 +332,177 @@ index 0000000..00ef597
 +TEST(DisplayMtlFamily1Test, SuccessCapabilities)
 +{
 +    Family1ProfileScope profile;
-+    EGLDisplay display = CreateMetalDisplay(true, DisplayMtl::Family1TestStage::None);
++    EGLDisplay display = CreateMetalDisplay(true, ANGLE_METAL_FAMILY1_TEST_STAGE_NONE);
 +    ASSERT_NE(display, EGL_NO_DISPLAY);
 +    ASSERT_EQ(eglInitialize(display, nullptr, nullptr), static_cast<EGLBoolean>(EGL_TRUE));
-+    EXPECT_EQ(DisplayMtl::getFamily1TestStage(), DisplayMtl::Family1TestStage::Success);
-+
-+    auto *impl = static_cast<egl::Display *>(display)->getImplementation();
-+    auto *mtl  = static_cast<DisplayMtl *>(impl);
-+    const egl::DisplayExtensions &extensions = static_cast<egl::Display *>(display)->getExtensions();
-+    EXPECT_EQ(mtl->getMaxSupportedESVersion(), gl::Version(3, 0));
-+    EXPECT_EQ(mtl->getNativeCaps().maxDrawBuffers, 8);
-+    EXPECT_EQ(mtl->getNativeCaps().maxColorAttachments, 8);
-+    EXPECT_TRUE(extensions.createContextRobustness);
-+    EXPECT_TRUE(extensions.iosurfaceClientBuffer);
-+    EXPECT_TRUE(extensions.surfacelessContext);
-+    EXPECT_TRUE(extensions.noConfigContext);
-+    EXPECT_TRUE(extensions.displayTextureShareGroup);
-+    EXPECT_TRUE(extensions.displaySemaphoreShareGroup);
-+    EXPECT_TRUE(extensions.mtlTextureClientBuffer);
-+    EXPECT_TRUE(extensions.waitUntilWorkScheduled);
-+    EXPECT_TRUE(extensions.fenceSync);
-+    EXPECT_TRUE(extensions.waitSync);
-+    EXPECT_TRUE(extensions.robustResourceInitializationANGLE);
-+    EXPECT_TRUE(extensions.image);
-+    EXPECT_TRUE(extensions.imageBase);
-+    EXPECT_TRUE(extensions.metalCreateContextOwnershipIdentityANGLE);
-+    EXPECT_TRUE(extensions.mtlSyncSharedEventANGLE);
-+    EXPECT_TRUE(extensions.mtlSyncCommandsScheduledANGLE);
++    ANGLE_MetalFamily1TestSnapshot snapshot = ANGLE_MetalFamily1TestGetSnapshot();
++    EXPECT_EQ(snapshot.stage, ANGLE_METAL_FAMILY1_TEST_STAGE_SUCCESS);
++    EXPECT_EQ(snapshot.maxESMajor, 3);
++    EXPECT_EQ(snapshot.maxESMinor, 0);
++    EXPECT_EQ(snapshot.maxDrawBuffers, 8);
++    EXPECT_EQ(snapshot.maxColorAttachments, 8);
++    EXPECT_TRUE(snapshot.createContextRobustness);
++    EXPECT_TRUE(snapshot.iosurfaceClientBuffer);
++    EXPECT_TRUE(snapshot.surfacelessContext);
++    EXPECT_TRUE(snapshot.noConfigContext);
++    EXPECT_TRUE(snapshot.displayTextureShareGroup);
++    EXPECT_TRUE(snapshot.displaySemaphoreShareGroup);
++    EXPECT_TRUE(snapshot.mtlTextureClientBuffer);
++    EXPECT_TRUE(snapshot.waitUntilWorkScheduled);
++    EXPECT_TRUE(snapshot.fenceSync);
++    EXPECT_TRUE(snapshot.waitSync);
++    EXPECT_TRUE(snapshot.robustResourceInitializationANGLE);
++    EXPECT_TRUE(snapshot.image);
++    EXPECT_TRUE(snapshot.imageBase);
++    EXPECT_TRUE(snapshot.metalCreateContextOwnershipIdentityANGLE);
++    EXPECT_TRUE(snapshot.mtlSyncSharedEventANGLE);
++    EXPECT_TRUE(snapshot.mtlSyncCommandsScheduledANGLE);
 +    eglTerminate(display);
 +}
-+}  // namespace rx
++}  // namespace
+diff --git a/src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.h b/src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.h
+new file mode 100644
+index 0000000..be0abd9
+--- /dev/null
++++ b/src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.h
+@@ -0,0 +1,59 @@
++// Copyright 2026 The ANGLE Project Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#ifndef LIBANGLE_RENDERER_METAL_DISPLAYMTLFAMILY1TESTBRIDGE_H_
++#define LIBANGLE_RENDERER_METAL_DISPLAYMTLFAMILY1TESTBRIDGE_H_
++
++#include <stdint.h>
++
++#include "export.h"
++
++typedef enum ANGLE_MetalFamily1TestStage
++{
++    ANGLE_METAL_FAMILY1_TEST_STAGE_NONE = 0,
++    ANGLE_METAL_FAMILY1_TEST_STAGE_DEVICE,
++    ANGLE_METAL_FAMILY1_TEST_STAGE_FEATURE_GATE,
++    ANGLE_METAL_FAMILY1_TEST_STAGE_COMMAND_QUEUE,
++    ANGLE_METAL_FAMILY1_TEST_STAGE_FORMAT_TABLE,
++    ANGLE_METAL_FAMILY1_TEST_STAGE_SHADER_LIBRARY,
++    ANGLE_METAL_FAMILY1_TEST_STAGE_RENDER_UTILS,
++    ANGLE_METAL_FAMILY1_TEST_STAGE_SUCCESS,
++} ANGLE_MetalFamily1TestStage;
++
++typedef struct ANGLE_MetalFamily1TestSnapshot
++{
++    int stage;
++    int maxESMajor;
++    int maxESMinor;
++    int maxDrawBuffers;
++    int maxColorAttachments;
++    uint8_t createContextRobustness;
++    uint8_t iosurfaceClientBuffer;
++    uint8_t surfacelessContext;
++    uint8_t noConfigContext;
++    uint8_t displayTextureShareGroup;
++    uint8_t displaySemaphoreShareGroup;
++    uint8_t mtlTextureClientBuffer;
++    uint8_t waitUntilWorkScheduled;
++    uint8_t fenceSync;
++    uint8_t waitSync;
++    uint8_t robustResourceInitializationANGLE;
++    uint8_t image;
++    uint8_t imageBase;
++    uint8_t metalCreateContextOwnershipIdentityANGLE;
++    uint8_t mtlSyncSharedEventANGLE;
++    uint8_t mtlSyncCommandsScheduledANGLE;
++} ANGLE_MetalFamily1TestSnapshot;
++
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++extern "C" {
++ANGLE_EXPORT void ANGLE_MetalFamily1TestEnableProfile();
++ANGLE_EXPORT void ANGLE_MetalFamily1TestClearProfile();
++ANGLE_EXPORT void ANGLE_MetalFamily1TestSetForcedStopStage(ANGLE_MetalFamily1TestStage stage);
++ANGLE_EXPORT ANGLE_MetalFamily1TestStage ANGLE_MetalFamily1TestGetStage();
++ANGLE_EXPORT ANGLE_MetalFamily1TestSnapshot ANGLE_MetalFamily1TestGetSnapshot();
++}
++#endif
++
++#endif  // LIBANGLE_RENDERER_METAL_DISPLAYMTLFAMILY1TESTBRIDGE_H_
+diff --git a/src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.mm b/src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.mm
+new file mode 100644
+index 0000000..9cdc089
+--- /dev/null
++++ b/src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.mm
+@@ -0,0 +1,72 @@
++// Copyright 2026 The ANGLE Project Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#include "libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.h"
++
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++#    include "libANGLE/Display.h"
++#    include "libANGLE/renderer/metal/DisplayMtl.h"
++
++extern "C" {
++
++void ANGLE_MetalFamily1TestEnableProfile()
++{
++    rx::DisplayMtl::enableFamily1TestProfile();
++}
++
++void ANGLE_MetalFamily1TestClearProfile()
++{
++    rx::DisplayMtl::clearFamily1TestProfile();
++}
++
++void ANGLE_MetalFamily1TestSetForcedStopStage(ANGLE_MetalFamily1TestStage stage)
++{
++    rx::DisplayMtl::setFamily1TestForcedStopStage(
++        static_cast<rx::DisplayMtl::Family1TestStage>(stage));
++}
++
++ANGLE_MetalFamily1TestStage ANGLE_MetalFamily1TestGetStage()
++{
++    return static_cast<ANGLE_MetalFamily1TestStage>(rx::DisplayMtl::getFamily1TestStage());
++}
++
++ANGLE_MetalFamily1TestSnapshot ANGLE_MetalFamily1TestGetSnapshot()
++{
++    ANGLE_MetalFamily1TestSnapshot snapshot = {};
++    snapshot.stage = static_cast<int>(rx::DisplayMtl::getFamily1TestStage());
++    rx::DisplayMtl *metalDisplay = rx::DisplayMtl::getFamily1TestDisplay();
++    if (metalDisplay == nullptr)
++    {
++        return snapshot;
++    }
++
++    gl::Version maxVersion = metalDisplay->getMaxSupportedESVersion();
++    snapshot.maxESMajor = maxVersion.major;
++    snapshot.maxESMinor = maxVersion.minor;
++    const gl::Caps &caps = metalDisplay->getNativeCaps();
++    snapshot.maxDrawBuffers = caps.maxDrawBuffers;
++    snapshot.maxColorAttachments = caps.maxColorAttachments;
++
++    const egl::DisplayExtensions &extensions = metalDisplay->getDisplay()->getExtensions();
++    snapshot.createContextRobustness = extensions.createContextRobustness;
++    snapshot.iosurfaceClientBuffer = extensions.iosurfaceClientBuffer;
++    snapshot.surfacelessContext = extensions.surfacelessContext;
++    snapshot.noConfigContext = extensions.noConfigContext;
++    snapshot.displayTextureShareGroup = extensions.displayTextureShareGroup;
++    snapshot.displaySemaphoreShareGroup = extensions.displaySemaphoreShareGroup;
++    snapshot.mtlTextureClientBuffer = extensions.mtlTextureClientBuffer;
++    snapshot.waitUntilWorkScheduled = extensions.waitUntilWorkScheduled;
++    snapshot.fenceSync = extensions.fenceSync;
++    snapshot.waitSync = extensions.waitSync;
++    snapshot.robustResourceInitializationANGLE = extensions.robustResourceInitializationANGLE;
++    snapshot.image = extensions.image;
++    snapshot.imageBase = extensions.imageBase;
++    snapshot.metalCreateContextOwnershipIdentityANGLE =
++        extensions.metalCreateContextOwnershipIdentityANGLE;
++    snapshot.mtlSyncSharedEventANGLE = extensions.mtlSyncSharedEventANGLE;
++    snapshot.mtlSyncCommandsScheduledANGLE = extensions.mtlSyncCommandsScheduledANGLE;
++    return snapshot;
++}
++}
++#endif
 diff --git a/src/tests/BUILD.gn b/src/tests/BUILD.gn
 index 79f77bd..0f0f760 100644
 --- a/src/tests/BUILD.gn

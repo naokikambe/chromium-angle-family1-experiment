@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = 8f881cad83799bf13dfdb86aec34e1898c077d4a72e2aa2e31b94f6776279057
+          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = 679103dd504c14bbb6034b72b7eaf5b274e32e88cf19608bc2c63d9173f57a6a
           git -C "$ANGLE_ROOT" apply --unidiff-zero --check "$GITHUB_WORKSPACE/$PATCH_PATH"
           git -C "$ANGLE_ROOT" apply --unidiff-zero "$GITHUB_WORKSPACE/$PATCH_PATH"
           expected=$(printf '%s\n' \
@@ -93,6 +93,8 @@ jobs:
             src/libANGLE/renderer/metal/DisplayMtl.h \
             src/libANGLE/renderer/metal/DisplayMtl.mm \
             src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm \
+            src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.h \
+            src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.mm \
             src/tests/BUILD.gn \
             src/tests/DisplayMtlFamily1TestMain.cpp)
           actual=$(git -C "$ANGLE_ROOT" status --short | sed 's/^.. //' | LC_ALL=C sort)
