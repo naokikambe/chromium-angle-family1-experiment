@@ -165,6 +165,8 @@ CI run `36349844094`では、このpreflight自体がGN生成時に`defines +=`�
 
 CI run `36351199352`ではBridge objectの5 symbolsは`T`だったが、libEGL dylibのexportには存在しなかった。`ANGLE_EXPORT`が固定revisionの内部configで空定義にされ得るため、stub専用header/sourceでは明示的なdefault-visibility macroを宣言・定義へ付与した。通常buildではheader/source自体がtargetへ入らず、通常export setは変更しない。
 
+その後のCI run `36353179445`でもlibEGLのexportが空だったため、macOSのlibEGL targetにstub flag時だけ`-Wl,-exported_symbol,_ANGLE_MetalFamily1Test*`を付与する。Bridge objectの`T`定義、libEGLのexport、最終test targetのlinkを段階的に検証し、通常buildのexport setは広げない。
+
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 
 ## 実機へ進む条件
