@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = 1c72f38d833e6934e0971af3c3cbdd45e4ed83e2b8a773d7b0905aa964585699
+          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = 1fe6d65ef49dfeaa90f30ddf57b6594172bc0d0730ab56ff995dfd93b456c53a
           git -C "$ANGLE_ROOT" apply --unidiff-zero --check "$GITHUB_WORKSPACE/$PATCH_PATH"
           git -C "$ANGLE_ROOT" apply --unidiff-zero "$GITHUB_WORKSPACE/$PATCH_PATH"
           expected=$(printf '%s\n' \
@@ -131,6 +131,29 @@ jobs:
           EOF
           shasum -a 256 out/Phase5/args.gn > "$DIAG_DIR/gn-args.sha256"
           gn gen out/Phase5 > "$DIAG_DIR/gn-stdout.log" 2> "$DIAG_DIR/gn-stderr.log"
+          {
+            printf '%s\n' '--- stub target sources ---'
+            gn desc out/Phase5 //src/tests:angle_metal_family1_test_stub sources
+            printf '%s\n' '--- stub target defines ---'
+            gn desc out/Phase5 //src/tests:angle_metal_family1_test_stub defines
+            printf '%s\n' '--- metal backend sources ---'
+            gn desc out/Phase5 //src/libANGLE/renderer/metal:angle_metal_backend sources
+          } > "$DIAG_DIR/bridge-gn-desc.log"
+          grep -F 'DisplayMtlFamily1TestBridge.mm' "$DIAG_DIR/bridge-gn-desc.log"
+          grep -F 'ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB' "$DIAG_DIR/bridge-gn-desc.log"
+          ! sed -n '/--- metal backend sources ---/,$p' "$DIAG_DIR/bridge-gn-desc.log" | grep -F 'DisplayMtlFamily1TestBridge.mm'
+          bridge_object=obj/src/tests/angle_metal_family1_test_stub/DisplayMtlFamily1TestBridge.o
+          ninja -C out/Phase5 "$bridge_object" > "$DIAG_DIR/bridge-build.log" 2>&1
+          nm -gU "out/Phase5/$bridge_object" > "$DIAG_DIR/bridge-nm.log"
+          for symbol in \
+            ANGLE_MetalFamily1TestEnableProfile \
+            ANGLE_MetalFamily1TestClearProfile \
+            ANGLE_MetalFamily1TestSetForcedStopStage \
+            ANGLE_MetalFamily1TestGetStage \
+            ANGLE_MetalFamily1TestGetSnapshot; do
+            grep -E "[[:space:]][Tt][[:space:]]+_?${symbol}$" "$DIAG_DIR/bridge-nm.log"
+          done
+          printf 'BRIDGE_OBJECT=%s\n' "$bridge_object" > "$DIAG_DIR/bridge-symbol-status.txt"
           { xcrun clang --version; xcodebuild -version; gn --version; ninja --version; } > "$DIAG_DIR/build-metadata.txt" 2>&1
           ninja -C out/Phase5 angle_metal_family1_test_stub > "$DIAG_DIR/build-stdout.log" 2> "$DIAG_DIR/build-stderr.log"
           set +e

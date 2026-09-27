@@ -155,7 +155,9 @@ CI run `36297447447`では1411 objectsのcompile後に、`libEGL`が内部C++ sy
 
 CI run `36304800477`では、`DisplayMtlFamily1Test.mm`の匿名namespace閉じ括弧が重複してbuildが停止し、testは実行されなかった。patchではglobal `TEST`宣言前のnamespace閉じ括弧を1つだけ残すよう対象行を修正し、静的監査でこの構造を確認する。新規source fileのhunkから1行を削除するため、hunk行数も`+1,119`から`+1,118`へ更新する。これを更新しないpatchは`git apply`でcorruptと判定されるため、固定revisionに対する`git apply --check`をcommit前検証に含める。
 
-CI run `36314480823`ではbridgeのC ABI symbolsが未定義のままlinkに失敗し、testは実行されなかった。原因はbridge sourceにstub defineがowning targetへ適用されていなかったことであり、patchでは`angle_metal_backend`自身へ同じcompile-time defineを追加してbridge definitionsを有効化する。通常buildでは引き続き無効である。固定revisionへのpatchは`git apply --unidiff-zero --check`で適用可能であることを確認する。
+CI run `36314480823`ではbridgeのC ABI symbolsが未定義のままlinkに失敗し、testは実行されなかった。続く確認でbridge source自体が`libEGL`のlink graphに入っていないことが判明したため、専用`angle_metal_family1_test_stub` targetへbridge sourceとtest-only defineを直接追加し、`angle_metal_backend`側の重複source/defineを削除する。これによりstub buildだけがbridge definitionsをlinkし、通常buildでは引き続き無効である。固定revisionへのpatchは`git apply --unidiff-zero --check`で適用可能であることを確認する。
+
+専用targetの本build前に、workflowは`gn desc`でstub targetのBridge source/defineとMetal backendからのBridge source不在を確認し、Bridge objectだけを先にbuildする。`nm`で5つのC ABI symbolsがdefined (`T`/`t`) であることをassertし、出力をdiagnosticsへ保存する。このpreflightはGN graphとBridge objectのtopologyを保証するだけで、最終的な専用targetのcompile/link統合を代替しない。
 
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 
