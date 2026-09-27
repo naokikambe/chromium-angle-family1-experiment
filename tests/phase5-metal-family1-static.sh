@@ -7,12 +7,13 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 test "$(shasum -a 256 "$patch" | awk '{print $1}')" = \
-  c8303c677ef310de20212a0ac5ac9057f71d4954f32f5c2d6b5497a156417df3
+  559ae200d9d9e93dd045f56e58c68e3280b7913a5494f43afdc1664e8f6d4d36
 grep -F 'angle_enable_metal_family1_test_stub = false' "$patch" >/dev/null
 grep -F 'ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB' "$patch" >/dev/null
 grep -F 'thread_local Family1TestState' "$patch" >/dev/null
 grep -F 'if (!mCmdQueue)' "$patch" >/dev/null
 grep -F 'DisplayMtlFamily1Test' "$patch" >/dev/null
+grep -F 'import("../../gni/angle.gni")' "$patch" >/dev/null
 ! grep -Ei 'getenv|command.line|--use-angle|--use-gl' "$patch" >/dev/null
 
 grep -F 'workflow_dispatch:' "$workflow" >/dev/null
@@ -28,7 +29,7 @@ grep -F 'contents: read' "$workflow" >/dev/null
 grep -F 'DEPOT_TOOLS_UPDATE: "0"' "$workflow" >/dev/null
 grep -F 'export PATH="$DEPOT_TOOLS_ROOT:$PATH"' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub.patch' "$workflow" >/dev/null
-grep -F 'c8303c677ef310de20212a0ac5ac9057f71d4954f32f5c2d6b5497a156417df3' "$workflow" >/dev/null
+grep -F '559ae200d9d9e93dd045f56e58c68e3280b7913a5494f43afdc1664e8f6d4d36' "$workflow" >/dev/null
 grep -F 'apply --unidiff-zero --check' "$workflow" >/dev/null
 grep -F '1ff8799c596d4fc9acea28343610b1f33650a6fa' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub-v1' "$workflow" >/dev/null
