@@ -427,7 +427,7 @@ index 0000000..be0abd9
 +#endif  // LIBANGLE_RENDERER_METAL_DISPLAYMTLFAMILY1TESTBRIDGE_H_
 diff --git a/src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.mm b/src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.mm
 new file mode 100644
-index 0000000..9cdc089
+index 0000000..7f365fe
 --- /dev/null
 +++ b/src/libANGLE/renderer/metal/DisplayMtlFamily1TestBridge.mm
 @@ -0,0 +1,72 @@
@@ -475,8 +475,8 @@ index 0000000..9cdc089
 +    }
 +
 +    gl::Version maxVersion = metalDisplay->getMaxSupportedESVersion();
-+    snapshot.maxESMajor = maxVersion.major;
-+    snapshot.maxESMinor = maxVersion.minor;
++    snapshot.maxESMajor = maxVersion.getMajor();
++    snapshot.maxESMinor = maxVersion.getMinor();
 +    const gl::Caps &caps = metalDisplay->getNativeCaps();
 +    snapshot.maxDrawBuffers = caps.maxDrawBuffers;
 +    snapshot.maxColorAttachments = caps.maxColorAttachments;
