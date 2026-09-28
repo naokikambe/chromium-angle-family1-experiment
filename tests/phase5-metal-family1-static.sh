@@ -79,6 +79,8 @@ grep -F 'libglesv2-nm.log' "$workflow" >/dev/null
 grep -F 'libglesv2-symbol-status.txt' "$workflow" >/dev/null
 grep -F 'ANGLE_MetalFamily1TestGetSnapshot' "$workflow" >/dev/null
 grep -F -- '--gtest_filter=DisplayMtlFamily1Test.*' "$workflow" >/dev/null
+grep -F 'lldb --batch' "$workflow" >/dev/null
+grep -F 'test-lldb-backtrace.log' "$workflow" >/dev/null
 grep -F 'test-result.txt' "$workflow" >/dev/null
 grep -F 'manifest.sha256' "$workflow" >/dev/null
 grep -F 'artifact.sha256' "$workflow" >/dev/null

@@ -194,6 +194,12 @@ jobs:
           set +e
           (cd out/Phase5 && ./angle_metal_family1_test_stub --gtest_filter=DisplayMtlFamily1Test.*) > "$DIAG_DIR/test-stdout.log" 2> "$DIAG_DIR/test-stderr.log"
           test_rc=$?
+          if [ "$test_rc" -ne 0 ]; then
+            (cd out/Phase5 && lldb --batch \
+              -o run -o bt -o quit -- \
+              ./angle_metal_family1_test_stub --gtest_filter=DisplayMtlFamily1Test.*) \
+              > "$DIAG_DIR/test-lldb-backtrace.log" 2>&1 || true
+          fi
           set -e
           printf '%s\n' "$test_rc" > "$DIAG_DIR/test-result.txt"
           test "$test_rc" -eq 0
