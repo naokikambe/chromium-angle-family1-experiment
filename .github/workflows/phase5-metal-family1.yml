@@ -7,6 +7,26 @@ on:
         description: Exact 40-character ANGLE revision for the pinned Phase 5 stub source
         required: true
         type: string
+      run_stub:
+        description: Run the existing test-only stub job
+        required: false
+        default: true
+        type: boolean
+      run_runtime:
+        description: Run the Phase 5 runtime artifact reusable workflow
+        required: false
+        default: false
+        type: boolean
+      runtime_chrome_version:
+        description: Chrome release version whose DEPS ANGLE pin must match for runtime
+        required: false
+        default: 154.0.8037.57
+        type: string
+      runtime_patch_sha256:
+        description: SHA-256 of the checked-in Phase 5 runtime patch
+        required: false
+        default: 178746470e54ee0d967e93cb2c56206a08149e2bfb5476280a02172e1b6bc15f
+        type: string
 
 concurrency:
   group: phase5-metal-family1-${{ github.ref }}
@@ -17,6 +37,7 @@ permissions:
 
 jobs:
   metal-family1-test-stub:
+    if: inputs.run_stub
     runs-on: macos-15-intel
     timeout-minutes: 60
     env:
@@ -243,3 +264,13 @@ jobs:
           path: ${{ runner.temp }}/phase5-metal-family1-test-stub
           if-no-files-found: error
           retention-days: 14
+
+  metal-family1-runtime:
+    if: inputs.run_runtime
+    uses: ./.github/workflows/phase5-metal-family1-runtime.yml
+    with:
+      angle_revision: ${{ inputs.angle_revision }}
+      chrome_version: ${{ inputs.runtime_chrome_version }}
+      runtime_patch_sha256: ${{ inputs.runtime_patch_sha256 }}
+    permissions:
+      contents: read
