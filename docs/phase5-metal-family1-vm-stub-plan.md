@@ -178,6 +178,7 @@ CI run `36389469500`ではGN preflight通過後、libEGL compileで既存のincl
 
 CI run `36393176516`ではBridge objectがlibGLESv2に含まれる一方、libEGLへexport flagsを付けたためlink時にsymbolsがundefinedとなった。最終設計ではstub+mac専用export configをbase `angle_libGLESv2` templateへ適用し、専用test targetはlibEGLとlibGLESv2の双方へlinkする。preflightもlibGLESv2 configs/output/nmを検証し、libEGL exportとは主張しない。
 CI run `36397819064`ではpreflight後の専用target buildが無関係な`libGLESv1_CM.dylib`のlinkまで誘発し、GL symbolsのundefinedで停止した。原因は専用targetの広い`data_deps = [ "$angle_root:angle" ]`である。data dependencyをlibEGL/libGLESv2に限定し、必要なruntime dylibだけを供給する。これはlinker failureを抑制する変更ではない。
+CI run `36402862552`では専用targetのbuild（95/95）は成功したが、テスト起動時に`./libEGL.dylib`を解決できず停止した。dylibの相対install nameに合わせ、workflowは`out/Phase5`をcwdとして`./angle_metal_family1_test_stub`を起動する。DYLD環境変数やlinker検査の緩和は行わない。
 
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 
