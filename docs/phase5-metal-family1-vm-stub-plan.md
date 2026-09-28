@@ -180,6 +180,7 @@ CI run `36393176516`ではBridge objectがlibGLESv2に含まれる一方、libEG
 CI run `36397819064`ではpreflight後の専用target buildが無関係な`libGLESv1_CM.dylib`のlinkまで誘発し、GL symbolsのundefinedで停止した。原因は専用targetの広い`data_deps = [ "$angle_root:angle" ]`である。data dependencyをlibEGL/libGLESv2に限定し、必要なruntime dylibだけを供給する。これはlinker failureを抑制する変更ではない。
 CI run `36402862552`では専用targetのbuild（95/95）は成功したが、テスト起動時に`./libEGL.dylib`を解決できず停止した。dylibの相対install nameに合わせ、workflowは`out/Phase5`をcwdとして`./angle_metal_family1_test_stub`を起動する。DYLD環境変数やlinker検査の緩和は行わない。
 CI run `36407337941`では最初のDeviceStageの実行中にSIGSEGV（exit 139）となった。artifactでは失敗した`eglInitialize`後の再`eglTerminate`まで進んだかを区別できないため、初期化失敗ケースでは`eglTerminate`を呼ばないようにし、固定revisionの既存EGLテストと同じ後処理境界に合わせる。また、feature override配列を関数ローカルからstatic storageへ移し、`eglInitialize`までポインタ寿命を保証する。いずれもtest-only harnessの修正であり、本番経路は変更しない。
+CI run `36412678542`でもDeviceStageの`[ RUN ]`直後にSIGSEGV（exit 139）が再現した。固定revisionの`CommandQueue::reset()`は`finishAllCommands()`を経由するため、未取得・部分初期化状態での`terminate()`から無条件に呼ばれないよう、production-safeに`mCmdQueue.valid()`を確認してからresetするguardを追加した。`WrappedObject`のnil release自体は安全だが、CommandQueueの部分初期化解放経路を明示的に閉じる。これは通常buildにも適用されるnil/valid安全修正で、stub専用挙動ではない。
 
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 

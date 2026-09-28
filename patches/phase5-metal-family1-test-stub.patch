@@ -271,6 +271,20 @@ index 71f0c61..319f46a 100644
 +        return macFamily == 1;
 +    }
 +#endif
+@@ -312,9 +312,12 @@ void DisplayMtl::terminate()
+ void DisplayMtl::terminate()
+ {
+     mUtils = nullptr;
+-    mCmdQueue.reset();
++    if (mCmdQueue.valid())
++    {
++        mCmdQueue.reset();
++    }
+     mDefaultShaders      = nil;
+     mMetalDevice         = nil;
+     mSharedEventListener = nil;
+     mCapsInitialized     = false;
+
 diff --git a/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm b/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm
 new file mode 100644
 index 0000000..990662f
