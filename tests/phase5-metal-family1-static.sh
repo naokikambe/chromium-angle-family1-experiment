@@ -52,6 +52,7 @@ grep -F 'angle-metal-family1-test-stub-' "$workflow" >/dev/null
 grep -F 'angle_enable_metal_family1_test_stub = true' "$workflow" >/dev/null
 grep -F 'angle_build_tests = true' "$workflow" >/dev/null
 grep -F 'ninja -C out/Phase5 angle_metal_family1_test_stub' "$workflow" >/dev/null
+grep -F '(cd out/Phase5 && ./angle_metal_family1_test_stub --gtest_filter=DisplayMtlFamily1Test.*)' "$workflow" >/dev/null
 grep -F 'gn desc out/Phase5 //src/tests:angle_metal_family1_test_stub sources' "$workflow" >/dev/null
 grep -F 'gn desc out/Phase5 //src/libANGLE/renderer/metal:angle_metal_backend sources' "$workflow" >/dev/null
 grep -F 'gn desc out/Phase5 //src/libANGLE/renderer/metal:angle_metal_backend defines' "$workflow" >/dev/null

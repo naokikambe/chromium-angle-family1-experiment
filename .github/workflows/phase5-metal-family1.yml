@@ -192,7 +192,7 @@ jobs:
           { xcrun clang --version; xcodebuild -version; gn --version; ninja --version; } > "$DIAG_DIR/build-metadata.txt" 2>&1
           ninja -C out/Phase5 angle_metal_family1_test_stub > "$DIAG_DIR/build-stdout.log" 2> "$DIAG_DIR/build-stderr.log"
           set +e
-          out/Phase5/angle_metal_family1_test_stub --gtest_filter=DisplayMtlFamily1Test.* > "$DIAG_DIR/test-stdout.log" 2> "$DIAG_DIR/test-stderr.log"
+          (cd out/Phase5 && ./angle_metal_family1_test_stub --gtest_filter=DisplayMtlFamily1Test.*) > "$DIAG_DIR/test-stdout.log" 2> "$DIAG_DIR/test-stderr.log"
           test_rc=$?
           set -e
           printf '%s\n' "$test_rc" > "$DIAG_DIR/test-result.txt"
