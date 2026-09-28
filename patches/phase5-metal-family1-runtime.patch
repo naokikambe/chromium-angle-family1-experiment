@@ -1,0 +1,20 @@
+diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/metal/DisplayMtl.mm
+--- a/src/libANGLE/renderer/metal/DisplayMtl.mm
++++ b/src/libANGLE/renderer/metal/DisplayMtl.mm
+@@ -155,2 +155,8 @@ bool IsMetalDisplayAvailable()
+-        ANGLE_TRY(mFormatTable.initialize(this));
+-        ANGLE_TRY(initializeShaderLibrary());
+        if (!mCmdQueue)
+        {
+            return angle::Result::Stop;
+        }
+
+        ANGLE_TRY(mFormatTable.initialize(this));
+        ANGLE_TRY(initializeShaderLibrary());
++        if (!mCmdQueue)
++        {
++            return angle::Result::Stop;
++        }
++
++        ANGLE_TRY(mFormatTable.initialize(this));
++        ANGLE_TRY(initializeShaderLibrary());
