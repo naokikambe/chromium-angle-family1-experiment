@@ -173,6 +173,9 @@ CI run `36381398889`ではwrapper templateがinvocationの`configs`をnested `li
 
 Phase 5 workflowでは、patch適用・source-state記録後に独立した`GN configuration preflight`を実行する。ここで`args.gn`を生成して`gn gen`を一度だけ行い、stub target、Metal backend、libEGL configの`gn desc`結果を診断へ保存・検証する。後続のBuild and testは同じ`out/Phase5`を再利用し、`gn gen`を再実行しない。これによりGN scope/template forwardingの失敗をcompile前に検出する。
 
+CI run `36389469500`ではGN preflight通過後、libEGL compileで既存のinclude configが失われ`common/system_utils.h`を見つけられなかった。原因はwrapper transferの`configs = invoker.configs`がnested targetの既定configsを上書きしたためである。patchではnested target内で`angle_common_configs + invoker.configs`を使い、既存設定を保持したままstub export configを追加する。
+追加のartifact分析では`//:libEGL configs`から`//:internal_config`も欠落していたため、transferを`configs = angle_common_configs + invoker.configs`へ固定した。GN preflightはlibEGL configsに`//:internal_config`が存在することもassertする。
+
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 
 ## 実機へ進む条件
