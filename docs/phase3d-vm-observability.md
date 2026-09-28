@@ -1,6 +1,6 @@
 # Phase 3D: macOS VM observability boundary
 
-更新日: 2026-09-26
+更新日: 2026-09-29
 
 Phase 3D is a GitHub-hosted macOS Intel observation stage.  It is deliberately
 separate from the user-owned-device Phase 3C and Case B/C procedures.  It does
@@ -36,11 +36,13 @@ artifactと同一物とは扱わない。3B diagnostics archiveのSHA-256は
 それぞれのfixture exit statusは`0`である。
 
 この成功runは実機作業、署名、ローカルChrome起動、artifact取得・置換を
-承認するものではない。Phase 5 implementationは、Phase 5 planに定めた
-3B/3C/3D run、manifest SHA-256、artifact名、ANGLE revision等の詳細な
-admission recordはソース実装開始に必要な範囲で完了している。ただし、
-この記録は新規Actions dispatch、artifact download、署名、Chrome起動、
-実機操作を承認するものではない。
+承認するものではない。Phase 5 implementationと専用stub CIは、Phase 5
+planに定めた3B/3C/3D run、manifest SHA-256、artifact名、ANGLE revision等の
+詳細なadmission recordを前提に完了した。専用CI run `36432392861`は成功し、
+`angle-metal-family1-test-stub-36432392861`（schema
+`phase5-metal-family1-test-stub-v1`）でtargeted EGL test 4件がすべて成功した。
+これはcompile-time test-only profileの検証であり、Chrome/GPUログを伴う追加VM観測や
+実機の署名・起動・KOOV操作を承認するものではない。
 
 ## Purpose
 

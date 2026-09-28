@@ -1,7 +1,9 @@
 # Phase 5: Metal Family 1 capability stub (VM-first)
 
-作成日: 2026-09-26  
-状態: 設計確認済み・admission record確認済み・未実装
+作成日: 2026-09-26
+更新日: 2026-09-29
+
+状態: 設計確認済み・admission record確認済み・実装済み・専用CI検証成功・実機未実施
 
 ## 結論
 
@@ -27,6 +29,23 @@ GitHub Actions の macOS Intel VMで、Intel HD Graphics 5000そのものを再�
 `phase-status.md`と`phase3d-vm-observability.md`の記述が一致しない場合、GitHub Actionsの実runと保存artifactを一次情報として照合し、Phase 5実行前に両文書を同じ状態へ更新する。run ID、manifest digest、artifact名、revisionを未確認のまま固定値として書かない。
 
 このadmission recordはPhase 5のソース実装を開始するために完了した。ただし、Actions dispatch、新規artifact download、署名、Chrome起動、実機操作を許可するものではない。
+
+## Phase 5専用CI一次記録（2026-09-29確認）
+
+固定revisionに対するtest-only stubの実装と専用workflowの検証は、次の成功runで完了した。これはstub buildとtargeted EGL testの証跡であり、Chrome/GPUログを伴うVM観測や実機試験の記録ではない。
+
+| 項目 | 記録 |
+| --- | --- |
+| workflow / run | `phase5-metal-family1.yml` / [`36432392861`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36432392861) / success |
+| commit | `0784dc1731e6709282260a9a8fda25df2fc0194f` |
+| artifact | `angle-metal-family1-test-stub-36432392861` / schema `phase5-metal-family1-test-stub-v1` |
+| ANGLE revision | `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
+| patch SHA-256 | `00a11d2289b306de4642cde3711cba051667b38fd5d97f46a434ba7f24ac5258` |
+| manifest SHA-256 | `c99b82bcd19cb564aa8f0aae7c2e0ecd8c18342de168c2d47e5a00b342f2b638` |
+| artifact-files SHA-256 | `17b5ee8a79978f01255c13ffb3fb4f2ee01a89e1303d5faa5a681b5886916d0f` |
+| test result | exit `0` / `DisplayMtlFamily1Test.*` 4 tests passed |
+
+このrunにより、実機へ進む条件の1〜5は証跡上満たした。条件4（stub無効時のproduction path不変）はcompile-time分離と静的監査で確認しており、通常artifactを実機で起動したことを意味しない。
 
 ## ソースコードによる裏取り
 

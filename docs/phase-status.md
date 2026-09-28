@@ -1,6 +1,6 @@
 # Phase 状態
 
-更新日: 2026-09-26
+更新日: 2026-09-29
 
 ## Orchestration
 
@@ -41,7 +41,8 @@ for new real-device work. Any separately approved historical device-test record 
 | Phase 2 | Phase 2B 完了 | 初回run `35495704110` と失敗follow-up run `35497602637` の記録は保持する。2回目のfollow-up run [`35501697418`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/35501697418) は固定ANGLE checkout、`gclient sync`、GN、Ninja、artifact検証、uploadに成功した。artifactはx86_64の`libEGL.dylib`と`libGLESv2.dylib`のみを含み、各自己install name以外に非system依存はなく、署名は未署名（Phase 2では許容）である。Phase 2B時点では未実行だった固定depot_tools `0306e4682b4ac35287c726fa35a983157a625902` のbootstrap付き構成は、Phase 3A run `35515036255`で初めて実行・検証された。 |
 | Phase 3A | legacy artifact記録 | Chrome `154.0.8037.45`向けartifact `35515036255`は過去の固定SHA・形式・依存・署名検証結果として記録する。新形式のrelease manifestを持たず、新しい実機試験には使用しない。 |
 | Phase 3B | synthetic fixture CI成功・実機試験未実施 | `angle-release-v1`はChrome/Chromium/ANGLE/depot_tools識別子、dylib SHA、artifact/run metadataを束縛する。test-copy manifestはrelease manifest SHAを記録し、Libraries baselineを保持したままANGLE 2本だけ追加する。正式なsynthetic fixture判定は下記のrunで成功した。ローカルfull fixtureは実行しない。retry0–12は保存済み履歴として不変保持し、新規attempt rootは別名で作成する。元Chromeのxattr、実署名、実機起動は行わない。 |
-| Phase 3B 以降 | synthetic 3B/3C成功、Phase 3D VM観測成功・新規実機試験未承認 | Phase 3D文書に記録された、別途承認済みの過去のユーザー所有機器テスト・署名・Chrome起動記録は履歴として保持する。今回確認した3B/3C/3D run metadataは新規の実機作業を承認せず、Family 1向け変更も実施していない。Phase 0の基準ログ保全・比較表、人間レビュー、およびPhase 5の詳細な入場記録が満たされるまで、新たな実機・署名・Chrome/KOOV操作へ進めない。 |
+| Phase 3B 以降 | synthetic 3B/3C成功、Phase 3D VM観測成功・新規実機試験未承認 | Phase 3D文書に記録された、別途承認済みの過去のユーザー所有機器テスト・署名・Chrome起動記録は履歴として保持する。今回確認した3B/3C/3D run metadataは新規の実機作業を承認しない。Phase 5の詳細な入場記録と専用stub CIは完了したが、署名・Chrome/KOOV操作は引き続き人間の承認境界にある。 |
+| Phase 5 | test-only Metal Family 1 stub実装・専用CI成功・実機未実施 | 固定ANGLE revisionに対する専用workflow [`36432392861`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36432392861) が成功。artifact `angle-metal-family1-test-stub-36432392861`、schema `phase5-metal-family1-test-stub-v1`、4/4 targeted EGL tests、manifest/artifact-files SHA-256をPhase 5 planに記録した。Chrome/GPUログを伴う追加VM観測と実機試験は未実施で、別途承認が必要。 |
 
 ## Phase 3の一次記録（2026-09-26確認）
 
@@ -53,4 +54,17 @@ for new real-device work. Any separately approved historical device-test record 
 | Phase 3C synthetic preflight fixture | `36241795968` / success | `3b116228de6c2af80b14cdfb36ff6fec1af6db38` | `phase3c-preflight-synthetic-diagnostics-36241795968` / archive SHA-256 `d33c4e301f023ce9870e2a8faba139fb9415c5109aca9584d080ad661ac9ec03` / exit `0` | [Actions run](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36241795968) |
 | Phase 3D dynamic ANGLE VM observation | `36071196477` / success | `e9002f5ba7f70ec6b23f6b82453c9580a33a399b` | `phase3d-dynamic-angle-36065655290-36071196477` / archive SHA-256 `8f142e7503555fe3d9a75f0716daf8777509b28089e17b1bb4a8cfef7aabe298` | [Actions run](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36071196477) |
 
-Phase 3D diagnostics artifactの`ANGLE_RELEASE_MANIFEST`はsidecar検証に成功した。schemaは`angle-release-v1`、Chromeは`154.0.8037.57`、manifest SHA-256は`ed01fc7c8a1634193cebc7e016be2fddd4a1d0094e7a77abdc98798d6b078c4f`、選択artifactは`angle-macos-x86_64-chrome-154.0.8037.57-angle-1ff8799c-36065655290`、ANGLE revisionは`1ff8799c596d4fc9acea28343610b1f33650a6fa`、build runは`36065655290`である。これにより、Phase 5の詳細なadmission recordはソース実装開始に必要な範囲で完了した。ただし、新規Actions dispatch、artifact download、署名、Chrome起動、実機操作を承認するものではない。
+Phase 3D diagnostics artifactの`ANGLE_RELEASE_MANIFEST`はsidecar検証に成功した。schemaは`angle-release-v1`、Chromeは`154.0.8037.57`、manifest SHA-256は`ed01fc7c8a1634193cebc7e016be2fddd4a1d0094e7a77abdc98798d6b078c4f`、選択artifactは`angle-macos-x86_64-chrome-154.0.8037.57-angle-1ff8799c-36065655290`、ANGLE revisionは`1ff8799c596d4fc9acea28343610b1f33650a6fa`、build runは`36065655290`である。これにより、Phase 5の詳細なadmission recordはソース実装開始に必要な範囲で完了した。さらにPhase 5専用stub CI run `36432392861`も成功し、targeted EGL testと専用artifactのmanifestを検証した。ただし、新規Actions dispatch、artifact download、署名、Chrome起動、実機操作を承認するものではない。
+
+## Phase 5専用CI一次記録（2026-09-29確認）
+
+| 項目 | 記録 |
+| --- | --- |
+| workflow / run | `phase5-metal-family1.yml` / [`36432392861`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36432392861) / success |
+| commit | `0784dc1731e6709282260a9a8fda25df2fc0194f` |
+| artifact / schema | `angle-metal-family1-test-stub-36432392861` / `phase5-metal-family1-test-stub-v1` |
+| ANGLE revision | `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
+| patch SHA-256 | `00a11d2289b306de4642cde3711cba051667b38fd5d97f46a434ba7f24ac5258` |
+| manifest SHA-256 | `c99b82bcd19cb564aa8f0aae7c2e0ecd8c18342de168c2d47e5a00b342f2b638` |
+| artifact-files SHA-256 | `17b5ee8a79978f01255c13ffb3fb4f2ee01a89e1303d5faa5a681b5886916d0f` |
+| test result | exit `0` / 4 tests passed |
