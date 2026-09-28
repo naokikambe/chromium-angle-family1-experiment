@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = 88feec7faee493a46efecb770af22cd3bd23bd7c0d05e71e93fd872dc95475ff
+          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = 34ec0c898a079ffa71f59246b054361aac291664b8762845cf1c654124c63015
           git -C "$ANGLE_ROOT" apply --unidiff-zero --check "$GITHUB_WORKSPACE/$PATCH_PATH"
           git -C "$ANGLE_ROOT" apply --unidiff-zero "$GITHUB_WORKSPACE/$PATCH_PATH"
           expected=$(printf '%s\n' \
@@ -137,15 +137,15 @@ jobs:
             gn desc out/Phase5 //src/libANGLE/renderer/metal:angle_metal_backend sources
             printf '%s\n' '--- metal backend defines ---'
             gn desc out/Phase5 //src/libANGLE/renderer/metal:angle_metal_backend defines
-            printf '%s\n' '--- libEGL configs ---'
-            gn desc out/Phase5 //:libEGL configs
+            printf '%s\n' '--- libGLESv2 configs ---'
+            gn desc out/Phase5 //:libGLESv2 configs
           } > "$DIAG_DIR/bridge-gn-desc.log"
           sed -n '/--- stub target sources ---/,/--- metal backend sources ---/p' "$DIAG_DIR/bridge-gn-desc.log" | grep -F 'DisplayMtlFamily1TestBridge.h'
           ! sed -n '/--- stub target sources ---/,/--- metal backend sources ---/p' "$DIAG_DIR/bridge-gn-desc.log" | grep -F 'DisplayMtlFamily1TestBridge.mm'
           sed -n '/--- metal backend sources ---/,/--- metal backend defines ---/p' "$DIAG_DIR/bridge-gn-desc.log" | grep -F 'DisplayMtlFamily1TestBridge.mm'
-          sed -n '/--- metal backend defines ---/,/--- libEGL configs ---/p' "$DIAG_DIR/bridge-gn-desc.log" | grep -F 'ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB'
-          sed -n '/--- libEGL configs ---/,$p' "$DIAG_DIR/bridge-gn-desc.log" | grep -F 'metal_family1_test_libegl_export_config'
-          sed -n '/--- libEGL configs ---/,$p' "$DIAG_DIR/bridge-gn-desc.log" | grep -F '//:internal_config'
+          sed -n '/--- metal backend defines ---/,/--- libGLESv2 configs ---/p' "$DIAG_DIR/bridge-gn-desc.log" | grep -F 'ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB'
+          sed -n '/--- libGLESv2 configs ---/,$p' "$DIAG_DIR/bridge-gn-desc.log" | grep -F 'metal_family1_test_libglesv2_export_config'
+          sed -n '/--- libGLESv2 configs ---/,$p' "$DIAG_DIR/bridge-gn-desc.log" | grep -F '//:internal_config'
 
       - name: Build and test stub
         timeout-minutes: 45
@@ -167,27 +167,28 @@ jobs:
           done
           printf 'BRIDGE_OBJECT=%s\n' "$bridge_object" > "$DIAG_DIR/bridge-symbol-status.txt"
           ninja -C out/Phase5 libEGL > "$DIAG_DIR/libegl-build.log" 2>&1
-          gn desc out/Phase5 //:libEGL outputs > "$DIAG_DIR/libegl-outputs.log"
-          libegl_output=$(awk '$0 ~ /(^|\/)libEGL\.dylib$/ { print; exit }' "$DIAG_DIR/libegl-outputs.log")
-          test -n "$libegl_output"
-          libegl_path="$libegl_output"
-          if [[ ! -f "$libegl_path" ]]; then
-            libegl_path="$ANGLE_ROOT/${libegl_output#//}"
+          ninja -C out/Phase5 libGLESv2 > "$DIAG_DIR/libglesv2-build.log" 2>&1
+          gn desc out/Phase5 //:libGLESv2 outputs > "$DIAG_DIR/libglesv2-outputs.log"
+          libglesv2_output=$(awk '$0 ~ /(^|\/)libGLESv2\.dylib$/ { print; exit }' "$DIAG_DIR/libglesv2-outputs.log")
+          test -n "$libglesv2_output"
+          libglesv2_path="$libglesv2_output"
+          if [[ ! -f "$libglesv2_path" ]]; then
+            libglesv2_path="$ANGLE_ROOT/${libglesv2_output#//}"
           fi
-          if [[ ! -f "$libegl_path" ]]; then
-            libegl_path="$ANGLE_ROOT/out/Phase5/libEGL.dylib"
+          if [[ ! -f "$libglesv2_path" ]]; then
+            libglesv2_path="$ANGLE_ROOT/out/Phase5/libGLESv2.dylib"
           fi
-          test -f "$libegl_path"
-          nm -gU "$libegl_path" > "$DIAG_DIR/libegl-nm.log"
+          test -f "$libglesv2_path"
+          nm -gU "$libglesv2_path" > "$DIAG_DIR/libglesv2-nm.log"
           for symbol in \
             ANGLE_MetalFamily1TestEnableProfile \
             ANGLE_MetalFamily1TestClearProfile \
             ANGLE_MetalFamily1TestSetForcedStopStage \
             ANGLE_MetalFamily1TestGetStage \
             ANGLE_MetalFamily1TestGetSnapshot; do
-            grep -E "[[:space:]][Tt][[:space:]]+_?${symbol}$" "$DIAG_DIR/libegl-nm.log"
+            grep -E "[[:space:]][Tt][[:space:]]+_?${symbol}$" "$DIAG_DIR/libglesv2-nm.log"
           done
-          printf 'LIBEGL_PATH=%s\n' "$libegl_path" > "$DIAG_DIR/libegl-symbol-status.txt"
+          printf 'LIBGLESV2_PATH=%s\n' "$libglesv2_path" > "$DIAG_DIR/libglesv2-symbol-status.txt"
           { xcrun clang --version; xcodebuild -version; gn --version; ninja --version; } > "$DIAG_DIR/build-metadata.txt" 2>&1
           ninja -C out/Phase5 angle_metal_family1_test_stub > "$DIAG_DIR/build-stdout.log" 2> "$DIAG_DIR/build-stderr.log"
           set +e
