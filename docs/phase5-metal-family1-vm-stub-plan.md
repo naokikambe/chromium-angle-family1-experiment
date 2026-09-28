@@ -169,6 +169,9 @@ CI run `36351199352`ではBridge objectの5 symbolsは`T`だったが、libEGL d
 
 CI run `36355191172`ではこのexport blockがlibEGL target invocationの外側に配置され、GNが`Unexpected token if`で停止した。続くrun `36376354124`ではtarget invocation内の直接`ldflags` assignmentがtemplateで消費されず、GNが`Assignment had no effect`で停止した。patchではstub+mac専用の`metal_family1_test_libegl_export_config`を定義し、`libEGL_shared_template("libEGL")` invocationの`configs`へ追加する。適用後の固定revision `BUILD.gn`でconfig定義とtargetへのconfigs追加を確認する。
 CI run `36380355206`では、`configs`がtemplate invocationの既定変数として宣言されていないため、`configs +=`が`Undefined identifier`で停止した。固定revisionの`libEGL_template`はinvokerの`configs`を受け取ってtargetへ適用するため、patchではstub+mac条件下のconfigを`configs = [ ":metal_family1_test_libegl_export_config" ]`として明示初期化する。通常buildではこの条件付きconfigが空のままで、通常export setは広げない。
+CI run `36381398889`ではwrapper templateがinvocationの`configs`をnested `libEGL_template`へforwardしておらず、`configs =`が`Assignment had no effect`で停止した。patchでは`libEGL_shared_template`内部のnested targetに`defined(invoker.configs)`を条件とする明示的transferを追加した。これにより既存wrapper invocationで未定義変数を参照せず、stub+macのlibEGLだけへexport configを伝播する。
+
+Phase 5 workflowでは、patch適用・source-state記録後に独立した`GN configuration preflight`を実行する。ここで`args.gn`を生成して`gn gen`を一度だけ行い、stub target、Metal backend、libEGL configの`gn desc`結果を診断へ保存・検証する。後続のBuild and testは同じ`out/Phase5`を再利用し、`gn gen`を再実行しない。これによりGN scope/template forwardingの失敗をcompile前に検出する。
 
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 

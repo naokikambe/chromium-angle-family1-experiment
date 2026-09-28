@@ -63,6 +63,13 @@ index 6c39b1a..0000000 100644
 +    configs = [ ":metal_family1_test_libegl_export_config" ]
 +  }
  }
+@@ -1638,2 +1638,5 @@ template("libEGL_shared_template") {
+     data_deps = [ ":${invoker.gles_library}" ]
++    if (defined(invoker.configs)) {
++      configs = invoker.configs
++    }
+   }
+ }
 diff --git a/src/libANGLE/renderer/metal/DisplayMtl.h b/src/libANGLE/renderer/metal/DisplayMtl.h
 index f5da632..97d10e3 100644
 --- a/src/libANGLE/renderer/metal/DisplayMtl.h
