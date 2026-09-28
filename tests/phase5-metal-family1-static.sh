@@ -90,7 +90,7 @@ grep -F 'test-result.txt' "$workflow" >/dev/null
 grep -F 'manifest.sha256' "$workflow" >/dev/null
 grep -F 'artifact.sha256' "$workflow" >/dev/null
 grep -F 'GN_ARGS_SHA256=' "$workflow" >/dev/null
-! grep -E 'Chrome|chrome|angle-artifact-v1' "$workflow" >/dev/null
+! grep -E 'Google Chrome|Chrome\.app|--user-data-dir|angle-artifact-v1' "$workflow" >/dev/null
 ! grep -E '(^|[^A-Za-z])(sudo|codesign|xattr|security|gh |git push|force-push|secrets\.|id-token|contents: write)([^A-Za-z]|$)' "$workflow" >/dev/null
 
 for path in \

@@ -1,6 +1,20 @@
 name: Phase 5 Metal Family 1 runtime artifact
 
 on:
+  workflow_call:
+    inputs:
+      angle_revision:
+        description: Exact ANGLE revision used by the Phase 5 runtime artifact
+        required: true
+        type: string
+      chrome_version:
+        description: Chrome release version whose DEPS ANGLE pin must match
+        required: true
+        type: string
+      runtime_patch_sha256:
+        description: SHA-256 of the checked-in Phase 5 runtime patch
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       angle_revision:
