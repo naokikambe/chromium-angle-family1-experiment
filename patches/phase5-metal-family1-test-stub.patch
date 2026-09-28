@@ -191,7 +191,18 @@ index 71f0c61..319f46a 100644
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +            RecordFamily1TestStage(Family1TestStage::FeatureGate);
 +#endif
-@@ -153,4 +245,33 @@ bool IsMetalDisplayAvailable()
+@@ -149,4 +149,10 @@ bool IsMetalDisplayAvailable()
+ bool IsMetalDisplayAvailable()
+ {
++#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
++    if (gFamily1TestState.enabled)
++    {
++        return true;
++    }
++#endif
+     return angle::IsMetalRendererAvailable();
+ }
+@@ -153,4 +251,33 @@ bool IsMetalDisplayAvailable()
          mCmdQueue = angle::adoptObjCPtr([mMetalDevice newCommandQueue]);
 
 -        ANGLE_TRY(mFormatTable.initialize(this));
@@ -227,7 +238,7 @@ index 71f0c61..319f46a 100644
 +#endif
 +            return formatResult;
 +        }
-@@ -157,0 +279,23 @@ bool IsMetalDisplayAvailable()
+@@ -157,0 +285,23 @@ bool IsMetalDisplayAvailable()
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +        if (ShouldStopAtFamily1TestStage(Family1TestStage::ShaderLibrary))
 +        {
@@ -251,31 +262,31 @@ index 71f0c61..319f46a 100644
 +            return angle::Result::Stop;
 +        }
 +#endif
-@@ -159,0 +304,4 @@ bool IsMetalDisplayAvailable()
+@@ -159,0 +310,4 @@ bool IsMetalDisplayAvailable()
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +        RecordFamily1TestStage(Family1TestStage::Success);
 +#endif
 +
-@@ -175,0 +324,4 @@ bool IsMetalDisplayAvailable()
+@@ -175,0 +330,4 @@ bool IsMetalDisplayAvailable()
 +
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +    gFamily1TestState.display = nullptr;
 +#endif
-@@ -1364,0 +1517,6 @@ bool IsMetalDisplayAvailable()
+@@ -1364,0 +1523,6 @@ bool IsMetalDisplayAvailable()
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +    if (gFamily1TestState.enabled)
 +    {
 +        return false;
 +    }
 +#endif
-@@ -1369,0 +1528,6 @@ bool IsMetalDisplayAvailable()
+@@ -1369,0 +1534,6 @@ bool IsMetalDisplayAvailable()
 +#if defined(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB)
 +    if (gFamily1TestState.enabled)
 +    {
 +        return macFamily == 1;
 +    }
 +#endif
-@@ -312,9 +312,12 @@ void DisplayMtl::terminate()
+@@ -312,8 +318,11 @@ void DisplayMtl::terminate()
  void DisplayMtl::terminate()
  {
      mUtils = nullptr;
@@ -288,7 +299,6 @@ index 71f0c61..319f46a 100644
      mMetalDevice         = nil;
      mSharedEventListener = nil;
      mCapsInitialized     = false;
-
 diff --git a/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm b/src/libANGLE/renderer/metal/DisplayMtlFamily1Test.mm
 new file mode 100644
 index 0000000..990662f
