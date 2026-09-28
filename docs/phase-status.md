@@ -42,7 +42,7 @@ for new real-device work. Any separately approved historical device-test record 
 | Phase 3A | legacy artifact記録 | Chrome `154.0.8037.45`向けartifact `35515036255`は過去の固定SHA・形式・依存・署名検証結果として記録する。新形式のrelease manifestを持たず、新しい実機試験には使用しない。 |
 | Phase 3B | synthetic fixture CI成功・実機試験未実施 | `angle-release-v1`はChrome/Chromium/ANGLE/depot_tools識別子、dylib SHA、artifact/run metadataを束縛する。test-copy manifestはrelease manifest SHAを記録し、Libraries baselineを保持したままANGLE 2本だけ追加する。正式なsynthetic fixture判定は下記のrunで成功した。ローカルfull fixtureは実行しない。retry0–12は保存済み履歴として不変保持し、新規attempt rootは別名で作成する。元Chromeのxattr、実署名、実機起動は行わない。 |
 | Phase 3B 以降 | synthetic 3B/3C成功、Phase 3D VM観測成功・新規実機試験未承認 | Phase 3D文書に記録された、別途承認済みの過去のユーザー所有機器テスト・署名・Chrome起動記録は履歴として保持する。今回確認した3B/3C/3D run metadataは新規の実機作業を承認しない。Phase 5の詳細な入場記録と専用stub CIは完了したが、署名・Chrome/KOOV操作は引き続き人間の承認境界にある。 |
-| Phase 5 | test-only Metal Family 1 stub実装・専用CI成功・実機未実施 | 固定ANGLE revisionに対する専用workflow [`36432392861`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36432392861) が成功。artifact `angle-metal-family1-test-stub-36432392861`、schema `phase5-metal-family1-test-stub-v1`、4/4 targeted EGL tests、manifest/artifact-files SHA-256をPhase 5 planに記録した。Chrome/GPUログを伴う追加VM観測と実機試験は未実施で、別途承認が必要。 |
+| Phase 5 | test-only Metal Family 1 stub実装・専用CI成功・CI先行runtime/VM段階待ち・実機未実施 | 固定ANGLE revisionに対する専用workflow [`36432392861`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36432392861) が成功。artifact `angle-metal-family1-test-stub-36432392861`、schema `phase5-metal-family1-test-stub-v1`、4/4 targeted EGL tests、manifest/artifact-files SHA-256をPhase 5 planに記録した。次は実機へ直行せず、実機用runtime patch/artifactをCIで検証し、Phase 3D VM観測を行う。Chrome/GPUログを伴う追加VM観測、artifact取得、署名、Chrome/KOOV操作は別途承認が必要。 |
 
 ## Phase 3の一次記録（2026-09-26確認）
 
@@ -68,3 +68,15 @@ Phase 3D diagnostics artifactの`ANGLE_RELEASE_MANIFEST`はsidecar検証に成�
 | manifest SHA-256 | `c99b82bcd19cb564aa8f0aae7c2e0ecd8c18342de168c2d47e5a00b342f2b638` |
 | artifact-files SHA-256 | `17b5ee8a79978f01255c13ffb3fb4f2ee01a89e1303d5faa5a681b5886916d0f` |
 | test result | exit `0` / 4 tests passed |
+
+## Phase 5次段階の実行方針（CI先行）
+
+Phase 5専用stub CIの成功は、test-only profileと初期化停止段階の検証完了を示す。実機試験へ進む前に、次のCI作業を完了させる。
+
+1. test-only stubと分離した、明示的opt-inの実機用runtime patchを固定ANGLE revisionへ適用する。
+2. `libEGL.dylib`／`libGLESv2.dylib`、patch provenance、manifest、SHA-256を含む実機用artifactをCIで生成・検証する。
+3. targeted test、static audit、artifact validationを実行する。
+4. Phase 3D VMで動的ANGLEロード、GPU process引数、EGL初期化、fallbackを観測する。
+5. 必要ならVM WebGL smokeを追加する。KOOV、USB、Bluetooth、既存profileはCIの対象外とする。
+
+この段階ではworkflow dispatch、CI artifact download、署名、xattr、Chrome起動、profile操作、KOOV操作を行わない。CI成功後も、実機用artifactの取得と実機操作にはHuman/Approverの個別承認が必要である。
