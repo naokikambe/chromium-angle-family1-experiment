@@ -34,7 +34,23 @@ diff --git a/BUILD.gn b/BUILD.gn
 index 6c39b1a..0000000 100644
 --- a/BUILD.gn
 +++ b/BUILD.gn
-@@ -1642,9 +1642,18 @@ libEGL_shared_template("libEGL") {
+@@ -426,4 +426,15 @@ config("build_id_config") {
+ config("build_id_config") {
+   ldflags = [ "-Wl,--build-id" ]
+ }
+
++config("metal_family1_test_libegl_export_config") {
++  if (angle_enable_metal_family1_test_stub && is_mac) {
++    ldflags = [
++      "-Wl,-exported_symbol,_ANGLE_MetalFamily1TestEnableProfile",
++      "-Wl,-exported_symbol,_ANGLE_MetalFamily1TestClearProfile",
++      "-Wl,-exported_symbol,_ANGLE_MetalFamily1TestSetForcedStopStage",
++      "-Wl,-exported_symbol,_ANGLE_MetalFamily1TestGetStage",
++      "-Wl,-exported_symbol,_ANGLE_MetalFamily1TestGetSnapshot",
++    ]
++  }
++}
+@@ -1642,9 +1642,12 @@ libEGL_shared_template("libEGL") {
  libEGL_shared_template("libEGL") {
    defines = [ "ANGLE_DISPATCH_LIBRARY=\"${_angle_glesv2_library_name}\"" ]
    output_name = "libEGL"
@@ -44,13 +60,7 @@ index 6c39b1a..0000000 100644
      sources += [ "src/libEGL/libEGL_autogen.def" ]
    }
 +  if (angle_enable_metal_family1_test_stub && is_mac) {
-+    ldflags = [
-+      "-Wl,-exported_symbol,_ANGLE_MetalFamily1TestEnableProfile",
-+      "-Wl,-exported_symbol,_ANGLE_MetalFamily1TestClearProfile",
-+      "-Wl,-exported_symbol,_ANGLE_MetalFamily1TestSetForcedStopStage",
-+      "-Wl,-exported_symbol,_ANGLE_MetalFamily1TestGetStage",
-+      "-Wl,-exported_symbol,_ANGLE_MetalFamily1TestGetSnapshot",
-+    ]
++    configs += [ ":metal_family1_test_libegl_export_config" ]
 +  }
  }
 diff --git a/src/libANGLE/renderer/metal/DisplayMtl.h b/src/libANGLE/renderer/metal/DisplayMtl.h

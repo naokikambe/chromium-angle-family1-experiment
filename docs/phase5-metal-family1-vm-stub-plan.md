@@ -167,7 +167,7 @@ CI run `36351199352`ではBridge objectの5 symbolsは`T`だったが、libEGL d
 
 その後のCI run `36353179445`でもlibEGLのexportが空だったため、macOSのlibEGL targetにstub flag時だけ`-Wl,-exported_symbol,_ANGLE_MetalFamily1Test*`を付与する。Bridge objectの`T`定義、libEGLのexport、最終test targetのlinkを段階的に検証し、通常buildのexport setは広げない。
 
-CI run `36355191172`ではこのexport blockがlibEGL target invocationの外側に配置され、GNが`Unexpected token if`で停止した。patchでは同じ条件付きldflagsを`libEGL_shared_template("libEGL")`のtarget scope内へ移動した。適用後の固定revision `BUILD.gn`で、export blockがtemplate closing braceの直前にあることを確認する。
+CI run `36355191172`ではこのexport blockがlibEGL target invocationの外側に配置され、GNが`Unexpected token if`で停止した。続くrun `36376354124`ではtarget invocation内の直接`ldflags` assignmentがtemplateで消費されず、GNが`Assignment had no effect`で停止した。patchではstub+mac専用の`metal_family1_test_libegl_export_config`を定義し、`libEGL_shared_template("libEGL")` invocationの`configs`へ追加する。適用後の固定revision `BUILD.gn`でconfig定義とtargetへのconfigs追加を確認する。
 
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 
