@@ -301,10 +301,11 @@ index 0000000..990662f
 +    ~Family1ProfileScope() { ANGLE_MetalFamily1TestClearProfile(); }
 +};
 +
++constexpr const char *kDisabledFeatures[] = {"requireGpuFamily2", nullptr};
++
 +EGLDisplay CreateMetalDisplay(bool disableFamily2Requirement, ANGLE_MetalFamily1TestStage stage)
 +{
 +    ANGLE_MetalFamily1TestSetForcedStopStage(stage);
-+    const char *disabledFeatures[] = {"requireGpuFamily2", nullptr};
 +    EGLAttrib attributes[] = {
 +        EGL_PLATFORM_ANGLE_TYPE_ANGLE,
 +        EGL_PLATFORM_ANGLE_TYPE_METAL_ANGLE,
@@ -315,7 +316,7 @@ index 0000000..990662f
 +    if (disableFamily2Requirement)
 +    {
 +        attributes[2] = EGL_FEATURE_OVERRIDES_DISABLED_ANGLE;
-+        attributes[3] = reinterpret_cast<EGLAttrib>(disabledFeatures);
++        attributes[3] = reinterpret_cast<EGLAttrib>(kDisabledFeatures);
 +    }
 +
 +    EGLDisplay display = eglGetPlatformDisplay(
@@ -336,7 +337,6 @@ index 0000000..990662f
 +    EXPECT_EQ(eglInitialize(display, nullptr, nullptr), static_cast<EGLBoolean>(EGL_FALSE));
 +    EXPECT_EQ(eglGetError(), EGL_NOT_INITIALIZED);
 +    EXPECT_EQ(ANGLE_MetalFamily1TestGetStage(), stage);
-+    eglTerminate(display);
 +}
 +}  // namespace
 +
