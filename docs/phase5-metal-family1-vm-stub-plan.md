@@ -167,14 +167,16 @@ CI run `36351199352`ではBridge objectの5 symbolsは`T`だったが、libEGL d
 
 その後のCI run `36353179445`でもlibEGLのexportが空だったため、macOSのlibEGL targetにstub flag時だけ`-Wl,-exported_symbol,_ANGLE_MetalFamily1Test*`を付与する。Bridge objectの`T`定義、libEGLのexport、最終test targetのlinkを段階的に検証し、通常buildのexport setは広げない。
 
-CI run `36355191172`ではこのexport blockがlibEGL target invocationの外側に配置され、GNが`Unexpected token if`で停止した。続くrun `36376354124`ではtarget invocation内の直接`ldflags` assignmentがtemplateで消費されず、GNが`Assignment had no effect`で停止した。patchではstub+mac専用の`metal_family1_test_libegl_export_config`を定義し、`libEGL_shared_template("libEGL")` invocationの`configs`へ追加する。適用後の固定revision `BUILD.gn`でconfig定義とtargetへのconfigs追加を確認する。
-CI run `36380355206`では、`configs`がtemplate invocationの既定変数として宣言されていないため、`configs +=`が`Undefined identifier`で停止した。固定revisionの`libEGL_template`はinvokerの`configs`を受け取ってtargetへ適用するため、patchではstub+mac条件下のconfigを`configs = [ ":metal_family1_test_libegl_export_config" ]`として明示初期化する。通常buildではこの条件付きconfigが空のままで、通常export setは広げない。
-CI run `36381398889`ではwrapper templateがinvocationの`configs`をnested `libEGL_template`へforwardしておらず、`configs =`が`Assignment had no effect`で停止した。patchでは`libEGL_shared_template`内部のnested targetに`defined(invoker.configs)`を条件とする明示的transferを追加した。これにより既存wrapper invocationで未定義変数を参照せず、stub+macのlibEGLだけへexport configを伝播する。
+CI run `36355191172`ではlibEGL target外のexport blockが`Unexpected token if`で停止し、run `36376354124`では直接`ldflags` assignmentが`Assignment had no effect`で停止した。これはlibEGL exportを試した過去の案であり、最終patchでは`metal_family1_test_libglesv2_export_config`をbase libGLESv2 templateへ適用する。
+CI run `36380355206`では、`configs`がtemplate invocationの既定変数として宣言されていないため、`configs +=`が`Undefined identifier`で停止した。最終patchではlibEGL invocationへconfigsを渡さず、base libGLESv2 template自身のtarget configsへstub+mac条件付きconfigを追加する。通常buildでは条件不成立のためexport setは広げない。
+CI run `36381398889`ではwrapper templateのconfigs forwarding案が`Assignment had no effect`で停止した。この案は廃止し、最終patchではlibEGL wrapperへconfigsを渡さない。
 
-Phase 5 workflowでは、patch適用・source-state記録後に独立した`GN configuration preflight`を実行する。ここで`args.gn`を生成して`gn gen`を一度だけ行い、stub target、Metal backend、libEGL configの`gn desc`結果を診断へ保存・検証する。後続のBuild and testは同じ`out/Phase5`を再利用し、`gn gen`を再実行しない。これによりGN scope/template forwardingの失敗をcompile前に検出する。
+Phase 5 workflowでは、patch適用・source-state記録後に独立した`GN configuration preflight`を実行する。ここで`args.gn`を生成して`gn gen`を一度だけ行い、stub target、Metal backend、libGLESv2 configの`gn desc`結果を診断へ保存・検証する。後続のBuild and testは同じ`out/Phase5`を再利用し、`gn gen`を再実行しない。これによりGN scope/template forwardingの失敗をcompile前に検出する。
 
 CI run `36389469500`ではGN preflight通過後、libEGL compileで既存のinclude configが失われ`common/system_utils.h`を見つけられなかった。原因はwrapper transferの`configs = invoker.configs`がnested targetの既定configsを上書きしたためである。patchではnested target内で`angle_common_configs + invoker.configs`を使い、既存設定を保持したままstub export configを追加する。
-追加のartifact分析では`//:libEGL configs`から`//:internal_config`も欠落していたため、transferを`configs = angle_common_configs + invoker.configs`へ固定した。GN preflightはlibEGL configsに`//:internal_config`が存在することもassertする。
+追加のartifact分析では当時の`//:libEGL configs`から`//:internal_config`も欠落していた。最終patchではlibEGL側のtransferを使わず、base libGLESv2 templateの既存configsへexport configを追加する。GN preflightはlibGLESv2 configsに`//:internal_config`が存在することもassertする。
+
+CI run `36393176516`ではBridge objectがlibGLESv2に含まれる一方、libEGLへexport flagsを付けたためlink時にsymbolsがundefinedとなった。最終設計ではstub+mac専用export configをbase `angle_libGLESv2` templateへ適用し、専用test targetはlibEGLとlibGLESv2の双方へlinkする。preflightもlibGLESv2 configs/output/nmを検証し、libEGL exportとは主張しない。
 
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 

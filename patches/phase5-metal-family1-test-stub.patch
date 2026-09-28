@@ -39,7 +39,7 @@ index 6c39b1a..0000000 100644
    ldflags = [ "-Wl,--build-id" ]
  }
 
-+config("metal_family1_test_libegl_export_config") {
++config("metal_family1_test_libglesv2_export_config") {
 +  if (angle_enable_metal_family1_test_stub && is_mac) {
 +    ldflags = [
 +      "-Wl,-exported_symbol,_ANGLE_MetalFamily1TestEnableProfile",
@@ -50,26 +50,15 @@ index 6c39b1a..0000000 100644
 +    ]
 +  }
 +}
-@@ -1642,9 +1642,12 @@ libEGL_shared_template("libEGL") {
- libEGL_shared_template("libEGL") {
-   defines = [ "ANGLE_DISPATCH_LIBRARY=\"${_angle_glesv2_library_name}\"" ]
-   output_name = "libEGL"
-   gles_library = "libGLESv2"
-   sources = []
-   if (is_win) {
-     sources += [ "src/libEGL/libEGL_autogen.def" ]
-   }
-+  if (angle_enable_metal_family1_test_stub && is_mac) {
-+    configs = [ ":metal_family1_test_libegl_export_config" ]
-+  }
- }
-@@ -1638,2 +1638,5 @@ template("libEGL_shared_template") {
-     data_deps = [ ":${invoker.gles_library}" ]
-+    if (defined(invoker.configs)) {
-+      configs = angle_common_configs + invoker.configs
+@@ -1485,5 +1485,8 @@ template("angle_libGLESv2") {
+     configs += [
+       ":angle_gl_visibility_config",
+       ":debug_annotations_config",
+       ":gl_prototypes",
+     ]
++    if (angle_enable_metal_family1_test_stub && is_mac && target_name == "libGLESv2") {
++      configs += [ ":metal_family1_test_libglesv2_export_config" ]
 +    }
-   }
- }
 diff --git a/src/libANGLE/renderer/metal/DisplayMtl.h b/src/libANGLE/renderer/metal/DisplayMtl.h
 index f5da632..97d10e3 100644
 --- a/src/libANGLE/renderer/metal/DisplayMtl.h
@@ -557,7 +546,7 @@ diff --git a/src/tests/BUILD.gn b/src/tests/BUILD.gn
 index 79f77bd..0f0f760 100644
 --- a/src/tests/BUILD.gn
 +++ b/src/tests/BUILD.gn
-@@ -403,0 +404,25 @@ if (is_win || is_linux || is_chromeos || is_android || is_fuchsia || is_apple) {
+@@ -403,0 +404,26 @@ if (is_win || is_linux || is_chromeos || is_android || is_fuchsia || is_apple) {
 +if (angle_enable_metal_family1_test_stub) {
 +  angle_test("angle_metal_family1_test_stub") {
 +    include_dirs = [ "." ]
@@ -570,6 +559,7 @@ index 79f77bd..0f0f760 100644
 +    deps = [
 +      ":angle_common_test_utils_shared",
 +      "$angle_root:libEGL",
++      "$angle_root:libGLESv2",
 +    ]
 +    data_deps = [ "$angle_root:angle" ]
 +
@@ -583,7 +573,6 @@ index 79f77bd..0f0f760 100644
 +    }
 +  }
 +}
-+
 diff --git a/src/tests/DisplayMtlFamily1TestMain.cpp b/src/tests/DisplayMtlFamily1TestMain.cpp
 new file mode 100644
 index 0000000..b610506
