@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = 9067b6bc510dea2ed470c81e54c52aecec29cbd921c987db494beb9d8a3576b9
+          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = b8ff7ea3a954f5f025b5a95fe4fba875c303a4042bf55da26e42e5657acda538
           git -C "$ANGLE_ROOT" apply --unidiff-zero --check "$GITHUB_WORKSPACE/$PATCH_PATH"
           git -C "$ANGLE_ROOT" apply --unidiff-zero "$GITHUB_WORKSPACE/$PATCH_PATH"
           expected=$(printf '%s\n' \
@@ -106,12 +106,10 @@ jobs:
             git -C "$ANGLE_ROOT" status --short
           } > "$DIAG_DIR/source-state.txt"
 
-      - name: Build and test stub
-        timeout-minutes: 45
+      - name: GN configuration preflight
         shell: bash
         run: |
-          set -uo pipefail
-          printf '%s\n' not-run > "$DIAG_DIR/test-result.txt"
+          set -euo pipefail
           cd "$ANGLE_ROOT"
           mkdir -p out/Phase5
           cat > out/Phase5/args.gn <<'EOF'
@@ -139,11 +137,22 @@ jobs:
             gn desc out/Phase5 //src/libANGLE/renderer/metal:angle_metal_backend sources
             printf '%s\n' '--- metal backend defines ---'
             gn desc out/Phase5 //src/libANGLE/renderer/metal:angle_metal_backend defines
+            printf '%s\n' '--- libEGL configs ---'
+            gn desc out/Phase5 //:libEGL configs
           } > "$DIAG_DIR/bridge-gn-desc.log"
           sed -n '/--- stub target sources ---/,/--- metal backend sources ---/p' "$DIAG_DIR/bridge-gn-desc.log" | grep -F 'DisplayMtlFamily1TestBridge.h'
           ! sed -n '/--- stub target sources ---/,/--- metal backend sources ---/p' "$DIAG_DIR/bridge-gn-desc.log" | grep -F 'DisplayMtlFamily1TestBridge.mm'
           sed -n '/--- metal backend sources ---/,/--- metal backend defines ---/p' "$DIAG_DIR/bridge-gn-desc.log" | grep -F 'DisplayMtlFamily1TestBridge.mm'
-          sed -n '/--- metal backend defines ---/,$p' "$DIAG_DIR/bridge-gn-desc.log" | grep -F 'ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB'
+          sed -n '/--- metal backend defines ---/,/--- libEGL configs ---/p' "$DIAG_DIR/bridge-gn-desc.log" | grep -F 'ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB'
+          sed -n '/--- libEGL configs ---/,$p' "$DIAG_DIR/bridge-gn-desc.log" | grep -F 'metal_family1_test_libegl_export_config'
+
+      - name: Build and test stub
+        timeout-minutes: 45
+        shell: bash
+        run: |
+          set -uo pipefail
+          printf '%s\n' not-run > "$DIAG_DIR/test-result.txt"
+          cd "$ANGLE_ROOT"
           bridge_object=obj/src/libANGLE/renderer/metal/angle_metal_backend/DisplayMtlFamily1TestBridge.o
           ninja -C out/Phase5 "$bridge_object" > "$DIAG_DIR/bridge-build.log" 2>&1
           nm -gU "out/Phase5/$bridge_object" > "$DIAG_DIR/bridge-nm.log"
