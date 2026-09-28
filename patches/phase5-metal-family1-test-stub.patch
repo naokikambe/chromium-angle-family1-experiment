@@ -546,7 +546,7 @@ diff --git a/src/tests/BUILD.gn b/src/tests/BUILD.gn
 index 79f77bd..0f0f760 100644
 --- a/src/tests/BUILD.gn
 +++ b/src/tests/BUILD.gn
-@@ -403,0 +404,26 @@ if (is_win || is_linux || is_chromeos || is_android || is_fuchsia || is_apple) {
+@@ -403,0 +404,29 @@ if (is_win || is_linux || is_chromeos || is_android || is_fuchsia || is_apple) {
 +if (angle_enable_metal_family1_test_stub) {
 +  angle_test("angle_metal_family1_test_stub") {
 +    include_dirs = [ "." ]
@@ -561,7 +561,10 @@ index 79f77bd..0f0f760 100644
 +      "$angle_root:libEGL",
 +      "$angle_root:libGLESv2",
 +    ]
-+    data_deps = [ "$angle_root:angle" ]
++    data_deps = [
++      "$angle_root:libEGL",
++      "$angle_root:libGLESv2",
++    ]
 +
 +    if (is_mac) {
 +      frameworks = [

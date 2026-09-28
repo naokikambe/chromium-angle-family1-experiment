@@ -121,7 +121,7 @@ test-onlyの内部診断に、次の停止段階を一度だけ記録する。
 
 テストでは`getMaxSupportedESVersion()`、`generateConfigs()`、`generateExtensions()`およびMetal renderer capabilityの結果を、上表の監査済み値と比較する。Apple GPU familyはどれも設定しない。vendor値だけを根拠にIntel実機との同一性を主張しない。
 
-既存の`EGLFeatureControlTest`はend-to-endのfeature overrideテストであり、新しいcompile-time-only profileの証明には使わない。初期案では`src/tests/angle_unittests.gni`の`angle_unittests_msl_sources`へMetal専用sourceを追加して`angle_unittests`で実行する方針だった。しかしCI run `36278046375`および`36280291932`で、パッチのコンパイル・リンクには成功した一方、static unit-test binaryでは`eglGetPlatformDisplay()`が`EGL_NO_DISPLAY`を返し、初期化stageへ到達できないことを確認した。さらにfull `angle_end2end_tests`はCI run `36290795681`で1621/1646 objectのコンパイル後に固定45分timeoutへ到達した。これはstub profileの失敗ではなく、runnerまたはtarget規模の問題である。したがって専用sourceは、`$angle_root:libEGL`へ直接linkし、EGL runtimeを`data_deps = [ "$angle_root:angle" ]`で提供する専用target `angle_metal_family1_test_stub`へ、同じ`angle_enable_metal_family1_test_stub` compile-time条件下で追加し、`angle_metal_family1_test_stub --gtest_filter=DisplayMtlFamily1Test.*`だけを実行する。通常build・公開API・runtime選択経路は変更しない。
+既存の`EGLFeatureControlTest`はend-to-endのfeature overrideテストであり、新しいcompile-time-only profileの証明には使わない。初期案では`src/tests/angle_unittests.gni`の`angle_unittests_msl_sources`へMetal専用sourceを追加して`angle_unittests`で実行する方針だった。しかしCI run `36278046375`および`36280291932`で、パッチのコンパイル・リンクには成功した一方、static unit-test binaryでは`eglGetPlatformDisplay()`が`EGL_NO_DISPLAY`を返し、初期化stageへ到達できないことを確認した。さらにfull `angle_end2end_tests`はCI run `36290795681`で1621/1646 objectのコンパイル後に固定45分timeoutへ到達した。これはstub profileの失敗ではなく、runnerまたはtarget規模の問題である。したがって専用sourceは、`$angle_root:libEGL`と`$angle_root:libGLESv2`へ直接linkし、同じ2つのruntime dylibだけを`data_deps`で提供する専用target `angle_metal_family1_test_stub`へ、同じ`angle_enable_metal_family1_test_stub` compile-time条件下で追加し、`angle_metal_family1_test_stub --gtest_filter=DisplayMtlFamily1Test.*`だけを実行する。通常build・公開API・runtime選択経路は変更しない。
 
 ### 5C: Phase 3Dへの接続
 
@@ -177,6 +177,7 @@ CI run `36389469500`ではGN preflight通過後、libEGL compileで既存のincl
 追加のartifact分析では当時の`//:libEGL configs`から`//:internal_config`も欠落していた。最終patchではlibEGL側のtransferを使わず、base libGLESv2 templateの既存configsへexport configを追加する。GN preflightはlibGLESv2 configsに`//:internal_config`が存在することもassertする。
 
 CI run `36393176516`ではBridge objectがlibGLESv2に含まれる一方、libEGLへexport flagsを付けたためlink時にsymbolsがundefinedとなった。最終設計ではstub+mac専用export configをbase `angle_libGLESv2` templateへ適用し、専用test targetはlibEGLとlibGLESv2の双方へlinkする。preflightもlibGLESv2 configs/output/nmを検証し、libEGL exportとは主張しない。
+CI run `36397819064`ではpreflight後の専用target buildが無関係な`libGLESv1_CM.dylib`のlinkまで誘発し、GL symbolsのundefinedで停止した。原因は専用targetの広い`data_deps = [ "$angle_root:angle" ]`である。data dependencyをlibEGL/libGLESv2に限定し、必要なruntime dylibだけを供給する。これはlinker failureを抑制する変更ではない。
 
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 
