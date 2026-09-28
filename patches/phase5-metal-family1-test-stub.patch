@@ -34,7 +34,7 @@ diff --git a/BUILD.gn b/BUILD.gn
 index 6c39b1a..0000000 100644
 --- a/BUILD.gn
 +++ b/BUILD.gn
-@@ -426,4 +426,15 @@ config("build_id_config") {
+@@ -426,4 +426,19 @@ config("build_id_config") {
  config("build_id_config") {
    ldflags = [ "-Wl,--build-id" ]
  }
@@ -47,6 +47,10 @@ index 6c39b1a..0000000 100644
 +      "-Wl,-exported_symbol,_ANGLE_MetalFamily1TestSetForcedStopStage",
 +      "-Wl,-exported_symbol,_ANGLE_MetalFamily1TestGetStage",
 +      "-Wl,-exported_symbol,_ANGLE_MetalFamily1TestGetSnapshot",
++      "-Wl,-exported_symbol,_EGL_GetPlatformDisplay",
++      "-Wl,-exported_symbol,_EGL_Initialize",
++      "-Wl,-exported_symbol,_EGL_GetError",
++      "-Wl,-exported_symbol,_EGL_Terminate",
 +    ]
 +  }
 +}

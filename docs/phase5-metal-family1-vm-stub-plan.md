@@ -182,6 +182,7 @@ CI run `36402862552`では専用targetのbuild（95/95）は成功したが、�
 CI run `36407337941`では最初のDeviceStageの実行中にSIGSEGV（exit 139）となった。artifactでは失敗した`eglInitialize`後の再`eglTerminate`まで進んだかを区別できないため、初期化失敗ケースでは`eglTerminate`を呼ばないようにし、固定revisionの既存EGLテストと同じ後処理境界に合わせる。また、feature override配列を関数ローカルからstatic storageへ移し、`eglInitialize`までポインタ寿命を保証する。いずれもtest-only harnessの修正であり、本番経路は変更しない。
 CI run `36412678542`でもDeviceStageの`[ RUN ]`直後にSIGSEGV（exit 139）が再現した。固定revisionの`CommandQueue::reset()`は`finishAllCommands()`を経由するため、未取得・部分初期化状態での`terminate()`から無条件に呼ばれないよう、production-safeに`mCmdQueue.valid()`を確認してからresetするguardを追加した。`WrappedObject`のnil release自体は安全だが、CommandQueueの部分初期化解放経路を明示的に閉じる。これは通常buildにも適用されるnil/valid安全修正で、stub専用挙動ではない。
 CI run `36417938293`でもDeviceStageの`[ RUN ]`直後にSIGSEGV（exit 139）が継続したため、次回workflowではテスト失敗時だけ同じcwdから`lldb --batch`でbacktraceを取得し、diagnosticsへ保存する。これは原因切り分け専用で、テスト結果やlinker/runtime検査を緩和しない。
+CI run `36422535441`のlldbではDeviceStage開始直後にEXC_BAD_ACCESS（PC=0）となり、libGLESv2のnm出力にbridge 5シンボル以外のEGL entrypointがありませんでした。loaderの`EGL_GetPlatformDisplay`、`EGL_Initialize`、`EGL_GetError`、`EGL_Terminate`をstub+mac専用libGLESv2 export configへ追加し、workflowのnm preflightでも4つを検証します。通常buildのexport集合とruntime選択経路は変更しません。
 
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 
