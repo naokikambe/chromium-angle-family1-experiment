@@ -7,7 +7,7 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 test "$(shasum -a 256 "$patch" | awk '{print $1}')" = \
-  b8ff7ea3a954f5f025b5a95fe4fba875c303a4042bf55da26e42e5657acda538
+  88feec7faee493a46efecb770af22cd3bd23bd7c0d05e71e93fd872dc95475ff
 grep -F 'angle_enable_metal_family1_test_stub = false' "$patch" >/dev/null
 grep -F 'ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB' "$patch" >/dev/null
 grep -F 'thread_local Family1TestState' "$patch" >/dev/null
@@ -27,6 +27,7 @@ grep -F 'workflow_dispatch:' "$workflow" >/dev/null
 grep -F 'name: GN configuration preflight' "$workflow" >/dev/null
 test "$(grep -c 'gn gen out/Phase5' "$workflow")" -eq 1
 grep -F 'gn desc out/Phase5 //:libEGL configs' "$workflow" >/dev/null
+grep -F "grep -F '//:internal_config'" "$workflow" >/dev/null
 grep -F 'libEGL configs' "$workflow" >/dev/null
 ! grep -E '^[[:space:]]*(push|pull_request|pull_request_target):' "$workflow" >/dev/null
 grep -F 'runs-on: macos-15-intel' "$workflow" >/dev/null
@@ -40,7 +41,7 @@ grep -F 'contents: read' "$workflow" >/dev/null
 grep -F 'DEPOT_TOOLS_UPDATE: "0"' "$workflow" >/dev/null
 grep -F 'export PATH="$DEPOT_TOOLS_ROOT:$PATH"' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub.patch' "$workflow" >/dev/null
-grep -F 'b8ff7ea3a954f5f025b5a95fe4fba875c303a4042bf55da26e42e5657acda538' "$workflow" >/dev/null
+grep -F '88feec7faee493a46efecb770af22cd3bd23bd7c0d05e71e93fd872dc95475ff' "$workflow" >/dev/null
 grep -F 'apply --unidiff-zero --check' "$workflow" >/dev/null
 grep -F '1ff8799c596d4fc9acea28343610b1f33650a6fa' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-test-stub-v1' "$workflow" >/dev/null
@@ -62,6 +63,7 @@ grep -F 'nm -gU' "$workflow" >/dev/null
 grep -F 'ANGLE_METAL_FAMILY1_TEST_EXPORT' "$patch" >/dev/null
 grep -F 'metal_family1_test_libegl_export_config' "$patch" >/dev/null
 grep -F 'configs = [ ":metal_family1_test_libegl_export_config" ]' "$patch" >/dev/null
+grep -F 'configs = angle_common_configs + invoker.configs' "$patch" >/dev/null
 grep -F 'if (defined(invoker.configs))' "$patch" >/dev/null
 grep -F 'ninja -C out/Phase5 libEGL' "$workflow" >/dev/null
 grep -F 'gn desc out/Phase5 //:libEGL outputs' "$workflow" >/dev/null
