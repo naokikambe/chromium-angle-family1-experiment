@@ -45,7 +45,72 @@ GitHub Actions の macOS Intel VMで、Intel HD Graphics 5000そのものを再�
 | artifact-files SHA-256 | `17b5ee8a79978f01255c13ffb3fb4f2ee01a89e1303d5faa5a681b5886916d0f` |
 | test result | exit `0` / `DisplayMtlFamily1Test.*` 4 tests passed |
 
-このrunにより、実機へ進む条件の1〜5は証跡上満たした。条件4（stub無効時のproduction path不変）はcompile-time分離と静的監査で確認しており、通常artifactを実機で起動したことを意味しない。
+このrunにより、test-only stub CIとして実機へ進む条件の1〜5は証跡上満たした。条件4（stub無効時のproduction path不変）はcompile-time分離と静的監査で確認している。ただし、このartifactは診断用であり、通常artifactまたは実機用runtime artifactを実機で起動したことを意味しない。
+
+## 実機移行前のCI先行方針
+
+Phase 5の次段階は、実機試験へ直行せず、CIで実機用runtime境界を先に検証する。既存の`phase5-metal-family1-test-stub-v1` artifactは、`DisplayMtlFamily1Test.*`の診断結果だけを保持するtest-only artifactであり、Chromeへ配置する`libEGL.dylib`／`libGLESv2.dylib`や、ChromeからFamily 1プロファイルを選択するruntime経路を提供しない。これを実機用artifactとして再利用しない。
+
+次のCI作業をこの順序で行う。
+
+1. 現行stubとは分離した、明示的opt-inの実機用runtime patchを設計する。既定のproduction path、Family 2以上の挙動、通常artifactを変更せず、Chromeの通常起動から暗黙に選択できない境界を維持する。
+2. 固定ANGLE revision `1ff8799c596d4fc9acea28343610b1f33650a6fa`からx86_64の`libEGL.dylib`／`libGLESv2.dylib`を生成する専用CI workflowを追加する。artifact名・manifest schemaはtest-only stubと分離し、patch SHA-256、source revision、dylib SHA-256、GN argsを束縛する。schemaは実装時に確定し、`angle-release-v1`を使う場合もpatch provenanceを失わせない。
+3. runtime patchのstatic audit、targeted EGL test、production pathのstub無効監査、artifact manifest検証をCIで実行する。
+4. 検証済みruntime artifactをPhase 3DのmacOS Intel VMへ渡し、動的ANGLEロード、GPU processの引数、EGL初期化境界、GPU fallbackを観測する。VMはApple Paravirtualized Graphics Deviceであり、Intel HD Graphics 5000の実機結果とは扱わない。
+5. 必要性と入力ページを別途固定したうえで、VM上のWebGL smoke観測を追加する。KOOV、USB、Bluetooth、ユーザーprofileはCI範囲に含めない。
+
+この順序の完了後に限り、実機用artifactの取得・test copy作成・署名・Chrome起動を別途承認する。CI workflowのdispatch、CI artifactのdownload、署名、xattr、profile操作、Chrome起動、KOOV操作は、この文書更新では実行しない。
+
+### CI先行段階の完了条件
+
+- 実機用runtime patchがtest-only stubと明確に分離され、既定OFFである。
+- 固定revision、patch hash、artifact manifest、2本のdylib hashが同一のCI記録に束縛されている。
+- targeted test、static audit、artifact validationが成功し、required testのskipがない。
+- Phase 3D VMで、少なくとも動的ロードの成否とGPU processのEGL初期化結果を直接記録できる。
+- VM成功を実機成功と解釈せず、未観測の実機リスクを記録する。
+
+## GitHub Actions workflow設計（45分timeout回避）
+
+この節は実機用runtime patchをCIで検証するための未実装・未dispatchの設計である。現在の専用stub workflowの成功記録や、既存artifactを変更するものではない。
+
+GitHub Actionsのstep/job timeoutはworkflowで個別に設定でき、公式仕様上の上限はGitHub-hosted runnerでは360分である。ただし、単純にtimeoutを延長して失敗検出を遅らせるのではなく、現在の45分step制限を各build段階の安全予算として維持する。[Workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)
+
+### 基本設計
+
+- `gn gen`、source audit、build、test、artifact検証を別stepに分ける。
+- 同じ`out/Phase5`を1つのbuild job内で順次再利用し、共有GN/Ninja treeに対する並列Ninja実行は行わない。
+- `libEGL.dylib`／`libGLESv2.dylib`とtargeted test binaryだけを対象にし、`angle_end2end_tests`やfull DEQPを起動しない。
+- 45分を超える可能性のある単一Ninja stepを作らない。各長時間stepに明示的な`timeout-minutes`とstage markerを置く。
+- 失敗時は`if: always()`でstage log、GN args、source state、Ninja diagnostics、exit statusを保存する。自動retryは行わず、失敗分類後に新しいrunを開始する。
+- `out/`全体をjob間artifactとして転送しない。job間では最終dylib、manifest、検証結果、diagnosticsだけをartifactにする。GitHubのartifactはjob間の生成物受け渡し、cacheは再生成コストの高い依存物の再利用に使い分ける。[Artifacts and dependency caching](https://docs.github.com/en/actions/concepts/workflows-and-actions/dependency-caching)
+
+### 提案するjob構成
+
+```text
+phase5-runtime-build  (macos-15-intel, job timeout 120分)
+ ├─ static workflow/patch audit                  (5分)
+ ├─ exact source checkout / dependency bootstrap (20分)
+ ├─ patch apply / source-state record            (5分)
+ ├─ GN configuration and graph preflight         (5分)
+ ├─ common objects and runtime library build     (最大35分)
+ ├─ separate libEGL/libGLESv2 link checks        (各10分以内)
+ ├─ targeted Phase 5 test build/run               (最大15分)
+ ├─ nm/manifest/hash/artifact validation          (5分)
+ └─ final dylib + diagnostics upload
+
+phase5-runtime-vm-observe (separate workflow, job timeout 30分)
+ ├─ download and verify final runtime artifact
+ ├─ Phase 3D dynamic ANGLE observation
+ └─ GPU/EGL/fallback diagnostics upload
+```
+
+`phase5-runtime-build`は、runtime artifactへtest-only bridgeやtest-only exportが混入していないことを`gn desc`、target topology、`nm`、artifact file listで検証する。runtime patchとtargeted testが異なるGN条件を必要とする場合は、同一artifactへ混在させず、source revision・patch hashを共有する別build modeとして明示する。まずはruntime artifact buildとtargeted testを同一jobのincremental treeで測定し、120分のjob予算内に収まることを確認する。
+
+依存物のcacheは、source revision、patch SHA-256、GN args SHA-256、runner OSを含む厳密なkeyでのみ再利用する。cache missでも必ず再生成できることを完了条件とし、未検証の`out/` partial cacheを正しいbuildの代替にしない。cacheが効かない初回runでも、各stepのtimeout予算を超えない構成にする。
+
+Phase 3D VM観測はbuild jobから分離し、検証済みruntime artifactのrun IDを入力にする。buildの再実行とVM観測を同じjobへ詰め込まない。これにより、VM側のChrome起動・GPU観測の失敗がANGLE build timeoutの原因と混ざらず、artifactを固定した再観測が可能になる。
+
+この設計の受入条件は、cache hitを前提にせず、各長時間stepが予算内で完了し、job全体が120分以内に終わり、最終artifactのmanifest・patch provenance・dylib hash・diagnosticsが相互に一致することである。workflowの実装、commit/push、dispatch、artifact downloadは別途承認後に行う。
 
 ## ソースコードによる裏取り
 
@@ -216,7 +281,7 @@ Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での
 4. production pathがstub無効時に変わらないことを確認
 5. Phase 3B/3C/3DのCI結果とartifactを保存
 
-その後、実機では最小の実験パッチを適用し、既存のPhase 3手順でANGLEロード、GPU初期化、WebGL、KOOVを段階的に確認する。
+上記のCI先行段階が完了した後、実機では別途承認された最小のruntime実験patchを使用し、既存のPhase 3手順でANGLEロード、GPU初期化、WebGL、KOOVを段階的に確認する。CI成功だけでは実機操作の承認にならない。
 
 ## できないこと・残る不確実性
 

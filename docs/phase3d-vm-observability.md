@@ -42,7 +42,9 @@ planに定めた3B/3C/3D run、manifest SHA-256、artifact名、ANGLE revision�
 `angle-metal-family1-test-stub-36432392861`（schema
 `phase5-metal-family1-test-stub-v1`）でtargeted EGL test 4件がすべて成功した。
 これはcompile-time test-only profileの検証であり、Chrome/GPUログを伴う追加VM観測や
-実機の署名・起動・KOOV操作を承認するものではない。
+実機の署名・起動・KOOV操作を承認するものではない。次段階は、test-only stubと分離した
+実機用runtime patch/artifactをCIで検証し、そのartifactをこのVM観測へ接続するCI先行工程
+である。VM観測の成功もIntel HD Graphics 5000での実機成功を意味しない。
 
 ## Purpose
 
