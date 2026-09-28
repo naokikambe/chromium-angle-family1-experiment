@@ -25,7 +25,7 @@ on:
       runtime_patch_sha256:
         description: SHA-256 of the checked-in Phase 5 runtime patch
         required: false
-        default: 178746470e54ee0d967e93cb2c56206a08149e2bfb5476280a02172e1b6bc15f
+        default: 07d7e80d8ce1099cb3d9d3ad5654eabd39b3d33776932ad28e3d76deaf6d4070
         type: string
 
 concurrency:

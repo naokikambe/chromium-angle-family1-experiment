@@ -7,9 +7,10 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 test "$(shasum -a 256 "$patch" | awk '{print $1}')" = \
-  178746470e54ee0d967e93cb2c56206a08149e2bfb5476280a02172e1b6bc15f
+  07d7e80d8ce1099cb3d9d3ad5654eabd39b3d33776932ad28e3d76deaf6d4070
+git apply --numstat "$patch" >/dev/null
 grep -F 'phase5-metal-family1-runtime.patch' "$workflow" >/dev/null
-grep -F '178746470e54ee0d967e93cb2c56206a08149e2bfb5476280a02172e1b6bc15f' "$workflow" >/dev/null
+grep -F '07d7e80d8ce1099cb3d9d3ad5654eabd39b3d33776932ad28e3d76deaf6d4070' "$workflow" >/dev/null
 grep -F '1ff8799c596d4fc9acea28343610b1f33650a6fa' "$workflow" >/dev/null
 grep -F '154.0.8037.57' "$workflow" >/dev/null
 grep -F 'workflow_dispatch:' "$workflow" >/dev/null
