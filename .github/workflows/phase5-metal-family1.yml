@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = f318c2a4f57a3012ec61ff992a974479ce136b441448019e1bff02e0872f2181
+          test "$(shasum -a 256 "$PATCH_PATH" | awk '{print $1}')" = 7046136527269522ae2f22389400821996536e4ebf6098ee90632366a5b70caa
           git -C "$ANGLE_ROOT" apply --unidiff-zero --check "$GITHUB_WORKSPACE/$PATCH_PATH"
           git -C "$ANGLE_ROOT" apply --unidiff-zero "$GITHUB_WORKSPACE/$PATCH_PATH"
           expected=$(printf '%s\n' \
@@ -186,6 +186,9 @@ jobs:
             ANGLE_MetalFamily1TestSetForcedStopStage \
             ANGLE_MetalFamily1TestGetStage \
             ANGLE_MetalFamily1TestGetSnapshot; do
+            grep -E "[[:space:]][Tt][[:space:]]+_?${symbol}$" "$DIAG_DIR/libglesv2-nm.log"
+          done
+          for symbol in EGL_GetPlatformDisplay EGL_Initialize EGL_GetError EGL_Terminate; do
             grep -E "[[:space:]][Tt][[:space:]]+_?${symbol}$" "$DIAG_DIR/libglesv2-nm.log"
           done
           printf 'LIBGLESV2_PATH=%s\n' "$libglesv2_path" > "$DIAG_DIR/libglesv2-symbol-status.txt"
