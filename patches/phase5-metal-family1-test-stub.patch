@@ -60,7 +60,7 @@ index 6c39b1a..0000000 100644
      sources += [ "src/libEGL/libEGL_autogen.def" ]
    }
 +  if (angle_enable_metal_family1_test_stub && is_mac) {
-+    configs += [ ":metal_family1_test_libegl_export_config" ]
++    configs = [ ":metal_family1_test_libegl_export_config" ]
 +  }
  }
 diff --git a/src/libANGLE/renderer/metal/DisplayMtl.h b/src/libANGLE/renderer/metal/DisplayMtl.h
