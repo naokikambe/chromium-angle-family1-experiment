@@ -612,6 +612,7 @@ profile_dir=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/phase3d-cft-profile.XXX
 }
 readonly browser_profile_arg="--user-data-dir=$profile_dir"
 artifact_json="$probe_tmp/known-good-versions-with-downloads.json"
+cft_download_urls="$probe_tmp/cft-download-urls.txt"
 zip_path="$probe_tmp/chrome-for-testing.zip"
 extract_dir="$probe_tmp/extracted"
 mkdir "$extract_dir"
@@ -625,15 +626,27 @@ curl -fsSL "$KNOWN_GOOD_URL" -o "$artifact_json" || {
   record_failure 'could not download Chrome for Testing known-good versions JSON'
   exit 1
 }
-download_count=$(jq --arg version "$chrome_version" '[.versions[] | select(.version == $version) | .downloads.chrome[] | select(.platform == "mac-x64")] | length' "$artifact_json") || {
+jq -r --arg version "$chrome_version" \
+  '.versions[] | select(.version == $version) | .downloads.chrome[] | select(.platform == "mac-x64") | .url' \
+  "$artifact_json" | LC_ALL=C sort -u > "$cft_download_urls" || {
   record_failure 'could not parse CfT version metadata'
   exit 1
 }
-[[ "$download_count" == 1 ]] || { record_failure 'exact CfT mac-x64 version entry was not unique'; exit 1; }
-download_url=$(jq -er --arg version "$chrome_version" '.versions[] | select(.version == $version) | .downloads.chrome[] | select(.platform == "mac-x64") | .url' "$artifact_json") || {
-  record_failure 'CfT mac-x64 download URL was unavailable'
-  exit 1
-}
+download_count=$(awk 'NF { count++ } END { print count + 0 }' "$cft_download_urls")
+download_source='known-good-json'
+case "$download_count" in
+  1)
+    download_url=$(sed -n '1p' "$cft_download_urls")
+    ;;
+  0)
+    download_source='deterministic-version-url'
+    download_url="https://storage.googleapis.com/chrome-for-testing-public/${chrome_version}/${EXPECTED_PLATFORM}/chrome-mac-x64.zip"
+    ;;
+  *)
+    record_failure 'CfT metadata returned multiple distinct mac-x64 download URLs'
+    exit 1
+    ;;
+esac
 [[ "$download_url" == https://storage.googleapis.com/chrome-for-testing-public/* ]] || {
   record_failure 'CfT download URL host was unexpected'
   exit 1
@@ -646,7 +659,8 @@ zip_sha256=$(shasum -a 256 "$zip_path" | awk '{print $1}') || {
   record_failure 'could not hash CfT archive'
   exit 1
 }
-printf 'download_url=%s\narchive_sha256=%s\n' "$download_url" "$zip_sha256" >> "$results_dir/probe-metadata.txt"
+printf 'download_source=%s\ndownload_url=%s\narchive_sha256=%s\n' \
+  "$download_source" "$download_url" "$zip_sha256" >> "$results_dir/probe-metadata.txt"
 unzip -q "$zip_path" -d "$extract_dir" || { record_failure 'CfT archive extraction failed'; exit 1; }
 browser_app="$extract_dir/chrome-mac-x64/Google Chrome for Testing.app"
 browser_executable="$browser_app/Contents/MacOS/Google Chrome for Testing"
