@@ -159,6 +159,7 @@ read_webgl_smoke_result() {
         "$results_dir/webgl-devtools-json.txt" 2>/dev/null || true)
       if [[ -n "$title" ]]; then
         payload=${title#"$title_prefix"}
+        payload=$(printf '%s\n' "$payload" | sed 's/&quot;/"/g')
         printf '%s\n' "$payload" > "$webgl_result_file"
         break
       fi
