@@ -39,6 +39,7 @@ processへ引数が届いたことは確認したが、ANGLEのfeature override�
 | ANGLE revision | `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
 | runtime CI | [`36545744638`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36545744638) / success |
 | VM observation | [`36549980089`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36549980089) / success |
+| Phase 3B diagnostic change CI | [`36566498600`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36566498600) / success; Phase 3B fixture exit `0`, release-artifact fixture exit `0`, combined exit `0`; no skipped fixtures found |
 | preflight | `completed-dry-run`; signing was not performed by preflight |
 | signing | new test copy only; receipt schema `phase3-angle-signing-receipt-v3`; deep strict verification passed |
 | post-run verification | signed test copy passed final `codesign --verify --deep --strict` |
@@ -60,7 +61,28 @@ traceのfinalization前に終了すると欠落または切断され得るため
 traceからの個別の所見は主張しない。公開文書には個人情報、署名
 identity、profile path、絶対パス、raw logを記録しない。
 
-上記のJSON要求を付けたChrome実行は、この記録の時点ではまだ行っていない。
+### JSON startup trace diagnostic retry
+
+Phase 3B CI run `36566498600`の成功後、既存の署名済み`.58` test copyを使い、Case Bを
+`--diagnostic-gpu-startup`付きで1回実行した。run metadataはChrome `154.0.8037.58`、
+ANGLE revision `1ff8799c596d4fc9acea28343610b1f33650a6fa`、release manifest SHA-256
+`c929c2fc2dcae41007599bbb2b86dd8daf7b923a868b85c1e7a2d5d2df12b64e`を記録し、
+`--trace-startup-format=json`を含んでいた。traceはJSONとしてparseでき、`traceEvents`
+は3,001件だった。GPU/startupカテゴリとGPU初期化イベントを含む一方、ANGLEの直接ロードを
+証明するイベントは確認できなかった。stderrにはtrace consumerのack timeoutも記録されて
+いるため、JSONとして妥当であることとtraceが完全であることは区別する。
+
+stderrはIntel HD Graphics 5000 / Metalのadapter選択後にEGL初期化失敗、
+`GLDisplayEGL::Initialize failed`、GPU process終了を記録した。GPU初期化が通らなかったため、
+WebGLとKOOVには進んでいない。replacement dylibの直接ロードも未確認である。
+
+その後の読み取り専用確認で、source Chromeとtest copyのFramework `Current`がともに
+`154.0.8037.59`を指していた。結果収集スクリプトはmanifestの`.58`記録とFramework versionの
+不一致を検出して停止した。起動stderrにはChromeからGoogleUpdaterの`--wake-all`子プロセスが
+開始された記録があるが、それが後のversion変更を実行したことまでは立証できない。従って、
+今回のCase Bログは起動時metadataと失敗系列の記録として保持するが、後から収集できなかった
+直接load証拠や、現在の`.59` bundleを使う追加試験には流用しない。`.58`向けの再試行には、
+Chrome versionとFramework versionを固定した新しい入力・isolated test copyが必要である。
 
 ## 段階別判定
 
