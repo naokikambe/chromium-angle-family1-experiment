@@ -264,7 +264,10 @@ jobs:
             out/Phase5/args.gn >/dev/null
 
       - name: Build libEGL
-        timeout-minutes: 25
+        # The uncached macos-15-intel build can need more than 25 minutes.
+        # Keep this below the historical 45-minute action budget while leaving
+        # room for the first-run dependency fan-in.
+        timeout-minutes: 40
         shell: bash
         run: |
           set -uo pipefail

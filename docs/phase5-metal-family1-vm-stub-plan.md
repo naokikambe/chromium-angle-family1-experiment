@@ -69,9 +69,9 @@ Phase 5の次段階は、実機試験へ直行せず、CIで実機用runtime境�
 - Phase 3D VMで、少なくとも動的ロードの成否とGPU processのEGL初期化結果を直接記録できる。
 - VM成功を実機成功と解釈せず、未観測の実機リスクを記録する。
 
-## GitHub Actions workflow設計（45分timeout回避）
+## GitHub Actions workflow実装（45分timeout回避）
 
-この節は実機用runtime patchをCIで検証するための未実装・未dispatchの設計である。現在の専用stub workflowの成功記録や、既存artifactを変更するものではない。
+実機用runtime patchをCIで検証するworkflowを、現在の専用stub workflowと分離したreusable workflowとして実装した。既存stub artifactや成功記録は変更しない。workflowは明示的なruntime opt-in入力からのみ呼び出し、実機用artifactの生成後も`RUNTIME_DEVICE_READY=false`を維持する。
 
 GitHub Actionsのstep/job timeoutはworkflowで個別に設定でき、公式仕様上の上限はGitHub-hosted runnerでは360分である。ただし、単純にtimeoutを延長して失敗検出を遅らせるのではなく、現在の45分step制限を各build段階の安全予算として維持する。[Workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)
 
@@ -80,7 +80,7 @@ GitHub Actionsのstep/job timeoutはworkflowで個別に設定でき、公式仕
 - `gn gen`、source audit、build、test、artifact検証を別stepに分ける。
 - 同じ`out/Phase5`を1つのbuild job内で順次再利用し、共有GN/Ninja treeに対する並列Ninja実行は行わない。
 - `libEGL.dylib`／`libGLESv2.dylib`とtargeted test binaryだけを対象にし、`angle_end2end_tests`やfull DEQPを起動しない。
-- 45分を超える可能性のある単一Ninja stepを作らない。各長時間stepに明示的な`timeout-minutes`とstage markerを置く。
+- 45分を超える単一Ninja stepを作らない。初回CIで`libEGL`が25分では完了せず`1211/1314`まで進んでtimeoutしたため、同stepを40分へ拡張し、`libGLESv2`は25分、job全体は120分に制限する。各長時間stepに明示的な`timeout-minutes`とstage markerを置く。
 - 失敗時は`if: always()`でstage log、GN args、source state、Ninja diagnostics、exit statusを保存する。自動retryは行わず、失敗分類後に新しいrunを開始する。
 - `out/`全体をjob間artifactとして転送しない。job間では最終dylib、manifest、検証結果、diagnosticsだけをartifactにする。GitHubのartifactはjob間の生成物受け渡し、cacheは再生成コストの高い依存物の再利用に使い分ける。[Artifacts and dependency caching](https://docs.github.com/en/actions/concepts/workflows-and-actions/dependency-caching)
 
@@ -104,13 +104,17 @@ phase5-runtime-vm-observe (separate workflow, job timeout 30分)
  └─ GPU/EGL/fallback diagnostics upload
 ```
 
-`phase5-runtime-build`は、runtime artifactへtest-only bridgeやtest-only exportが混入していないことを`gn desc`、target topology、`nm`、artifact file listで検証する。runtime patchとtargeted testが異なるGN条件を必要とする場合は、同一artifactへ混在させず、source revision・patch hashを共有する別build modeとして明示する。まずはruntime artifact buildとtargeted testを同一jobのincremental treeで測定し、120分のjob予算内に収まることを確認する。
+`phase5-runtime-build`は、runtime artifactへtest-only bridgeやtest-only exportが混入していないことを`gn desc`、target topology、`nm`、artifact file listで検証する。runtime patchとtargeted testが異なるGN条件を必要とする場合は、同一artifactへ混在させず、source revision・patch hashを共有する別build modeとして明示する。runtime artifact buildは同一jobのincremental treeで測定し、初回run `36497660658`ではpatch適用・GN監査まで成功した後、`libEGL` stepが25分timeoutした。次回runは40分step予算へ修正して、120分のjob予算内に収まることを再検証する。
 
 依存物のcacheは、source revision、patch SHA-256、GN args SHA-256、runner OSを含む厳密なkeyでのみ再利用する。cache missでも必ず再生成できることを完了条件とし、未検証の`out/` partial cacheを正しいbuildの代替にしない。cacheが効かない初回runでも、各stepのtimeout予算を超えない構成にする。
 
 Phase 3D VM観測はbuild jobから分離し、検証済みruntime artifactのrun IDを入力にする。buildの再実行とVM観測を同じjobへ詰め込まない。これにより、VM側のChrome起動・GPU観測の失敗がANGLE build timeoutの原因と混ざらず、artifactを固定した再観測が可能になる。
 
-この設計の受入条件は、cache hitを前提にせず、各長時間stepが予算内で完了し、job全体が120分以内に終わり、最終artifactのmanifest・patch provenance・dylib hash・diagnosticsが相互に一致することである。workflowの実装、commit/push、dispatch、artifact downloadは別途承認後に行う。
+この設計の受入条件は、cache hitを前提にせず、各長時間stepが予算内で完了し、job全体が120分以内に終わり、最終artifactのmanifest・patch provenance・dylib hash・diagnosticsが相互に一致することである。workflow実装はcommit/push済みで、CI dispatchは承認を受けて実施中である。artifactが成功するまで、実機用artifactの実機取得・署名・Chrome起動・実機操作は行わない。
+
+### runtime artifact CIの失敗記録
+
+初回runtime dispatch `36496266565`は、workflowへ接続する前の旧patchが`git apply`で壊れた形式だったため、patch適用段階で失敗した。patchを正規化してSHA-256を`07d7e80d8ce1099cb3d9d3ad5654eabd39b3d33776932ad28e3d76deaf6d4070`へ更新し、commit `6059faf`で修正した。再run `36497660658`は同patchの適用、固定ANGLE source、GN生成、target graph監査まで成功したが、初回依存・未cacheの`ninja libEGL`が25分でtimeoutした。diagnostics artifact `phase5-metal-family1-runtime-diagnostics-36497660658`のbuild logは`1211/1314`まで進んでおり、コンパイルエラーは記録されていない。この結果を受け、libEGL stepのtimeoutを40分へ変更し、別runで再検証する。
 
 ## ソースコードによる裏取り
 

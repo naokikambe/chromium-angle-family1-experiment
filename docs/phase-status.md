@@ -79,4 +79,4 @@ Phase 5専用stub CIの成功は、test-only profileと初期化停止段階の�
 4. Phase 3D VMで動的ANGLEロード、GPU process引数、EGL初期化、fallbackを観測する。
 5. 必要ならVM WebGL smokeを追加する。KOOV、USB、Bluetooth、既存profileはCIの対象外とする。
 
-この段階ではworkflow dispatch、CI artifact download、署名、xattr、Chrome起動、profile操作、KOOV操作を行わない。CI成功後も、実機用artifactの取得と実機操作にはHuman/Approverの個別承認が必要である。
+runtime artifact workflowは実装済みで、明示的runtime opt-inとしてCI dispatchを開始した。初回再run `36497660658`は固定ANGLE source・patch適用・GN監査に成功した後、初回未cacheの`ninja libEGL`が25分timeoutした。diagnostics artifact `phase5-metal-family1-runtime-diagnostics-36497660658`は保存済みで、ログは`1211/1314`まで進んだコンパイルtimeoutを示す。原因に合わせてlibEGL stepを40分（45分未満）へ修正し、次のCI runで再検証する。CI成功後も、実機用artifactの取得と実機操作にはHuman/Approverの個別承認が必要である。署名、xattr、Chrome起動、profile操作、KOOV操作は引き続き行わない。
