@@ -1,9 +1,14 @@
 # Phase 3 — Dynamic ANGLE experiment
 
-Status: release-manifest migration is under implementation and requires successful
-Phase 3B and Phase 3C synthetic CI before any new device preflight is authorized.
-This workflow does not modify the installed Chrome app, sign code, launch Chrome or
-KOOV, or access existing browser profiles.
+Status: Chrome `154.0.8037.58` runtime artifact CI and Phase 3D VM observation
+are complete. The separately approved `.58` real-device attempt reached GPU
+initialization and stopped there; its evidence and remaining boundaries are in
+[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md).
+Any new device preflight still requires separate approval. The release-manifest
+migration history and procedure below remain part of this record.
+The CI workflows described here do not modify the installed Chrome app, sign
+code, launch Chrome or KOOV, or access existing browser profiles. The separately
+approved device procedure and its current `.58` observation are recorded below.
 
 ## Release selection and provenance
 
@@ -106,17 +111,27 @@ the GPU process loads both external dylibs or that KOOV works.
 `run-dynamic-angle-test.sh` accepts the explicit optional
 `--diagnostic-gpu-startup` flag for a separately approved diagnostic Case B or
 Case C attempt. It adds Chrome VLOG selection for `gl_display` and
-`gl_initializer_mac`, and writes a 15-second Chrome GPU startup trace directly
-to the case results directory. The selected mode and trace path are recorded in
-`run-metadata.txt`; the normal case does not enable it.
+`gl_initializer_mac`, requests a 15-second Chrome GPU startup trace in JSON
+format, and writes it to the case results directory. The selected mode, trace
+path, and requested format are recorded in `run-metadata.txt`; the normal case
+does not enable it.
+
+Chromium's tracing switch documentation describes proto as the default format:
+it can be written incrementally and retain more data if the browser terminates
+unexpectedly. JSON is easier to read, but it can be incomplete or truncated if
+the browser exits before trace finalization. Therefore `json` in the command
+line or metadata records a requested format only. The result file must be
+checked after the run before calling it valid JSON or using its contents.
 
 This mode does not alter the signed test-copy bytes or add a dyld entitlement.
 In particular, it deliberately does not rely on `DYLD_*` environment variables:
 the Hardened Runtime may ignore those variables without the
 `allow-dyld-environment-variables` entitlement. The trace and `stderr.log` can
 show EGL/GPU initialization failures, but do not prove external ANGLE loading.
-`lsof` or `vmmap` naming both test-copy dylib absolute paths remains the required
-load proof.
+`stderr.log` and other process evidence remain independent of trace format. A
+trace, its requested flags, or its existence do not prove external ANGLE
+loading or an internal ANGLE stage. `lsof` or `vmmap` naming both test-copy
+dylib absolute paths remains the required load proof.
 
 ## Phase 3 results and transition to Family 1 work
 
@@ -131,24 +146,42 @@ case showed the external ANGLE libraries in the GPU process, while the stock
 control did not. This proves the dynamic loading and propagation path in the
 VM; it does not prove successful Metal initialization on the target Mac.
 
-On the Intel Mac, a test copy was prepared and Apple Development signed with
-strict verification passing. The Keychain prompt was declined intentionally.
-Chrome itself launched, but repeated GPU processes failed with
-`Initialization of all (1) EGL display types failed`, followed by
+As a historical pre-`.58` Intel Mac attempt, a test copy was prepared and
+Apple Development signed with strict verification passing. The Keychain prompt
+was declined intentionally. Chrome launched, and repeated GPU processes
+recorded `Initialization of all (1) EGL display types failed`, followed by
 `GLDisplayEGL::Initialize failed` and GPU-process exit. The same EGL failure was
-reproduced with the unmodified installed Chrome using the same ANGLE/Metal
-startup switches. Therefore the current evidence attributes the failure to
-the pre-existing Chrome/ANGLE Metal initialization path on this Intel HD
-Graphics 5000 / Metal Family 1 environment, not to test-copy signing or the
-dynamic replacement mechanism.
+also recorded during that historical comparison with the unmodified installed
+Chrome using the same ANGLE/Metal startup switches. This record predates the
+current `.58` attempt; it does not establish current `.58` stock behavior,
+current `.58` dynamic ANGLE loading, or the root cause of the current failure.
 
-The real-device run did not establish external dylib loading: the short-lived
-GPU processes were not captured while their libraries were mapped. It also did
-not launch KOOV. Those are unresolved observations, not evidence that dynamic
-ANGLE was absent. The next work is therefore Phase 5: make the smallest
-explicitly opt-in ANGLE change that permits or adapts Metal Family 1
-initialization, preserve Family 2+ behavior, validate it in CI and the VM,
-and only then repeat the approved real-device test.
+On the Intel Mac, the `.58` test copy was prepared and Apple Development
+signed with strict verification passing. Chrome launched with a fresh disposable
+profile. In live repeat Case B and Case C observations, the GPU process selected
+Intel HD Graphics 5000 / Metal, then failed with
+`Initialization of all (1) EGL display types failed`, followed by
+`GLDisplayEGL::Initialize failed`, GPU-process exit, and
+`--use-gl=disabled` fallback. Case C added only
+`--disable-angle-features=requireGpuFamily2`; the switch reached the GPU
+process, but this does not prove that the feature override was recognized or
+that initialization should succeed.
+
+The real-device observation did not establish external dylib loading. Neither
+`lsof`/`vmmap` nor the collector named both replacement dylibs, and the short-lived
+GPU process disappeared before collection in some observations. This is an
+unresolved load observation, not evidence that dynamic ANGLE was absent. WebGL
+and KOOV were not started after the GPU initialization stop condition. The
+details and sanitized attempt record are in
+[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md).
+
+The next work is read-only analysis of the existing GPU startup trace, stderr
+extract, GPU process arguments, and failure ordering. If needed, disposable
+diagnostic tooling should improve direct load and feature-override proof. Then
+the fixed revision's Family 1 gate and runtime patch should be diagnosed at
+source level, with CI and VM validation before any separately approved repeat
+device test. The current runtime patch adds a nil command-queue guard; it does
+not bypass the Family 1 availability gate.
 
 ## Legacy artifacts
 

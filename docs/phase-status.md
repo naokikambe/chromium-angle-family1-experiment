@@ -40,9 +40,9 @@ for new real-device work. Any separately approved historical device-test record 
 | Phase 1 | 完了 | Chromium `62d2fcb41a84e4dcefd8c4da7dfa534e6c482854`、ANGLE `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`、dynamic ANGLE の探索位置と主要 dylib を固定ソースで確認済み。Feature override が後続の条件付き既定値で上書きされない根拠を `docs/baseline.md` に追記した。 |
 | Phase 2 | Phase 2B 完了 | 初回run `35495704110` と失敗follow-up run `35497602637` の記録は保持する。2回目のfollow-up run [`35501697418`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/35501697418) は固定ANGLE checkout、`gclient sync`、GN、Ninja、artifact検証、uploadに成功した。artifactはx86_64の`libEGL.dylib`と`libGLESv2.dylib`のみを含み、各自己install name以外に非system依存はなく、署名は未署名（Phase 2では許容）である。Phase 2B時点では未実行だった固定depot_tools `0306e4682b4ac35287c726fa35a983157a625902` のbootstrap付き構成は、Phase 3A run `35515036255`で初めて実行・検証された。 |
 | Phase 3A | legacy artifact記録 | Chrome `154.0.8037.45`向けartifact `35515036255`は過去の固定SHA・形式・依存・署名検証結果として記録する。新形式のrelease manifestを持たず、新しい実機試験には使用しない。 |
-| Phase 3B | synthetic fixture CI成功・実機試験未実施 | `angle-release-v1`はChrome/Chromium/ANGLE/depot_tools識別子、dylib SHA、artifact/run metadataを束縛する。test-copy manifestはrelease manifest SHAを記録し、Libraries baselineを保持したままANGLE 2本だけ追加する。正式なsynthetic fixture判定は下記のrunで成功した。ローカルfull fixtureは実行しない。retry0–12は保存済み履歴として不変保持し、新規attempt rootは別名で作成する。元Chromeのxattr、実署名、実機起動は行わない。 |
-| Phase 3B 以降 | synthetic 3B/3C成功、Phase 3D VM観測成功・新規実機試験未承認 | Phase 3D文書に記録された、別途承認済みの過去のユーザー所有機器テスト・署名・Chrome起動記録は履歴として保持する。今回確認した3B/3C/3D run metadataは新規の実機作業を承認しない。Phase 5の詳細な入場記録と専用stub CIは完了したが、署名・Chrome/KOOV操作は引き続き人間の承認境界にある。 |
-| Phase 5 | Chrome `154.0.8037.58` runtime artifact CI・Phase 3D VM/WebGL smoke観測成功、実機未実施 | `.58`向けruntime artifact CI [`36545744638`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36545744638)とPhase 3D VM/WebGL観測 [`36549980089`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36549980089)を追加記録した。両replacement dylibのGPU-correlated dyld loadは成功したが、EGL初期化失敗とGPU disabled fallbackが発生し、WebGL2/WebGL1 contextはdynamic/stockとも`context-null`だった。過去の`.57`記録は履歴として保持する。署名、実機Chrome/KOOV操作は未実施。 |
+| Phase 3B | synthetic fixture CI成功（記録時点） | `angle-release-v1`はChrome/Chromium/ANGLE/depot_tools識別子、dylib SHA、artifact/run metadataを束縛する。test-copy manifestはrelease manifest SHAを記録し、Libraries baselineを保持したままANGLE 2本だけ追加する。正式なsynthetic fixture判定は下記のrunの記録時点で成功した。ローカルfull fixtureは実行しない。retry0–12は保存済み履歴として不変保持し、新規attempt rootは別名で作成する。この行はCI記録の要約であり、後日の実機試行状態を表さない。 |
+| Phase 3B 以降 | synthetic 3B/3C成功、Phase 3D VM観測成功（各記録時点） | Phase 3D文書に記録された、別途承認済みの過去のユーザー所有機器テスト・署名・Chrome起動記録は履歴として保持する。3B/3C/3D run metadataはCI/VMの記録であり、新規の実機作業を承認しない。Phase 5の詳細な入場記録と専用stub CIは完了しているが、この行自体は現在の実機試行結果を表さない。 |
+| Phase 5 | Chrome `154.0.8037.58` runtime artifact CI・Phase 3D VM/WebGL smoke観測成功、実機はGPU初期化で停止 | `.58`向けruntime artifact CI [`36545744638`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36545744638)とPhase 3D VM/WebGL観測 [`36549980089`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36549980089)を追加記録した。実機では新規test copyのpreflight、Apple Development署名、strict verify、Chrome起動、Intel HD Graphics 5000 / Metal選択まで成功した。Case B/CはEGL初期化失敗、GPU process終了、`--use-gl=disabled` fallbackで停止し、replacement dylibの直接ロードは未確認である。WebGL/KOOVは未実施。詳細は[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)。過去の`.57`記録は履歴として保持する。 |
 
 ## Phase 3の一次記録（2026-09-26確認）
 
@@ -104,7 +104,7 @@ Phase 3D diagnostics artifactの`ANGLE_RELEASE_MANIFEST`はsidecar検証に成�
 
 ## Phase 5次段階の実行方針（CI先行）
 
-Phase 5専用stub CIの成功は、test-only profileと初期化停止段階の検証完了を示す。実機試験へ進む前に、次のCI作業を完了させる。
+Phase 5専用stub CIの成功は、記録時点でtest-only profileと初期化停止段階の検証が完了したことを示す。続くruntime artifact CIとVM観測も完了し、現在は実機試行の結果を別記録として扱う。次の項目はCI/VM記録の順序を示すもので、現在の実機試行が未実施であることを示すものではない。
 
 1. test-only stubと分離した、明示的opt-inの実機用runtime patchを固定ANGLE revisionへ適用する。
 2. `libEGL.dylib`／`libGLESv2.dylib`、patch provenance、manifest、SHA-256を含む実機用artifactをCIで生成・検証する。
@@ -112,9 +112,19 @@ Phase 5専用stub CIの成功は、test-only profileと初期化停止段階の�
 4. Phase 3D VMで動的ANGLEロード、GPU process引数、EGL初期化、fallbackを観測する。
 5. 必要性と入力ページを別途固定したうえで、VM上のWebGL smoke観測を追加した。これはrun [`36514821653`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36514821653)で完了した。KOOV、USB、Bluetooth、既存profileはCIの対象外とする。
 
-runtime artifact workflowは実装済みで、明示的runtime opt-inとしてCI dispatchを実施した。初回再run `36497660658`は固定ANGLE source・patch適用・GN監査に成功した後、初回未cacheの`ninja libEGL`が25分timeoutした。原因に合わせてlibEGL stepを40分（45分未満）へ修正し、run `36501314503`で`libEGL`、`libGLESv2`、symbol/manifest/artifact検証、uploadまで成功した。続くPhase 3D VM観測と固定WebGL smoke観測も完了したが、VM成功を実機成功とは扱わない。署名、xattr、Chrome起動、profile操作、KOOV操作は引き続き行わない。
+runtime artifact workflowは実装済みで、明示的runtime opt-inとしてCI dispatchを実施した。初回再run `36497660658`のtimeout、修正後のruntime build run `36501314503`、続くPhase 3D VM観測と固定WebGL smoke観測は、それぞれ当時のCI/VM記録として完了している。VM成功を実機成功とは扱わない。実機試行の署名・Chrome起動は別途実施済みであり、その結果は「Phase 5実機試行の結果」と実機観測文書に記録する。KOOV操作は未実施である。
 
 Phase 3D VM観測run `36507728136`は、runtime artifact `36501314503`を固定入力として成功した。dynamic probeでは`BROWSER_STARTED=true`、`BROWSER_ALIVE_AT_DEADLINE=true`、両replacement dylibのGPUプロセス相関dyld loadが`true`、`EGL_INITIALIZATION_FAILURE_OBSERVED=true`、`GPU_DISABLED_FALLBACK_OBSERVED=true`、`PROBE_EXIT_STATUS=0`だった。stock controlではEGL初期化失敗は観測されず、両ケースともGPU disabled fallbackが発生したため、comparisonは`dynamic-angle-differs-from-stock-control`となった。これはruntime artifactがVM上のGPUプロセスへ到達した証拠だが、描画成功やIntel HD Graphics 5000実機互換性の証明ではない。
+
+## Phase 5 実機試行の結果（2026-09-29）
+
+`.58` runtime artifactを使った新規attempt `attempt-20260929-193416`では、Phase 3C preflightは`completed-dry-run`となり、その後に明示承認されたtest copyだけをApple Development署名した。署名receipt v3の生成、deep strict verification、Chrome起動、Intel HD Graphics 5000 / Metalのadapter選択を確認した。
+
+live repeatのCase BとCase Cでは、いずれも`Initialization of all (1) EGL display types failed`、`GLDisplayEGL::Initialize failed`、GPU process終了、`--use-gl=disabled` fallbackを確認した。Case Cの`--disable-angle-features=requireGpuFamily2`はGPU processへ到達したが、初期化成功やANGLE feature overrideの認識までは証明しない。`lsof`、`vmmap`、collector結果は両replacement dylibの直接ロードを証明しなかったため、ロード済みとも未ロードとも断定しない。停止条件によりWebGLとKOOVは実施していない。source Chromeは`.58`のままで、既存retry/evidenceは変更していない。
+
+runtime manifestの`RUNTIME_DEVICE_READY=false`は、CI artifactが未署名・実機起動前の境界で作られていることを示す。実機で署名・起動した事実やGPU初期化成功を表す値ではなく、変更しない。
+
+次の作業は、既存trace、stderr抽出、GPU process引数、失敗順序の読み取り専用分析、必要に応じた一時的な診断手段での直接ロード・feature override証明、固定revisionのFamily 1 gateとruntime patchのソース診断の順に進める。CI/VMで修正結果を確認し、別途承認を得た後にのみ新しい実機試行を行う。GPU初期化が成功するまでWebGL、その後にKOOVへ進まない。
 
 ## Phase 3D runtime artifact観測記録
 
