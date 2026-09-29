@@ -20,7 +20,7 @@ on:
       runtime_chrome_version:
         description: Chrome release version whose DEPS ANGLE pin must match for runtime
         required: false
-        default: 154.0.8037.57
+        default: 154.0.8037.58
         type: string
       runtime_patch_sha256:
         description: SHA-256 of the checked-in Phase 5 runtime patch

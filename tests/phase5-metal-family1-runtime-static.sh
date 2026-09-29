@@ -12,7 +12,7 @@ git apply --numstat "$patch" >/dev/null
 grep -F 'phase5-metal-family1-runtime.patch' "$workflow" >/dev/null
 grep -F '07d7e80d8ce1099cb3d9d3ad5654eabd39b3d33776932ad28e3d76deaf6d4070' "$workflow" >/dev/null
 grep -F '1ff8799c596d4fc9acea28343610b1f33650a6fa' "$workflow" >/dev/null
-grep -F '154.0.8037.57' "$workflow" >/dev/null
+grep -F '154.0.8037.58' "$workflow" >/dev/null
 grep -F 'workflow_dispatch:' "$workflow" >/dev/null
 ! grep -E '^[[:space:]]*(push|pull_request|pull_request_target):' "$workflow" >/dev/null
 grep -F 'runs-on: macos-15-intel' "$workflow" >/dev/null
