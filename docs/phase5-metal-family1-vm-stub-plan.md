@@ -3,7 +3,22 @@
 作成日: 2026-09-26
 更新日: 2026-09-29
 
-状態: 設計確認済み・admission record確認済み・実装済み・runtime artifact CI/Phase 3D VM/WebGL smoke検証成功・実機未実施
+状態: 設計確認済み・admission record確認済み・実装済み・Chrome 154.0.8037.58 runtime artifact CI/Phase 3D VM/WebGL smoke検証成功・実機未実施
+
+## Chrome 154.0.8037.58 rebuild status（2026-09-29）
+
+既存のChrome `.57`記録は履歴として保持し、実機にインストールされた
+Chrome `154.0.8037.58`に合わせてruntime artifactとPhase 3D VM観測を
+再生成した。
+
+| 項目 | 記録 |
+| --- | --- |
+| runtime CI | [`36545744638`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36545744638) / success |
+| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.58-angle-1ff8799c-36545744638` / GitHub digest `sha256:76a4a04c342edfb263cf4d65157e9a5d5ebfc5c5331d9c896a4614115e89b379` |
+| Chrome / Chromium / ANGLE | `154.0.8037.58` / `a654841425914cbb703a2931e07b70a83aedbafd` / `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
+| manifest / dylib | manifest `c929c2fc2dcae41007599bbb2b86dd8daf7b923a868b85c1e7a2d5d2df12b64e`; `libEGL=f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`; `libGLESv2=d0dedeeddb3b727e645648ee2b90462be43300c07914c3cc8ca7fc3de3b95e5c` |
+| VM observation | [`36549980089`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36549980089) / success; dynamic両dylib GPU-correlated load、EGL failure、GPU fallback; WebGL context/drawは未達 |
+| device boundary | `RUNTIME_DEVICE_READY=false`; 署名、Chrome起動、実機操作、KOOV操作は未実施 |
 
 ## 結論
 

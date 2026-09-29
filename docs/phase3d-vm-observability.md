@@ -46,6 +46,43 @@ planに定めた3B/3C/3D run、manifest SHA-256、artifact名、ANGLE revision�
 Phase 3D run `36507728136`も成功したが、署名・実機起動・KOOV操作は行っていない。
 VM観測の成功もIntel HD Graphics 5000での実機成功を意味しない。
 
+## Chrome 154.0.8037.58 rebuild observation record
+
+The Phase 5 runtime artifact was rebuilt for the Chrome version currently
+installed on the target Mac. The previous `.57` records remain historical;
+this section is the current `.58` input and observation record.
+
+| 項目 | 記録 |
+| --- | --- |
+| runtime build run | [`36545744638`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36545744638) / success / 33m30s |
+| build commit | `7c034047a585986a52141b208f8b34bcda07ab84` |
+| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.58-angle-1ff8799c-36545744638` / GitHub digest `sha256:76a4a04c342edfb263cf4d65157e9a5d5ebfc5c5331d9c896a4614115e89b379` |
+| Chrome / Chromium | `154.0.8037.58` / `a654841425914cbb703a2931e07b70a83aedbafd` |
+| ANGLE / depot_tools | `1ff8799c596d4fc9acea28343610b1f33650a6fa` / `0306e4682b4ac35287c726fa35a983157a625902` |
+| runtime patch SHA-256 | `07d7e80d8ce1099cb3d9d3ad5654eabd39b3d33776932ad28e3d76deaf6d4070` |
+| manifest SHA-256 | `c929c2fc2dcae41007599bbb2b86dd8daf7b923a868b85c1e7a2d5d2df12b64e` |
+| dylib SHA-256 | `libEGL.dylib=f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`; `libGLESv2.dylib=d0dedeeddb3b727e645648ee2b90462be43300c07914c3cc8ca7fc3de3b95e5c` |
+| build validation | `libEGL=0`, `libGLESv2=0`; `verify-artifact.sh` and `verify-phase5-runtime-artifact.sh` passed; `TEST_ONLY_STUB=absent` |
+| device boundary | `RUNTIME_DEVICE_READY=false`; x86_64 Mach-O、未署名 |
+| CfT archive | official deterministic version URL / SHA-256 `84dfd08a56c5c5bdb5f74687b3fb1f6b7eeaf62ed0b700f91e283fb3ccee3beb` / bundle `154.0.8037.58` |
+| observation run | [`36549980089`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36549980089) / success / 3m20s |
+| observation commit | `063c9c47905c87653ed5cc40ee3504e85b14519e` |
+| diagnostics artifact | `phase3d-dynamic-angle-36545744638-36549980089` / GitHub digest `sha256:bd41e2e171a9b9337ad5139d63c617f29c2fba2bab0845f0375fa3abeb4c17fd` |
+| dynamic result | browser/GPU ANGLE flags `true`; both replacement libraries GPU-correlated dyld-loaded; EGL initialization failure `true`; GPU disabled fallback `true`; `DYNAMIC_ANGLE_OUTCOME=both-replacement-libraries-gpu-loaded`; probe exit `0` |
+| stock control | EGL initialization failure `false`; GPU disabled fallback `true`; comparison `dynamic-angle-differs-from-stock-control` |
+| WebGL result | dynamic/stockともページ到達 `true`、WebGL2/WebGL1 context `false`、draw `false`、`context-null` |
+| evidence limits | process-map observation `false`; dynamic collector failure count `0`; stock collector failure count `1`; VMはApple Paravirtualized Graphics Deviceで実機結果ではない |
+
+The CfT known-good JSON did not list a unique mac-x64 entry for `.58` at the
+time of the run. The probe therefore used the official version-fixed archive
+URL, recorded its archive SHA-256, and still required the extracted bundle
+version to equal `154.0.8037.58`. Distinct metadata URLs remain fatal.
+
+This `.58` VM result confirms the same software boundary as the earlier `.57`
+run: dynamic ANGLE reaches the GPU process, but EGL initialization fails and
+WebGL contexts are not created. It does not establish real-device rendering,
+Intel HD Graphics 5000 compatibility, signing success, or KOOV behavior.
+
 ## Phase 5 runtime artifact observation record
 
 The following record uses the runtime artifact produced by Phase 5 CI rather than the
@@ -117,8 +154,11 @@ hosted VM:
   new crash reports.
 
 The workflow dispatch input is an exact four-component Chrome for Testing
-version.  It downloads only the matching official mac-x64 Chrome for Testing
-archive and records the archive SHA-256 and bundle version.
+version. It downloads the matching official mac-x64 Chrome for Testing archive
+from the known-good metadata when a unique entry exists, or from the official
+version-fixed archive URL when metadata has not listed that exact version yet.
+It records the archive SHA-256 and requires the extracted bundle version to
+match exactly.
 
 ## Dynamic ANGLE observation
 
