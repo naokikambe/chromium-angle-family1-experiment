@@ -1,8 +1,61 @@
 # Phase 5 実機観測記録
 
-更新日: 2026-09-29
+更新日: 2026-09-30
 
-## 現在の結論
+## 最新の結論: Chrome 154.0.8037.59
+
+`.59`用runtime artifactのbuild、Phase 3D VM観測、実機Case BのGPU startup trace取得まで完了した。
+CI runの成功は診断workflowが完了した意味であり、GPU初期化・WebGLが成功した意味ではない。
+
+実機ではIntel HD Graphics 5000 / Metal adapter選択後にEGL初期化が3回失敗し、各GPU processが終了した。
+その後のGPU processは`--use-gl=disabled`で動作した。JSON traceは3,434 eventsを含み、
+`gpu_init::SetupGLDisplayManagerEGL`を記録した。ANGLE replacement dylibの直接ロードは確認できず、
+ロード済みとも未ロードとも判定しない。GPU初期化の停止条件により、実機WebGLとKOOVは実施していない。
+
+新しいtest copyのpreflight、Apple Development署名、deep strict verification、Case B起動は完了した。
+source ChromeとそのFrameworkは観測前後とも`154.0.8037.59`であり、既存retry/evidenceは変更していない。
+起動時にGoogleUpdaterの`--wake-all`が開始・正常終了したが、この観測期間内のsource更新は確認されなかった。
+
+| 対象 | 証跡・結果 |
+| --- | --- |
+| Phase 3B synthetic CI | [`36632187071`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36632187071) / success |
+| Chrome `.59` runtime artifact CI | [`36632206740`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36632206740) / success |
+| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.59-angle-1ff8799c-36632206740` / `sha256:3b20ea9d3dd1d0bba98afdbb4785cf8ed9e775db0c8fe6bd4956a49b4981c95b` |
+| manifest | Chrome `154.0.8037.59`; Chromium `b5a24985a2f5ed35909845221b7203c5d8995c8f`; ANGLE `1ff8799c596d4fc9acea28343610b1f33650a6fa`; release manifest SHA-256 `f07f5c27a0e0c8d79917a277dae393d8546697e75bc068d55f6476192b95fc47`; `RUNTIME_DEVICE_READY=false` |
+| runtime patch/libraries | Patch SHA-256 `07d7e80d8ce1099cb3d9d3ad5654eabd39b3d33776932ad28e3d76deaf6d4070`; `libEGL.dylib` SHA-256 `f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`; `libGLESv2.dylib` SHA-256 `d0dedeeddb3b727e645648ee2b90462be43300c07914c3cc8ca7fc3de3b95e5c` |
+| Phase 3D VM observation | [`36636862891`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36636862891) / success; diagnostics archive SHA-256 `c22e97e90c155bc440c6f3713f92f8024e10977b0ee2e39a734b6001b1d21a58` |
+| VM dynamic | Both replacement dylibs were directly observed in the GPU process; EGL initialization failed and Chrome fell back to `--use-gl=disabled`. WebGL page loaded, but neither WebGL 1 nor 2 context was created and no draw completed. |
+| VM stock control | No replacement ANGLE load was requested; EGL initialization failure was not observed, but GPU fallback occurred. WebGL 1/2 contexts and drawing were also unavailable in this VM. |
+| Real-device preflight/signing | `.59` source/test-copy/Framework versions matched; preflight completed, Apple Development signing receipt recorded strict verification passed. |
+| Real-device Case B | JSON trace parsed; 3,434 events. Intel HD Graphics 5000 / Metal selected, then EGL failure, GPU-process exit and disabled fallback. WebGL/KOOV were not run. |
+
+### 実機のANGLEロード証拠とcollector修正
+
+Case Bのprocess snapshotには、test Framework配下の`Google Chrome Helper.app --type=gpu-process`が記録された。
+当時のcollectorは`Google Chrome Helper (GPU)`という専用bundle名だけを探していたため、このGPU processを
+`gpu-processes.txt`に採取できず、`load-evidence.txt`も「未確認」となった。fallback状態のGPU processに対する
+事後`lsof`/`vmmap`では両replacement dylibのpathを見つけられなかったが、これはEGL failure後の状態であり、
+起動時にロードされなかった証明ではない。
+
+この誤検出を避けるため、collectorをFramework配下の`--type=gpu-process`で照合する変更をcommit
+`5cb3dbf`に記録した。専用helper形式・汎用helper形式のfocused fixtureはローカルでpassした。
+Phase 3B full suiteはPinned CIで確認する。collector修正後の実機再試行は別のretryにあたり、
+CI成功後に追加承認を得るまで実施しない。
+
+### `.59`段階別判定
+
+| 段階 | 判定 | 根拠 |
+| --- | --- | --- |
+| ANGLEロード | PENDING | GPU processは起動しdynamic-angle flagsも確認したが、直接load証拠なし。collector name-filter修正後の実機確認が必要。 |
+| GPU初期化 | BLOCKED | Intel HD Graphics 5000 / Metal選択後にEGL初期化失敗、GPU process終了、`--use-gl=disabled` fallback。 |
+| WebGL | PENDING | GPU初期化失敗で停止。実機WebGLは未実施。 |
+| KOOV | PENDING | WebGL成功前のため未実施。 |
+
+`RUNTIME_DEVICE_READY=false`はbuild成功と実機準備を区別するmanifest上の明示的なゲートである。
+CI artifactが作成され、署名済みtest copyで起動できたことだけでは、実機GPU初期化やANGLE動作の準備完了を意味しない。
+実機GPU初期化・WebGL・KOOVの受け入れ条件が満たされるまで`false`を維持する。
+
+## Chrome 154.0.8037.58 の過去記録
 
 Chrome `154.0.8037.58`用のPhase 5 runtime artifactを使い、新規の隔離test
 copyで実機確認を開始した。Phase 3C preflightはexit `0`、
@@ -27,7 +80,7 @@ Case Cの追加引数は`--disable-angle-features=requireGpuFamily2`だけであ
 processへ引数が届いたことは確認したが、ANGLEのfeature overrideが認識されたことや、
 初期化成功を示す証拠ではない。
 
-## 入力と証跡
+### `.58`の入力と証跡
 
 | 項目 | 記録 |
 | --- | --- |
@@ -84,7 +137,7 @@ WebGLとKOOVには進んでいない。replacement dylibの直接ロードも未
 直接load証拠や、現在の`.59` bundleを使う追加試験には流用しない。`.58`向けの再試行には、
 Chrome versionとFramework versionを固定した新しい入力・isolated test copyが必要である。
 
-## 段階別判定
+### `.58`段階別判定
 
 | 段階 | 判定 | 根拠 |
 | --- | --- | --- |
@@ -128,9 +181,10 @@ Paravirtualized Graphics Deviceであり、Intel HD Graphics 5000実機の代替
 
 ### 2. 診断証拠の改善
 
-必要な場合だけ、既存source Chrome・retry・保存済みevidenceを変更しない一時的な
-診断手段で、両replacement dylibの直接ロードとfeature override認識を同時に観測
-できるかを確認する。コマンドライン引数だけをロード証拠として扱わない。
+collectorはcommit `5cb3dbf`でGPU process type基準に修正し、専用/汎用helperを扱う
+focused fixtureがpassした。Pinned Phase 3B CI成功後、両replacement dylibの直接ロードと
+feature override認識を同時に記録できるか、別途承認された新しい実機retryで確認する。
+コマンドライン引数だけをロード証拠として扱わない。
 
 ### 3. ソース診断とCI/VM確認
 
@@ -140,12 +194,13 @@ validation、VM観測で確認する。`requireMsl21`は実装と効果を確認
 
 ### 4. 再度の実機試行
 
-CI/VMの証拠が揃い、実機用入力と観測方法が固定された後に、別途承認を得て新しい
-isolated test copyで実機試行を行う。GPU初期化成功後にだけWebGLへ進み、WebGLの
+collector修正のPinned Phase 3B CI成功後、別途承認を得て新しいisolated test copyで
+実機試行を行う。GPU初期化成功後にだけWebGLへ進み、WebGLの
 context生成と描画成功後にだけKOOVへ進む。各段階の失敗では結果を保全して停止する。
 
 ## 状態の境界
 
-今回の実機試行で完了したのは、`.58`入力のtest copy準備、署名検証、Chrome起動、
-adapter選択、GPU初期化失敗の観測である。WebGLとKOOVの実験結果は存在しない。
-この記録は新しい実機試行を自動承認せず、既存の`.57`記録やretry/evidenceを上書きしない。
+`.58`の過去試行と最新`.59`試行は別のtest copy/evidenceである。`.59`ではtest copy準備、
+署名検証、Chrome起動、adapter選択、GPU初期化失敗の観測まで完了した。実機WebGLとKOOVの
+実験結果は存在しない。この記録は新しい実機試行を自動承認せず、過去の`.57`/`.58`記録や
+retry/evidenceを上書きしない。
