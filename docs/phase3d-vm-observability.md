@@ -65,8 +65,40 @@ historical release artifact above.
 Interpretation: the runtime artifact reached the observed GPU process through dyld,
 but initialization did not reach a usable EGL state in the Apple Paravirtualized
 Graphics Device VM. This is a useful load/stop-boundary result, not a rendering
-pass and not evidence of Intel HD Graphics 5000 compatibility. WebGL smoke and
-user-owned-device/KOOV testing remain separate stages.
+pass and not evidence of Intel HD Graphics 5000 compatibility. The fixed WebGL
+smoke is recorded below; user-owned-device/KOOV testing remains separate.
+
+## WebGL smoke observation
+
+The fixed input `tests/fixtures/phase3d-webgl-smoke.html` was added to the
+dynamic and stock-control probes. Each probe used only its disposable Chrome
+for Testing bundle and temporary profile. The page creates independent WebGL2
+and WebGL1 canvases, attempts a minimal clear operation, and records the
+context/draw result, renderer metadata when available, and the exact null/error
+boundary. The probe reads the result through Chrome's loopback-only DevTools
+`/json` endpoint; no auxiliary server, installed Chrome, or user profile is
+used.
+
+| 項目 | 記録 |
+| --- | --- |
+| workflow / run | [`36514821653`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36514821653) / success / 3分52秒 |
+| commit | `e42e51f` |
+| input artifact | `angle-macos-x86_64-chrome-154.0.8037.57-angle-1ff8799c-36501314503` / ANGLE `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
+| diagnostics artifact | `phase3d-dynamic-angle-36501314503-36514821653` / GitHub digest `sha256:bf931a2be9b2060ba1366de67dea36c5231c59c225c9c4b387dd037be079be53` |
+| dynamic result | page loaded `true`; WebGL2/WebGL1 context `false`; draw `false`; `webgl2_error=context-null`, `webgl1_error=context-null` |
+| stock result | page loaded `true`; WebGL2/WebGL1 context `false`; draw `false`; `webgl2_error=context-null`, `webgl1_error=context-null` |
+| interpretation | `dynamic-webgl-blocked-by-egl-initialization`; dynamic EGL failure `true`, stock EGL failure `false` |
+
+The WebGL smoke workflow pass means the page was reached and its result was
+captured with no probe infrastructure failure. It does not mean a WebGL
+context or rendering succeeded. In this VM, both controls stopped at
+`context-null`, consistent with the observed GPU/EGL boundary.
+
+The first two WebGL attempts are retained as failure diagnostics: run
+`36513869419` stopped before Chrome launch because an auxiliary result server
+did not publish a port; run `36514367145` reached Chrome and DevTools but the
+`/json` endpoint HTML-escaped the title JSON. The final implementation removed
+the auxiliary server and decodes the DevTools title before JSON validation.
 
 ## Purpose
 

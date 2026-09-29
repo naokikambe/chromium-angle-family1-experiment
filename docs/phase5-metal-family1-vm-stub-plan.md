@@ -3,7 +3,7 @@
 作成日: 2026-09-26
 更新日: 2026-09-29
 
-状態: 設計確認済み・admission record確認済み・実装済み・runtime artifact CI/Phase 3D VM検証成功・WebGL/実機未実施
+状態: 設計確認済み・admission record確認済み・実装済み・runtime artifact CI/Phase 3D VM/WebGL smoke検証成功・実機未実施
 
 ## 結論
 
@@ -57,9 +57,9 @@ Phase 5の次段階は、実機試験へ直行せず、CIで実機用runtime境�
 2. 固定ANGLE revision `1ff8799c596d4fc9acea28343610b1f33650a6fa`からx86_64の`libEGL.dylib`／`libGLESv2.dylib`を生成する専用CI workflowを追加する。artifact名・manifest schemaはtest-only stubと分離し、patch SHA-256、source revision、dylib SHA-256、GN argsを束縛する。schemaは実装時に確定し、`angle-release-v1`を使う場合もpatch provenanceを失わせない。
 3. runtime patchのstatic audit、targeted EGL test、production pathのstub無効監査、artifact manifest検証をCIで実行する。
 4. 検証済みruntime artifactをPhase 3DのmacOS Intel VMへ渡し、動的ANGLEロード、GPU processの引数、EGL初期化境界、GPU fallbackを観測する。これはrun `36507728136`で完了した。VMはApple Paravirtualized Graphics Deviceであり、Intel HD Graphics 5000の実機結果とは扱わない。
-5. 必要性と入力ページを別途固定したうえで、VM上のWebGL smoke観測を追加する。KOOV、USB、Bluetooth、ユーザーprofileはCI範囲に含めない。
+5. 必要性と入力ページを別途固定したうえで、VM上のWebGL smoke観測を追加する。run `36514821653`で固定fixtureのページ到達、WebGL2/WebGL1のcontext-null、dynamic/stock比較を記録した。KOOV、USB、Bluetooth、ユーザーprofileはCI範囲に含めない。
 
-runtime artifact CIとPhase 3D VM観測は完了したが、WebGL smokeと実機試験は未完了である。この順序の残作業を完了した後に限り、実機用artifactのtest copy作成・署名・Chrome起動を別途承認する。CI workflowのdispatchとartifact downloadは今回承認済み範囲で実施したが、署名、xattr、profile操作、実機Chrome起動、KOOV操作は行わない。
+runtime artifact CI、Phase 3D VM観測、WebGL smoke観測は完了したが、実機試験は未完了である。WebGL smoke成功はcontext生成や描画成功を意味せず、実機用artifactのtest copy作成・署名・Chrome起動へ進むには別途承認が必要である。CI workflowのdispatchとartifact downloadは承認済み範囲で実施したが、署名、xattr、profile操作、実機Chrome起動、KOOV操作は行わない。
 
 ### CI先行段階の完了条件
 
@@ -67,6 +67,7 @@ runtime artifact CIとPhase 3D VM観測は完了したが、WebGL smokeと実機
 - 固定revision、patch hash、artifact manifest、2本のdylib hashが同一のCI記録に束縛されている。
 - targeted test、static audit、artifact validationが成功し、required testのskipがない。
 - Phase 3D VMで、少なくとも動的ロードの成否とGPU processのEGL初期化結果を直接記録できる。run `36507728136`で両replacement dylibのGPU-correlated dyld load、EGL初期化失敗、GPU disabled fallbackを記録した。
+- 固定WebGL smoke fixtureをdynamic/stock双方へ投入し、ページ到達、WebGL2/WebGL1 context、最小draw、renderer/error結果をdiagnostics artifactへ保存する。run `36514821653`でcontext-nullとEGL境界を記録した。
 - VM成功を実機成功と解釈せず、未観測の実機リスクを記録する。
 
 ## GitHub Actions workflow実装（45分timeout回避）
@@ -110,7 +111,7 @@ phase5-runtime-vm-observe (separate workflow, job timeout 30分)
 
 Phase 3D VM観測はbuild jobから分離し、検証済みruntime artifactのrun IDを入力にする。buildの再実行とVM観測を同じjobへ詰め込まない。これにより、VM側のChrome起動・GPU観測の失敗がANGLE build timeoutの原因と混ざらず、artifactを固定した再観測が可能になる。
 
-この設計の受入条件は、cache hitを前提にせず、各長時間stepが予算内で完了し、job全体が120分以内に終わり、最終artifactのmanifest・patch provenance・dylib hash・diagnosticsが相互に一致することである。run `36501314503`は37分37秒で完了し、`libEGL`（約25分超を含む）と`libGLESv2`、artifact validation、diagnostics uploadが成功した。続くrun `36507728136`は固定artifactのVM観測に成功し、runtime artifact段階とPhase 3D観測段階のCI受入条件を満たした。ただし`RUNTIME_DEVICE_READY=false`であり、WebGL smokeと実機操作は未実施である。
+この設計の受入条件は、cache hitを前提にせず、各長時間stepが予算内で完了し、job全体が120分以内に終わり、最終artifactのmanifest・patch provenance・dylib hash・diagnosticsが相互に一致することである。run `36501314503`は37分37秒で完了し、`libEGL`（約25分超を含む）と`libGLESv2`、artifact validation、diagnostics uploadが成功した。続くrun `36507728136`は固定artifactのVM観測に成功し、runtime artifact段階とPhase 3D観測段階のCI受入条件を満たした。WebGL smoke付き再観測run `36514821653`では、dynamic/stock双方のページ到達、context-null、EGL比較を記録した。ただし`RUNTIME_DEVICE_READY=false`であり、実機操作は未実施である。
 
 ### runtime artifact CIの失敗記録
 
@@ -118,7 +119,7 @@ Phase 3D VM観測はbuild jobから分離し、検証済みruntime artifactのru
 
 修正版run `36501314503`（commit `b7cd00c`）では、`libEGL`が`00:16:58Z`から`00:41:46Z`まで実行して成功し、従来の25分境界を越えて完了した。`libGLESv2`は続けて成功し、runtime artifactとdiagnosticsをuploadした。取得後の`verify-artifact.sh`、`verify-phase5-runtime-artifact.sh`、manifest/sidecar、artifact-files SHA検証も成功した。artifactにはtest-only stub markerがなく、`RUNTIME_DEVICE_READY=false`、x86_64 Mach-O、未署名であることを確認した。runtime artifactはCIで検証済みだが、実機で使用可能とする署名・配置・Chrome起動の承認を意味しない。
 
-Phase 3D run `36507728136`では、同runtime artifactを一時展開したChrome for Testingへ配置し、dynamic probeとstock controlを実行した。dynamic側は両dylibのGPU-correlated dyld loadを確認したが、EGL初期化失敗後にGPU disabled fallbackへ移行した。stock controlはEGL初期化失敗を示さず、両ケースの差分は`CONTROL_INTERPRETATION=dynamic-angle-differs-from-stock-control`として保存された。replacement-library-post-runのSHAはartifactと一致し、runner上の一時bundle以外は変更していない。これはロード経路と失敗境界の証拠であり、WebGL描画成功、実機互換性、KOOV動作の証拠ではない。
+Phase 3D run `36507728136`では、同runtime artifactを一時展開したChrome for Testingへ配置し、dynamic probeとstock controlを実行した。dynamic側は両dylibのGPU-correlated dyld loadを確認したが、EGL初期化失敗後にGPU disabled fallbackへ移行した。stock controlはEGL初期化失敗を示さず、両ケースの差分は`CONTROL_INTERPRETATION=dynamic-angle-differs-from-stock-control`として保存された。WebGL smoke付きrun `36514821653`では、固定fixtureのページ到達を確認し、dynamic/stock双方でWebGL2/WebGL1が`context-null`、draw未実行となった。replacement-library-post-runのSHAはartifactと一致し、runner上の一時bundle以外は変更していない。これはロード経路と失敗境界の証拠であり、WebGL描画成功、実機互換性、KOOV動作の証拠ではない。
 
 ## ソースコードによる裏取り
 
