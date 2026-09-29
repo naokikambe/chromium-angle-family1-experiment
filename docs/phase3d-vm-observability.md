@@ -35,16 +35,38 @@ artifactと同一物とは扱わない。3B diagnostics archiveのSHA-256は
 `d33c4e301f023ce9870e2a8faba139fb9415c5109aca9584d080ad661ac9ec03`であり、
 それぞれのfixture exit statusは`0`である。
 
-この成功runは実機作業、署名、ローカルChrome起動、artifact取得・置換を
+この成功runは、当時の実機作業、署名、ローカルChrome起動、artifact取得・置換を
 承認するものではない。Phase 5 implementationと専用stub CIは、Phase 5
 planに定めた3B/3C/3D run、manifest SHA-256、artifact名、ANGLE revision等の
 詳細なadmission recordを前提に完了した。専用CI run `36432392861`は成功し、
 `angle-metal-family1-test-stub-36432392861`（schema
 `phase5-metal-family1-test-stub-v1`）でtargeted EGL test 4件がすべて成功した。
-これはcompile-time test-only profileの検証であり、Chrome/GPUログを伴う追加VM観測や
-実機の署名・起動・KOOV操作を承認するものではない。次段階は、test-only stubと分離した
-実機用runtime patch/artifactをCIで検証し、そのartifactをこのVM観測へ接続するCI先行工程
-である。VM観測の成功もIntel HD Graphics 5000での実機成功を意味しない。
+これはcompile-time test-only profileの検証であり、後続のruntime artifact/VM観測とは
+別の記録である。後続のHuman承認によりruntime artifact `36501314503`を入力にした
+Phase 3D run `36507728136`も成功したが、署名・実機起動・KOOV操作は行っていない。
+VM観測の成功もIntel HD Graphics 5000での実機成功を意味しない。
+
+## Phase 5 runtime artifact observation record
+
+The following record uses the runtime artifact produced by Phase 5 CI rather than the
+historical release artifact above.
+
+| 項目 | 記録 |
+| --- | --- |
+| observation run | [`36507728136`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36507728136) / success / 3m04s |
+| observation commit | `73e04a42b0375e06a41b096fa45bd216d0f5abc7` |
+| input build run | `36501314503` / runtime artifact `angle-macos-x86_64-chrome-154.0.8037.57-angle-1ff8799c-36501314503` |
+| diagnostics artifact | `phase3d-dynamic-angle-36501314503-36507728136` / GitHub digest `sha256:0e313e79fc1d16f76aa4c7cad6b1e65ad349031195e57cfc8f7695060c4f36ea` |
+| release manifest | SHA-256 `fc0c39145695fa5501039b7aa1093326aadf7af71022e6b30294f464604dbdc2` / ANGLE `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
+| dynamic result | both replacement libraries GPU-correlated dyld-loaded; EGL initialization failure `true`; GPU disabled fallback `true`; probe exit `0` |
+| stock control | EGL initialization failure `false`; GPU disabled fallback `true`; comparison `dynamic-angle-differs-from-stock-control` |
+| evidence limits | process-map observation `false`; dynamic collector failure count `1`; post-run replacement hashes unchanged |
+
+Interpretation: the runtime artifact reached the observed GPU process through dyld,
+but initialization did not reach a usable EGL state in the Apple Paravirtualized
+Graphics Device VM. This is a useful load/stop-boundary result, not a rendering
+pass and not evidence of Intel HD Graphics 5000 compatibility. WebGL smoke and
+user-owned-device/KOOV testing remain separate stages.
 
 ## Purpose
 

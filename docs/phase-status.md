@@ -42,7 +42,7 @@ for new real-device work. Any separately approved historical device-test record 
 | Phase 3A | legacy artifact記録 | Chrome `154.0.8037.45`向けartifact `35515036255`は過去の固定SHA・形式・依存・署名検証結果として記録する。新形式のrelease manifestを持たず、新しい実機試験には使用しない。 |
 | Phase 3B | synthetic fixture CI成功・実機試験未実施 | `angle-release-v1`はChrome/Chromium/ANGLE/depot_tools識別子、dylib SHA、artifact/run metadataを束縛する。test-copy manifestはrelease manifest SHAを記録し、Libraries baselineを保持したままANGLE 2本だけ追加する。正式なsynthetic fixture判定は下記のrunで成功した。ローカルfull fixtureは実行しない。retry0–12は保存済み履歴として不変保持し、新規attempt rootは別名で作成する。元Chromeのxattr、実署名、実機起動は行わない。 |
 | Phase 3B 以降 | synthetic 3B/3C成功、Phase 3D VM観測成功・新規実機試験未承認 | Phase 3D文書に記録された、別途承認済みの過去のユーザー所有機器テスト・署名・Chrome起動記録は履歴として保持する。今回確認した3B/3C/3D run metadataは新規の実機作業を承認しない。Phase 5の詳細な入場記録と専用stub CIは完了したが、署名・Chrome/KOOV操作は引き続き人間の承認境界にある。 |
-| Phase 5 | test-only Metal Family 1 stub実装・専用CI成功・CI先行runtime/VM段階待ち・実機未実施 | 固定ANGLE revisionに対する専用workflow [`36432392861`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36432392861) が成功。artifact `angle-metal-family1-test-stub-36432392861`、schema `phase5-metal-family1-test-stub-v1`、4/4 targeted EGL tests、manifest/artifact-files SHA-256をPhase 5 planに記録した。次は実機へ直行せず、実機用runtime patch/artifactをCIで検証し、Phase 3D VM観測を行う。Chrome/GPUログを伴う追加VM観測、artifact取得、署名、Chrome/KOOV操作は別途承認が必要。 |
+| Phase 5 | runtime artifact CI・Phase 3D VM観測成功、WebGL/実機未実施 | 固定ANGLE revisionに対するtest-only stub CI [`36432392861`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36432392861)、runtime artifact CI [`36501314503`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36501314503)、Phase 3D VM観測 [`36507728136`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36507728136) を記録した。runtime artifactはGPUプロセスから両dylibのdyldロードまで到達したが、EGL初期化失敗とGPU disabled fallbackが発生した。VM成功は実機成功を意味せず、WebGL smoke、署名、実機Chrome/KOOV操作は未実施。 |
 
 ## Phase 3の一次記録（2026-09-26確認）
 
@@ -97,3 +97,18 @@ Phase 5専用stub CIの成功は、test-only profileと初期化停止段階の�
 5. 必要ならVM WebGL smokeを追加する。KOOV、USB、Bluetooth、既存profileはCIの対象外とする。
 
 runtime artifact workflowは実装済みで、明示的runtime opt-inとしてCI dispatchを実施した。初回再run `36497660658`は固定ANGLE source・patch適用・GN監査に成功した後、初回未cacheの`ninja libEGL`が25分timeoutした。原因に合わせてlibEGL stepを40分（45分未満）へ修正し、run `36501314503`で`libEGL`、`libGLESv2`、symbol/manifest/artifact検証、uploadまで成功した。次はこの固定artifactを入力とするPhase 3D VM観測であり、VM成功を実機成功とは扱わない。署名、xattr、Chrome起動、profile操作、KOOV操作は引き続き行わない。
+
+Phase 3D VM観測run `36507728136`は、runtime artifact `36501314503`を固定入力として成功した。dynamic probeでは`BROWSER_STARTED=true`、`BROWSER_ALIVE_AT_DEADLINE=true`、両replacement dylibのGPUプロセス相関dyld loadが`true`、`EGL_INITIALIZATION_FAILURE_OBSERVED=true`、`GPU_DISABLED_FALLBACK_OBSERVED=true`、`PROBE_EXIT_STATUS=0`だった。stock controlではEGL初期化失敗は観測されず、両ケースともGPU disabled fallbackが発生したため、comparisonは`dynamic-angle-differs-from-stock-control`となった。これはruntime artifactがVM上のGPUプロセスへ到達した証拠だが、描画成功やIntel HD Graphics 5000実機互換性の証明ではない。
+
+## Phase 3D runtime artifact観測記録
+
+| 項目 | 記録 |
+| --- | --- |
+| workflow / run | `phase3d-dynamic-angle-vm.yml` / [`36507728136`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36507728136) / success / 3分04秒 |
+| commit | `73e04a42b0375e06a41b096fa45bd216d0f5abc7` |
+| input artifact | `angle-macos-x86_64-chrome-154.0.8037.57-angle-1ff8799c-36501314503` / manifest SHA-256 `fc0c39145695fa5501039b7aa1093326aadf7af71022e6b30294f464604dbdc2` |
+| diagnostics artifact | `phase3d-dynamic-angle-36501314503-36507728136` / GitHub digest `sha256:0e313e79fc1d16f76aa4c7cad6b1e65ad349031195e57cfc8f7695060c4f36ea` |
+| dynamic boundary | `DYNAMIC_ANGLE_OUTCOME=both-replacement-libraries-gpu-loaded`; browser/GPU ANGLE flags `true`; libEGL/libGLESv2 GPU-correlated dyld load `true` |
+| initialization boundary | `EGL_INITIALIZATION_FAILURE_OBSERVED=true`; `GPU_DISABLED_FALLBACK_OBSERVED=true`; browser remained alive; probe exit `0` |
+| stock control | EGL initialization failure `false`; GPU disabled fallback `true`; `CONTROL_INTERPRETATION=dynamic-angle-differs-from-stock-control` |
+| evidence limits | process-map observation `false`; dynamic collector failure count `1`; post-run dylib SHA unchanged; VMはApple Paravirtualized Graphics Deviceで実機結果ではない |
