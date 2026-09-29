@@ -104,17 +104,19 @@ phase5-runtime-vm-observe (separate workflow, job timeout 30分)
  └─ GPU/EGL/fallback diagnostics upload
 ```
 
-`phase5-runtime-build`は、runtime artifactへtest-only bridgeやtest-only exportが混入していないことを`gn desc`、target topology、`nm`、artifact file listで検証する。runtime patchとtargeted testが異なるGN条件を必要とする場合は、同一artifactへ混在させず、source revision・patch hashを共有する別build modeとして明示する。runtime artifact buildは同一jobのincremental treeで測定し、初回run `36497660658`ではpatch適用・GN監査まで成功した後、`libEGL` stepが25分timeoutした。次回runは40分step予算へ修正して、120分のjob予算内に収まることを再検証する。
+`phase5-runtime-build`は、runtime artifactへtest-only bridgeやtest-only exportが混入していないことを`gn desc`、target topology、`nm`、artifact file listで検証する。runtime patchとtargeted testが異なるGN条件を必要とする場合は、同一artifactへ混在させず、source revision・patch hashを共有する別build modeとして明示する。runtime artifact buildは同一jobのincremental treeで測定した。初回run `36497660658`ではpatch適用・GN監査まで成功した後、`libEGL` stepが25分timeoutしたが、40分step予算へ修正したrun `36501314503`で全build・監査・artifact uploadが成功した。
 
 依存物のcacheは、source revision、patch SHA-256、GN args SHA-256、runner OSを含む厳密なkeyでのみ再利用する。cache missでも必ず再生成できることを完了条件とし、未検証の`out/` partial cacheを正しいbuildの代替にしない。cacheが効かない初回runでも、各stepのtimeout予算を超えない構成にする。
 
 Phase 3D VM観測はbuild jobから分離し、検証済みruntime artifactのrun IDを入力にする。buildの再実行とVM観測を同じjobへ詰め込まない。これにより、VM側のChrome起動・GPU観測の失敗がANGLE build timeoutの原因と混ざらず、artifactを固定した再観測が可能になる。
 
-この設計の受入条件は、cache hitを前提にせず、各長時間stepが予算内で完了し、job全体が120分以内に終わり、最終artifactのmanifest・patch provenance・dylib hash・diagnosticsが相互に一致することである。workflow実装はcommit/push済みで、CI dispatchは承認を受けて実施中である。artifactが成功するまで、実機用artifactの実機取得・署名・Chrome起動・実機操作は行わない。
+この設計の受入条件は、cache hitを前提にせず、各長時間stepが予算内で完了し、job全体が120分以内に終わり、最終artifactのmanifest・patch provenance・dylib hash・diagnosticsが相互に一致することである。run `36501314503`は37分37秒で完了し、`libEGL`（約25分超を含む）と`libGLESv2`、artifact validation、diagnostics uploadが成功した。runtime artifact段階のCI受入条件は満たしたが、`RUNTIME_DEVICE_READY=false`であり、Phase 3D VM観測と実機操作は未実施である。
 
 ### runtime artifact CIの失敗記録
 
 初回runtime dispatch `36496266565`は、workflowへ接続する前の旧patchが`git apply`で壊れた形式だったため、patch適用段階で失敗した。patchを正規化してSHA-256を`07d7e80d8ce1099cb3d9d3ad5654eabd39b3d33776932ad28e3d76deaf6d4070`へ更新し、commit `6059faf`で修正した。再run `36497660658`は同patchの適用、固定ANGLE source、GN生成、target graph監査まで成功したが、初回依存・未cacheの`ninja libEGL`が25分でtimeoutした。diagnostics artifact `phase5-metal-family1-runtime-diagnostics-36497660658`のbuild logは`1211/1314`まで進んでおり、コンパイルエラーは記録されていない。この結果を受け、libEGL stepのtimeoutを40分へ変更し、別runで再検証する。
+
+修正版run `36501314503`（commit `b7cd00c`）では、`libEGL`が`00:16:58Z`から`00:41:46Z`まで実行して成功し、従来の25分境界を越えて完了した。`libGLESv2`は続けて成功し、runtime artifactとdiagnosticsをuploadした。取得後の`verify-artifact.sh`、`verify-phase5-runtime-artifact.sh`、manifest/sidecar、artifact-files SHA検証も成功した。artifactにはtest-only stub markerがなく、`RUNTIME_DEVICE_READY=false`、x86_64 Mach-O、未署名であることを確認した。runtime artifactはCIで検証済みだが、実機で使用可能とする署名・配置・Chrome起動の承認を意味しない。
 
 ## ソースコードによる裏取り
 
