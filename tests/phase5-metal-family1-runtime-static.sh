@@ -17,6 +17,8 @@ grep -F 'workflow_dispatch:' "$workflow" >/dev/null
 ! grep -E '^[[:space:]]*(push|pull_request|pull_request_target):' "$workflow" >/dev/null
 grep -F 'runs-on: macos-15-intel' "$workflow" >/dev/null
 grep -F 'timeout-minutes: 120' "$workflow" >/dev/null
+grep -A4 -F -- '- name: Build libEGL' "$workflow" | grep -F 'timeout-minutes: 40' >/dev/null
+grep -A2 -F -- '- name: Build libGLESv2' "$workflow" | grep -F 'timeout-minutes: 25' >/dev/null
 grep -F 'timeout-minutes: 25' "$workflow" >/dev/null
 grep -F 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' "$workflow" >/dev/null
 grep -F 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' "$workflow" >/dev/null
