@@ -11,6 +11,8 @@ below rather than duplicated in this overview:
   and WebGL observation records
 - `docs/phase5-metal-family1-vm-stub-plan.md` — Phase 5 admission conditions,
   runtime artifact design, and real-device transition boundary
+- `docs/phase5-real-device-observation.md` — Chrome 154.0.8037.58 real-device
+  attempt, evidence limits, and the next-step decision tree
 - `docs/phase3-dynamic-angle.md` — separately approved device-test procedure
 
 The base workflow builds ANGLE targets `libEGL` and `libGLESv2` on
@@ -20,10 +22,12 @@ VM observation may use verified libraries inside a disposable Chrome for
 Testing bundle on the runner. It does not modify `/Applications`, the source
 Chrome app, an existing user profile, retained evidence, or KOOV.
 
-Real-device test-copy creation, xattr changes, signing, Chrome launch, profile
-use, and KOOV operation remain separately approved human actions. The original
-Chrome app and retained retry/evidence directories are read-only to the
-automated workflows.
+The separately approved Chrome `154.0.8037.58` real-device attempt is recorded
+in `docs/phase5-real-device-observation.md` and stopped at GPU initialization.
+Any new test-copy creation, xattr changes, signing, Chrome launch, profile use,
+or KOOV operation still requires separate human approval. The original Chrome
+app and retained retry/evidence directories are read-only to the automated
+workflows.
 
 ## License
 

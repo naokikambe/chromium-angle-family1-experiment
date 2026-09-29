@@ -72,6 +72,7 @@ if [[ "$diagnostic_gpu_startup" == true ]]; then
   command+=(
     '--vmodule=gl_display=2,gl_initializer_mac=2'
     '--trace-startup=gpu,disabled-by-default-gpu.angle'
+    '--trace-startup-format=json'
     "--trace-startup-file=$startup_trace"
     '--trace-startup-duration=15'
   )
@@ -92,6 +93,7 @@ fi
   printf 'diagnostic_gpu_startup=%s\n' "$diagnostic_gpu_startup"
   if [[ "$diagnostic_gpu_startup" == true ]]; then
     printf 'chrome_gpu_startup_trace=%s\n' "$startup_trace"
+    printf 'chrome_gpu_startup_trace_format=json\n'
   fi
   printf 'command='
   printf '%q ' "${command[@]}"

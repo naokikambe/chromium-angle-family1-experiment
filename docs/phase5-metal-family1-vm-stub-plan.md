@@ -3,7 +3,7 @@
 作成日: 2026-09-26
 更新日: 2026-09-29
 
-状態: 設計確認済み・admission record確認済み・実装済み・Chrome 154.0.8037.58 runtime artifact CI/Phase 3D VM/WebGL smoke検証成功・実機未実施
+状態: 設計確認済み・admission record確認済み・実装済み・Chrome 154.0.8037.58 runtime artifact CI/Phase 3D VM/WebGL smoke検証済み・実機試行はGPU初期化で停止（2026-09-29）
 
 ## Chrome 154.0.8037.58 rebuild status（2026-09-29）
 
@@ -18,7 +18,7 @@ Chrome `154.0.8037.58`に合わせてruntime artifactとPhase 3D VM観測を
 | Chrome / Chromium / ANGLE | `154.0.8037.58` / `a654841425914cbb703a2931e07b70a83aedbafd` / `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
 | manifest / dylib | manifest `c929c2fc2dcae41007599bbb2b86dd8daf7b923a868b85c1e7a2d5d2df12b64e`; `libEGL=f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`; `libGLESv2=d0dedeeddb3b727e645648ee2b90462be43300c07914c3cc8ca7fc3de3b95e5c` |
 | VM observation | [`36549980089`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36549980089) / success; dynamic両dylib GPU-correlated load、EGL failure、GPU fallback; WebGL context/drawは未達 |
-| device boundary | `RUNTIME_DEVICE_READY=false`; 署名、Chrome起動、実機操作、KOOV操作は未実施 |
+| device boundary | `RUNTIME_DEVICE_READY=false`; CI artifactの境界値。実機では新規test copyの署名・strict verify・Chrome起動まで実施し、GPU初期化で停止 |
 
 ## 結論
 
@@ -74,7 +74,7 @@ Phase 5の次段階は、実機試験へ直行せず、CIで実機用runtime境�
 4. 検証済みruntime artifactをPhase 3DのmacOS Intel VMへ渡し、動的ANGLEロード、GPU processの引数、EGL初期化境界、GPU fallbackを観測する。これはrun `36507728136`で完了した。VMはApple Paravirtualized Graphics Deviceであり、Intel HD Graphics 5000の実機結果とは扱わない。
 5. 必要性と入力ページを別途固定したうえで、VM上のWebGL smoke観測を追加する。run `36514821653`で固定fixtureのページ到達、WebGL2/WebGL1のcontext-null、dynamic/stock比較を記録した。KOOV、USB、Bluetooth、ユーザーprofileはCI範囲に含めない。
 
-runtime artifact CI、Phase 3D VM観測、WebGL smoke観測は完了したが、実機試験は未完了である。WebGL smoke成功はcontext生成や描画成功を意味せず、実機用artifactのtest copy作成・署名・Chrome起動へ進むには別途承認が必要である。CI workflowのdispatchとartifact downloadは承認済み範囲で実施したが、署名、xattr、profile操作、実機Chrome起動、KOOV操作は行わない。
+runtime artifact CI、Phase 3D VM観測、WebGL smoke観測は記録時点で完了した。WebGL smoke成功はcontext生成や描画成功を意味しない。今回の実機試行では、別途承認されたtest copy作成、署名、Chrome起動まで実施し、GPU初期化失敗で停止した。実機観測の詳細は[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)に記録する。KOOV操作は行っていない。
 
 ### CI先行段階の完了条件
 
@@ -126,7 +126,7 @@ phase5-runtime-vm-observe (separate workflow, job timeout 30分)
 
 Phase 3D VM観測はbuild jobから分離し、検証済みruntime artifactのrun IDを入力にする。buildの再実行とVM観測を同じjobへ詰め込まない。これにより、VM側のChrome起動・GPU観測の失敗がANGLE build timeoutの原因と混ざらず、artifactを固定した再観測が可能になる。
 
-この設計の受入条件は、cache hitを前提にせず、各長時間stepが予算内で完了し、job全体が120分以内に終わり、最終artifactのmanifest・patch provenance・dylib hash・diagnosticsが相互に一致することである。run `36501314503`は37分37秒で完了し、`libEGL`（約25分超を含む）と`libGLESv2`、artifact validation、diagnostics uploadが成功した。続くrun `36507728136`は固定artifactのVM観測に成功し、runtime artifact段階とPhase 3D観測段階のCI受入条件を満たした。WebGL smoke付き再観測run `36514821653`では、dynamic/stock双方のページ到達、context-null、EGL比較を記録した。ただし`RUNTIME_DEVICE_READY=false`であり、実機操作は未実施である。
+この設計の受入条件は、cache hitを前提にせず、各長時間stepが予算内で完了し、job全体が120分以内に終わり、最終artifactのmanifest・patch provenance・dylib hash・diagnosticsが相互に一致することである。run `36501314503`は37分37秒で完了し、`libEGL`（約25分超を含む）と`libGLESv2`、artifact validation、diagnostics uploadが成功した。続くrun `36507728136`は固定artifactのVM観測に成功し、runtime artifact段階とPhase 3D観測段階のCI受入条件を満たした。WebGL smoke付き再観測run `36514821653`では、dynamic/stock双方のページ到達、context-null、EGL比較を記録した。これらはCI/VM記録時点の結果であり、`RUNTIME_DEVICE_READY=false`のartifact境界を維持する。実機試行の結果は本書の「実機試行後の判断」と別の実機観測文書に記録する。
 
 ### runtime artifact CIの失敗記録
 
@@ -295,9 +295,9 @@ CI run `36426804853`ではEGL export preflight通過後、4テストすべてが
 
 Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での実機成功を意味しない。逆にVMのApple Paravirtualized Graphics Deviceで失敗しても、Family 1実機の結果を直接否定しない。
 
-## 実機へ進む条件
+## 実機へ進む条件（CI/VM記録時点）
 
-次の条件を満たすまで、実機の署名・起動・KOOV操作は行わない。
+次の条件は、実機試行を開始する前にCI/VMの記録上で確認する入場条件である。今回の試行ではこの条件確認後に、人間承認のもとtest copyの署名とChrome起動まで進めた。ここに挙げるCI/VM記録は、GPU初期化成功やWebGL/KOOV完了を意味しない。
 
 1. release manifestのANGLE revisionに対するソース差分確認が完了
 2. Family 1プロファイルのtargeted EGL testがCIで成功
@@ -306,6 +306,14 @@ Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での
 5. Phase 3B/3C/3DのCI結果とartifactを保存
 
 上記のCI先行段階が完了した後、実機では別途承認された最小のruntime実験patchを使用し、既存のPhase 3手順でANGLEロード、GPU初期化、WebGL、KOOVを段階的に確認する。CI成功だけでは実機操作の承認にならない。
+
+## 実機試行後の判断
+
+実機試行の詳細は[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)に記録する。`.58`のCase B/Cでは、Intel HD Graphics 5000 / Metalのadapter選択後にEGL初期化が失敗し、GPU processが終了して`--use-gl=disabled`へfallbackした。Case Cの`requireGpuFamily2`指定はGPU processへ渡ったが、初期化成功やfeature overrideの認識を示す証拠ではない。runtime patchは`newCommandQueue`のnil guardを追加するだけで、Family 1 availability gateを迂回しない。
+
+runtime manifestは`RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21`を記録する一方、既存のCase Cスクリプトは`requireGpuFamily2`だけを指定する。固定revisionで`requireMsl21`の存在と効果は確認できていないため、次の実機試行へ暗黙に追加しない。
+
+次の判断順序は、保存済みGPU startup traceとstderrの読み取り専用分析、必要に応じた診断用の直接ロード・feature override証明、固定revisionのFamily 1 gateとruntime patchのソース診断、修正のCI/VM検証、新しい実機試行の承認である。GPU初期化が成功するまでWebGL、続いてKOOVへ進めない。
 
 ## できないこと・残る不確実性
 
