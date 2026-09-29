@@ -475,6 +475,7 @@ run_evidence_receipt_policy_group() {
   cat > "$focused_process_snapshot" <<EOF
 333 /unrelated/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU) --type=gpu-process
 444 $focused_output/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU) --type=gpu-process
+555 $focused_output/Contents/Frameworks/Google Chrome Framework.framework/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper --type=gpu-process
 EOF
   export PHASE3_FIXTURE_PS_SNAPSHOT="$focused_process_snapshot"
   mkdir "$fixture/evidence one-library" "$fixture/evidence both-libraries"
@@ -487,7 +488,10 @@ EOF
   "$collect" "$focused_output" "$fixture/evidence both-libraries"
   grep -F 'direct dynamic ANGLE load evidence: lsof confirmed both test-copy dylib absolute paths for GPU PID 444' \
     "$fixture/evidence both-libraries/load-evidence.txt" >/dev/null
+  grep -F 'direct dynamic ANGLE load evidence: lsof confirmed both test-copy dylib absolute paths for GPU PID 555' \
+    "$fixture/evidence both-libraries/load-evidence.txt" >/dev/null
   grep -F '444 ' "$fixture/evidence both-libraries/gpu-processes.txt" >/dev/null
+  grep -F '555 ' "$fixture/evidence both-libraries/gpu-processes.txt" >/dev/null
   ! grep -F '333 ' "$fixture/evidence both-libraries/gpu-processes.txt"
   fixture_checkpoint evidence-after-both-libraries
 

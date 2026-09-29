@@ -59,7 +59,9 @@ fi
 process_snapshot="$results_real/process-table-snapshot.txt"
 phase3_capture_process_snapshot "$process_snapshot"
 gpu_pids_file="$results_real/gpu-processes.txt"
-phase3_snapshot_matching_processes "$process_snapshot" "$framework" 'Google Chrome Helper (GPU)' > "$gpu_pids_file"
+# Chrome may run its GPU process from the generic Helper.app rather than the
+# dedicated Google Chrome Helper (GPU).app; the process type is the stable discriminator.
+phase3_snapshot_matching_processes "$process_snapshot" "$framework" '--type=gpu-process' > "$gpu_pids_file"
 if [[ ! -s "$gpu_pids_file" ]]; then
   printf 'No matching GPU process was observed; dynamic ANGLE load is unconfirmed.\n' >> "$gpu_pids_file"
 else
