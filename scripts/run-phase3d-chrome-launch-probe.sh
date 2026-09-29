@@ -3,7 +3,6 @@ set -euo pipefail
 
 PHASE3_SCRIPT_NAME='run-phase3d-chrome-launch-probe'
 readonly PHASE3_SCRIPT_NAME
-readonly PHASE3_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/phase3-test-copy-common.sh"
 
 usage() {
@@ -81,10 +80,8 @@ browser_executable=''
 browser_profile_arg=''
 browser_app=''
 log_stream_pid=''
-webgl_server_pid=''
-webgl_server_ready_file=''
-webgl_server_result_file=''
-webgl_server_port=''
+webgl_debug_port=''
+webgl_result_file=''
 cleanup_done=false
 browser_started=false
 browser_observed=false
@@ -138,72 +135,59 @@ record_failure() {
   printf 'probe infrastructure failure: %s\n' "$1" >&2
 }
 
-safe_webgl_server_process() {
-  local pid=$1 command_line
-  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
-  command_line=$(process_command_for_pid "$pid")
-  [[ -n "$command_line" &&
-    "$command_line" == *"$PHASE3_SCRIPT_DIR/phase3d-webgl-smoke-server.py"* &&
-    "$command_line" == *"--result-file $webgl_server_result_file"* ]]
-}
-
-start_webgl_smoke_server() {
+prepare_webgl_smoke_debug() {
   [[ "$webgl_smoke_requested" == true ]] || return 0
-  webgl_server_ready_file="$probe_tmp/webgl-server-ready.txt"
-  webgl_server_result_file="$results_dir/webgl-smoke-result.json"
-  python3 "$PHASE3_SCRIPT_DIR/phase3d-webgl-smoke-server.py" \
-    --page-file "$webgl_smoke_page" \
-    --ready-file "$webgl_server_ready_file" \
-    --result-file "$webgl_server_result_file" \
-    --port 0 > "$results_dir/webgl-server-stdout.log" 2> "$results_dir/webgl-server-stderr.log" &
-  webgl_server_pid=$!
-  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
-    if [[ -s "$webgl_server_ready_file" ]]; then break; fi
-    sleep 0.1
-  done
-  if [[ ! -s "$webgl_server_ready_file" ]]; then
-    record_failure 'WebGL smoke server did not publish a ready port'
+  webgl_debug_port=9222
+  webgl_result_file="$results_dir/webgl-smoke-result.json"
+  if curl -fsS --max-time 1 "http://127.0.0.1:${webgl_debug_port}/json/version" \
+    > "$results_dir/webgl-devtools-preflight.txt" 2>&1; then
+    record_failure "WebGL smoke DevTools port is already in use: $webgl_debug_port"
     return 1
   fi
-  webgl_server_port=$(awk -F= '$1 == "port" {print $2; exit}' "$webgl_server_ready_file")
-  if [[ ! "$webgl_server_port" =~ ^[0-9]+$ ]]; then
-    record_failure 'WebGL smoke server published an invalid port'
-    return 1
-  fi
-  printf 'webgl_smoke_page=%s\nwebgl_server_port=%s\nwebgl_server_pid=%s\n' \
-    "$webgl_smoke_page" "$webgl_server_port" "$webgl_server_pid" \
-    > "$results_dir/webgl-smoke-metadata.txt"
+  printf 'webgl_smoke_page=%s\nwebgl_debug_port=%s\n' \
+    "$webgl_smoke_page" "$webgl_debug_port" > "$results_dir/webgl-smoke-metadata.txt"
 }
 
 read_webgl_smoke_result() {
   [[ "$webgl_smoke_requested" == true ]] || return 0
-  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25; do
-    [[ -s "$webgl_server_result_file" ]] && break
+  local title='' title_prefix='phase3d-webgl-smoke:' payload=''
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50; do
+    if curl -fsS --max-time 1 "http://127.0.0.1:${webgl_debug_port}/json" \
+      > "$results_dir/webgl-devtools-json.txt" 2> "$results_dir/webgl-devtools-curl-error.txt"; then
+      title=$(jq -r --arg prefix "$title_prefix" \
+        '[.[] | select((.title // "") | startswith($prefix)) | .title] | .[0] // empty' \
+        "$results_dir/webgl-devtools-json.txt" 2>/dev/null || true)
+      if [[ -n "$title" ]]; then
+        payload=${title#"$title_prefix"}
+        printf '%s\n' "$payload" > "$webgl_result_file"
+        break
+      fi
+    fi
     sleep 0.2
   done
-  if [[ ! -s "$webgl_server_result_file" ]]; then
+  if [[ ! -s "$webgl_result_file" ]]; then
     webgl_smoke_error_json='"result-not-received"'
-    record_failure 'WebGL smoke page did not POST a result'
+    record_failure 'WebGL smoke page did not publish a DevTools title result'
     return 1
   fi
   if ! jq -e '.schema == "phase3d-webgl-smoke-v1" and .page_loaded == true' \
-    "$webgl_server_result_file" >/dev/null; then
+    "$webgl_result_file" >/dev/null; then
     webgl_smoke_error_json='"invalid-result"'
     record_failure 'WebGL smoke result failed schema or page-loaded validation'
     return 1
   fi
   webgl_smoke_result_observed=true
   webgl_page_loaded=true
-  webgl2_context_created=$(jq -r 'if .webgl2_context_created == true then "true" else "false" end' "$webgl_server_result_file")
-  webgl1_context_created=$(jq -r 'if .webgl1_context_created == true then "true" else "false" end' "$webgl_server_result_file")
-  webgl_draw_operation_completed=$(jq -r 'if .draw_operation_completed == true then "true" else "false" end' "$webgl_server_result_file")
-  webgl_renderer_json=$(jq -c '.renderer // null' "$webgl_server_result_file")
-  webgl_vendor_json=$(jq -c '.vendor // null' "$webgl_server_result_file")
-  webgl_version_json=$(jq -c '.version // null' "$webgl_server_result_file")
-  webgl_smoke_error_json=$(jq -c '{webgl2_error,webgl1_error,draw_error,post_error}' "$webgl_server_result_file")
+  webgl2_context_created=$(jq -r 'if .webgl2_context_created == true then "true" else "false" end' "$webgl_result_file")
+  webgl1_context_created=$(jq -r 'if .webgl1_context_created == true then "true" else "false" end' "$webgl_result_file")
+  webgl_draw_operation_completed=$(jq -r 'if .draw_operation_completed == true then "true" else "false" end' "$webgl_result_file")
+  webgl_renderer_json=$(jq -c '.renderer // null' "$webgl_result_file")
+  webgl_vendor_json=$(jq -c '.vendor // null' "$webgl_result_file")
+  webgl_version_json=$(jq -c '.version // null' "$webgl_result_file")
+  webgl_smoke_error_json=$(jq -c '{webgl2_error,webgl1_error,draw_error}' "$webgl_result_file")
   {
     printf 'schema=phase3d-webgl-smoke-result-v1\n'
-    printf 'result_file=%s\n' "$webgl_server_result_file"
+    printf 'result_file=%s\n' "$webgl_result_file"
     printf 'page_loaded=%s\n' "$webgl_page_loaded"
     printf 'webgl2_context_created=%s\n' "$webgl2_context_created"
     printf 'webgl1_context_created=%s\n' "$webgl1_context_created"
@@ -213,23 +197,6 @@ read_webgl_smoke_result() {
     printf 'version=%s\n' "$webgl_version_json"
     printf 'errors=%s\n' "$webgl_smoke_error_json"
   } > "$results_dir/webgl-smoke-summary.txt"
-}
-
-stop_webgl_smoke_server() {
-  [[ -n "$webgl_server_pid" ]] || return 0
-  if kill -0 "$webgl_server_pid" 2>/dev/null; then
-    if safe_webgl_server_process "$webgl_server_pid"; then
-      kill -TERM "$webgl_server_pid" 2>/dev/null || true
-    else
-      record_failure 'could not verify WebGL smoke server process for cleanup'
-      webgl_server_pid=''
-      return 1
-    fi
-  fi
-  set +e
-  wait "$webgl_server_pid"
-  set -e
-  webgl_server_pid=''
 }
 
 prepare_dynamic_angle_replacement() {
@@ -602,7 +569,6 @@ finish_on_exit() {
   if [[ "$cleanup_done" != true && -n "$browser_pid" ]]; then
     cleanup_test_processes || { record_failure 'test browser cleanup failed'; status=1; }
   fi
-  stop_webgl_smoke_server || status=1
   stop_log_stream
   if [[ -n "$results_dir" && ! -f "$results_dir/authoritative-result.txt" ]]; then
     observation_complete=false
@@ -635,10 +601,6 @@ trap finish_on_exit EXIT
 for command in curl jq unzip shasum codesign spctl system_profiler ioreg ps lsof vmmap log plutil xattr tail mkfifo env install readlink file lipo otool find; do
   command -v "$command" >/dev/null 2>&1 || { record_failure "required command unavailable: $command"; exit 1; }
 done
-if [[ "$webgl_smoke_requested" == true ]]; then
-  command -v python3 >/dev/null 2>&1 || { record_failure 'required command unavailable: python3'; exit 1; }
-fi
-
 probe_tmp=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/phase3d-cft-probe.XXXXXX") || {
   record_failure 'could not create probe temporary directory'
   exit 1
@@ -743,7 +705,7 @@ snapshot_crash_reports "$results_dir/crash-reports-before.txt"
 log stream --style compact --predicate "$log_predicate" > "$results_dir/unified-log-stream.txt" 2>&1 &
 log_stream_pid=$!
 
-start_webgl_smoke_server
+prepare_webgl_smoke_debug
 
 sampler_active="$probe_tmp/sampler-active"
 touch "$sampler_active"
@@ -827,7 +789,8 @@ if [[ "$angle_flags_requested" == true ]]; then
 fi
 launch_target='about:blank'
 if [[ "$webgl_smoke_requested" == true ]]; then
-  launch_target="http://127.0.0.1:${webgl_server_port}/phase3d-webgl-smoke.html"
+  launch_args+=("--remote-debugging-address=127.0.0.1" "--remote-debugging-port=$webgl_debug_port")
+  launch_target="file://$webgl_smoke_page"
 fi
 launch_args+=("$launch_target")
 launch_utc=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
@@ -839,7 +802,8 @@ launch_utc=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
   printf '\nloader_trace=%s\n' "$loader_trace"
   printf 'webgl_smoke_requested=%s\n' "$webgl_smoke_requested"
   if [[ "$webgl_smoke_requested" == true ]]; then
-    printf 'webgl_smoke_url=http://127.0.0.1:%s/phase3d-webgl-smoke.html\n' "$webgl_server_port"
+    printf 'webgl_smoke_url=file://%s\n' "$webgl_smoke_page"
+    printf 'webgl_debug_port=%s\n' "$webgl_debug_port"
   fi
 } > "$results_dir/launch-command.txt"
 if [[ "$loader_trace" == true ]]; then
@@ -861,14 +825,13 @@ done
 
 if kill -0 "$browser_pid" 2>/dev/null; then browser_alive_at_deadline=true; fi
 if [[ -s "$browser_observations" ]]; then browser_observed=true; fi
+read_webgl_smoke_result || true
 cleanup_test_processes || { record_failure 'could not safely terminate all test browser processes'; }
 set +e
 wait "$browser_pid"
 browser_exit=$?
 set -e
 browser_pid=''
-
-read_webgl_smoke_result || true
 
 : > "$sampler_active"
 rm -f "$sampler_active"

@@ -38,7 +38,6 @@ jobs:
           set -euo pipefail
           [[ "$ANGLE_BUILD_RUN_ID" =~ ^[0-9]+$ ]]
           bash -n scripts/run-phase3d-chrome-launch-probe.sh
-          python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("scripts/phase3d-webgl-smoke-server.py").read_text())'
           bash -n tests/phase3d-chrome-launch-probe-static.sh
           bash -n tests/phase3d-dynamic-angle-vm-static.sh
           bash -n tests/phase3d-webgl-smoke-static.sh
