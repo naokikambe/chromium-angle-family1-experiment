@@ -3,7 +3,7 @@
 作成日: 2026-09-26
 更新日: 2026-09-29
 
-状態: 設計確認済み・admission record確認済み・実装済み・専用CI検証成功・実機未実施
+状態: 設計確認済み・admission record確認済み・実装済み・runtime artifact CI/Phase 3D VM検証成功・WebGL/実機未実施
 
 ## 結論
 
@@ -28,7 +28,7 @@ GitHub Actions の macOS Intel VMで、Intel HD Graphics 5000そのものを再�
 
 `phase-status.md`と`phase3d-vm-observability.md`の記述が一致しない場合、GitHub Actionsの実runと保存artifactを一次情報として照合し、Phase 5実行前に両文書を同じ状態へ更新する。run ID、manifest digest、artifact名、revisionを未確認のまま固定値として書かない。
 
-このadmission recordはPhase 5のソース実装を開始するために完了した。ただし、Actions dispatch、新規artifact download、署名、Chrome起動、実機操作を許可するものではない。
+このadmission recordはPhase 5のソース実装を開始するために完了した。後続のCI dispatchとartifact検証はHuman承認後に実施済みだが、実機の署名・配置・Chrome起動・実機操作を許可する記録ではない。
 
 ## Phase 5専用CI一次記録（2026-09-29確認）
 
@@ -56,17 +56,17 @@ Phase 5の次段階は、実機試験へ直行せず、CIで実機用runtime境�
 1. 現行stubとは分離した、明示的opt-inの実機用runtime patchを設計する。既定のproduction path、Family 2以上の挙動、通常artifactを変更せず、Chromeの通常起動から暗黙に選択できない境界を維持する。
 2. 固定ANGLE revision `1ff8799c596d4fc9acea28343610b1f33650a6fa`からx86_64の`libEGL.dylib`／`libGLESv2.dylib`を生成する専用CI workflowを追加する。artifact名・manifest schemaはtest-only stubと分離し、patch SHA-256、source revision、dylib SHA-256、GN argsを束縛する。schemaは実装時に確定し、`angle-release-v1`を使う場合もpatch provenanceを失わせない。
 3. runtime patchのstatic audit、targeted EGL test、production pathのstub無効監査、artifact manifest検証をCIで実行する。
-4. 検証済みruntime artifactをPhase 3DのmacOS Intel VMへ渡し、動的ANGLEロード、GPU processの引数、EGL初期化境界、GPU fallbackを観測する。VMはApple Paravirtualized Graphics Deviceであり、Intel HD Graphics 5000の実機結果とは扱わない。
+4. 検証済みruntime artifactをPhase 3DのmacOS Intel VMへ渡し、動的ANGLEロード、GPU processの引数、EGL初期化境界、GPU fallbackを観測する。これはrun `36507728136`で完了した。VMはApple Paravirtualized Graphics Deviceであり、Intel HD Graphics 5000の実機結果とは扱わない。
 5. 必要性と入力ページを別途固定したうえで、VM上のWebGL smoke観測を追加する。KOOV、USB、Bluetooth、ユーザーprofileはCI範囲に含めない。
 
-この順序の完了後に限り、実機用artifactの取得・test copy作成・署名・Chrome起動を別途承認する。CI workflowのdispatch、CI artifactのdownload、署名、xattr、profile操作、Chrome起動、KOOV操作は、この文書更新では実行しない。
+runtime artifact CIとPhase 3D VM観測は完了したが、WebGL smokeと実機試験は未完了である。この順序の残作業を完了した後に限り、実機用artifactのtest copy作成・署名・Chrome起動を別途承認する。CI workflowのdispatchとartifact downloadは今回承認済み範囲で実施したが、署名、xattr、profile操作、実機Chrome起動、KOOV操作は行わない。
 
 ### CI先行段階の完了条件
 
 - 実機用runtime patchがtest-only stubと明確に分離され、既定OFFである。
 - 固定revision、patch hash、artifact manifest、2本のdylib hashが同一のCI記録に束縛されている。
 - targeted test、static audit、artifact validationが成功し、required testのskipがない。
-- Phase 3D VMで、少なくとも動的ロードの成否とGPU processのEGL初期化結果を直接記録できる。
+- Phase 3D VMで、少なくとも動的ロードの成否とGPU processのEGL初期化結果を直接記録できる。run `36507728136`で両replacement dylibのGPU-correlated dyld load、EGL初期化失敗、GPU disabled fallbackを記録した。
 - VM成功を実機成功と解釈せず、未観測の実機リスクを記録する。
 
 ## GitHub Actions workflow実装（45分timeout回避）
@@ -110,13 +110,15 @@ phase5-runtime-vm-observe (separate workflow, job timeout 30分)
 
 Phase 3D VM観測はbuild jobから分離し、検証済みruntime artifactのrun IDを入力にする。buildの再実行とVM観測を同じjobへ詰め込まない。これにより、VM側のChrome起動・GPU観測の失敗がANGLE build timeoutの原因と混ざらず、artifactを固定した再観測が可能になる。
 
-この設計の受入条件は、cache hitを前提にせず、各長時間stepが予算内で完了し、job全体が120分以内に終わり、最終artifactのmanifest・patch provenance・dylib hash・diagnosticsが相互に一致することである。run `36501314503`は37分37秒で完了し、`libEGL`（約25分超を含む）と`libGLESv2`、artifact validation、diagnostics uploadが成功した。runtime artifact段階のCI受入条件は満たしたが、`RUNTIME_DEVICE_READY=false`であり、Phase 3D VM観測と実機操作は未実施である。
+この設計の受入条件は、cache hitを前提にせず、各長時間stepが予算内で完了し、job全体が120分以内に終わり、最終artifactのmanifest・patch provenance・dylib hash・diagnosticsが相互に一致することである。run `36501314503`は37分37秒で完了し、`libEGL`（約25分超を含む）と`libGLESv2`、artifact validation、diagnostics uploadが成功した。続くrun `36507728136`は固定artifactのVM観測に成功し、runtime artifact段階とPhase 3D観測段階のCI受入条件を満たした。ただし`RUNTIME_DEVICE_READY=false`であり、WebGL smokeと実機操作は未実施である。
 
 ### runtime artifact CIの失敗記録
 
 初回runtime dispatch `36496266565`は、workflowへ接続する前の旧patchが`git apply`で壊れた形式だったため、patch適用段階で失敗した。patchを正規化してSHA-256を`07d7e80d8ce1099cb3d9d3ad5654eabd39b3d33776932ad28e3d76deaf6d4070`へ更新し、commit `6059faf`で修正した。再run `36497660658`は同patchの適用、固定ANGLE source、GN生成、target graph監査まで成功したが、初回依存・未cacheの`ninja libEGL`が25分でtimeoutした。diagnostics artifact `phase5-metal-family1-runtime-diagnostics-36497660658`のbuild logは`1211/1314`まで進んでおり、コンパイルエラーは記録されていない。この結果を受け、libEGL stepのtimeoutを40分へ変更し、別runで再検証する。
 
 修正版run `36501314503`（commit `b7cd00c`）では、`libEGL`が`00:16:58Z`から`00:41:46Z`まで実行して成功し、従来の25分境界を越えて完了した。`libGLESv2`は続けて成功し、runtime artifactとdiagnosticsをuploadした。取得後の`verify-artifact.sh`、`verify-phase5-runtime-artifact.sh`、manifest/sidecar、artifact-files SHA検証も成功した。artifactにはtest-only stub markerがなく、`RUNTIME_DEVICE_READY=false`、x86_64 Mach-O、未署名であることを確認した。runtime artifactはCIで検証済みだが、実機で使用可能とする署名・配置・Chrome起動の承認を意味しない。
+
+Phase 3D run `36507728136`では、同runtime artifactを一時展開したChrome for Testingへ配置し、dynamic probeとstock controlを実行した。dynamic側は両dylibのGPU-correlated dyld loadを確認したが、EGL初期化失敗後にGPU disabled fallbackへ移行した。stock controlはEGL初期化失敗を示さず、両ケースの差分は`CONTROL_INTERPRETATION=dynamic-angle-differs-from-stock-control`として保存された。replacement-library-post-runのSHAはartifactと一致し、runner上の一時bundle以外は変更していない。これはロード経路と失敗境界の証拠であり、WebGL描画成功、実機互換性、KOOV動作の証拠ではない。
 
 ## ソースコードによる裏取り
 
