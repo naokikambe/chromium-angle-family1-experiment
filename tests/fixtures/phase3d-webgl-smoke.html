@@ -1,0 +1,85 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Phase 3D WebGL smoke</title>
+<body>
+<pre id="status">starting</pre>
+<script>
+(() => {
+  'use strict';
+
+  const result = {
+    schema: 'phase3d-webgl-smoke-v1',
+    page_loaded: true,
+    webgl2_context_created: false,
+    webgl1_context_created: false,
+    draw_operation_completed: false,
+    renderer: null,
+    vendor: null,
+    version: null,
+    shading_language_version: null,
+    webgl2_error: null,
+    webgl1_error: null,
+    draw_error: null,
+    user_agent: navigator.userAgent,
+  };
+
+  const status = document.getElementById('status');
+
+  function inspectContext(kind, field, errorField) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 16;
+    canvas.height = 16;
+    document.body.appendChild(canvas);
+    let gl;
+    try {
+      gl = canvas.getContext(kind, {antialias: false, preserveDrawingBuffer: false});
+    } catch (error) {
+      result[errorField] = String(error);
+      return;
+    }
+    if (!gl) {
+      result[errorField] = 'context-null';
+      return;
+    }
+    result[field] = true;
+
+    try {
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.clearColor(0.125, 0.25, 0.5, 1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      const error = gl.getError();
+      if (error !== gl.NO_ERROR) {
+        result.draw_error = `${kind}:gl-error-${error}`;
+      } else {
+        result.draw_operation_completed = true;
+      }
+    } catch (error) {
+      result.draw_error = `${kind}:${String(error)}`;
+    }
+
+    if (result.renderer === null) {
+      const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+      if (debugInfo) {
+        result.renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+        result.vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+      }
+      result.version = gl.getParameter(gl.VERSION);
+      result.shading_language_version = gl.getParameter(gl.SHADING_LANGUAGE_VERSION);
+    }
+  }
+
+  inspectContext('webgl2', 'webgl2_context_created', 'webgl2_error');
+  inspectContext('webgl', 'webgl1_context_created', 'webgl1_error');
+  status.textContent = JSON.stringify(result, null, 2);
+
+  fetch('/result', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(result),
+    cache: 'no-store',
+  }).catch((error) => {
+    result.post_error = String(error);
+    status.textContent = JSON.stringify(result, null, 2);
+  });
+})();
+</script>
