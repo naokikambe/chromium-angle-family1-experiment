@@ -3,10 +3,11 @@ set -euo pipefail
 
 PHASE3_SCRIPT_NAME='run-phase3d-chrome-launch-probe'
 readonly PHASE3_SCRIPT_NAME
+readonly PHASE3_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/phase3-test-copy-common.sh"
 
 usage() {
-  printf 'usage: %s CHROME_VERSION RESULTS_DIRECTORY [--loader-trace] [--dynamic-angle-flags] [--angle-artifact DIRECTORY]\n' "$0" >&2
+  printf 'usage: %s CHROME_VERSION RESULTS_DIRECTORY [--loader-trace] [--dynamic-angle-flags] [--angle-artifact DIRECTORY] [--webgl-smoke-page FILE]\n' "$0" >&2
   exit 64
 }
 
@@ -17,6 +18,8 @@ shift 2
 loader_trace=false
 angle_artifact_dir=''
 angle_flags_requested=false
+webgl_smoke_page=''
+webgl_smoke_requested=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --loader-trace)
@@ -33,6 +36,12 @@ while [[ $# -gt 0 ]]; do
       angle_flags_requested=true
       shift
       ;;
+    --webgl-smoke-page)
+      webgl_smoke_requested=true
+      [[ $# -ge 2 && -n "$2" ]] || usage
+      webgl_smoke_page=$2
+      shift 2
+      ;;
     *) usage ;;
   esac
 done
@@ -45,6 +54,13 @@ done
 if [[ -n "$angle_artifact_dir" ]]; then
   [[ "$angle_artifact_dir" == /* ]] || { echo 'ANGLE artifact directory must be absolute' >&2; exit 64; }
   [[ -d "$angle_artifact_dir" ]] || { echo 'ANGLE artifact directory does not exist' >&2; exit 66; }
+fi
+if [[ "$webgl_smoke_requested" == true ]]; then
+  [[ "$webgl_smoke_page" == /* ]] || { echo 'WebGL smoke page must be an absolute path' >&2; exit 64; }
+  [[ -f "$webgl_smoke_page" && ! -L "$webgl_smoke_page" ]] || {
+    echo 'WebGL smoke page must be a regular file' >&2
+    exit 66
+  }
 fi
 mkdir -p "$results_dir"
 
@@ -65,6 +81,10 @@ browser_executable=''
 browser_profile_arg=''
 browser_app=''
 log_stream_pid=''
+webgl_server_pid=''
+webgl_server_ready_file=''
+webgl_server_result_file=''
+webgl_server_port=''
 cleanup_done=false
 browser_started=false
 browser_observed=false
@@ -98,6 +118,15 @@ libglesv2_process_map_observed=false
 gpu_disabled_fallback_observed=false
 egl_initialization_failure_observed=false
 dynamic_angle_outcome='not-requested'
+webgl_smoke_result_observed=false
+webgl_page_loaded=false
+webgl2_context_created=false
+webgl1_context_created=false
+webgl_draw_operation_completed=false
+webgl_renderer_json='null'
+webgl_vendor_json='null'
+webgl_version_json='null'
+webgl_smoke_error_json='null'
 if [[ -n "$angle_artifact_dir" ]]; then
   probe_mode='dynamic-angle'
 elif [[ "$angle_flags_requested" == true ]]; then
@@ -107,6 +136,100 @@ fi
 record_failure() {
   infrastructure_failure=$1
   printf 'probe infrastructure failure: %s\n' "$1" >&2
+}
+
+safe_webgl_server_process() {
+  local pid=$1 command_line
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  command_line=$(process_command_for_pid "$pid")
+  [[ -n "$command_line" &&
+    "$command_line" == *"$PHASE3_SCRIPT_DIR/phase3d-webgl-smoke-server.py"* &&
+    "$command_line" == *"--result-file $webgl_server_result_file"* ]]
+}
+
+start_webgl_smoke_server() {
+  [[ "$webgl_smoke_requested" == true ]] || return 0
+  webgl_server_ready_file="$probe_tmp/webgl-server-ready.txt"
+  webgl_server_result_file="$results_dir/webgl-smoke-result.json"
+  python3 "$PHASE3_SCRIPT_DIR/phase3d-webgl-smoke-server.py" \
+    --page-file "$webgl_smoke_page" \
+    --ready-file "$webgl_server_ready_file" \
+    --result-file "$webgl_server_result_file" \
+    --port 0 > "$results_dir/webgl-server-stdout.log" 2> "$results_dir/webgl-server-stderr.log" &
+  webgl_server_pid=$!
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    if [[ -s "$webgl_server_ready_file" ]]; then break; fi
+    sleep 0.1
+  done
+  if [[ ! -s "$webgl_server_ready_file" ]]; then
+    record_failure 'WebGL smoke server did not publish a ready port'
+    return 1
+  fi
+  webgl_server_port=$(awk -F= '$1 == "port" {print $2; exit}' "$webgl_server_ready_file")
+  if [[ ! "$webgl_server_port" =~ ^[0-9]+$ ]]; then
+    record_failure 'WebGL smoke server published an invalid port'
+    return 1
+  fi
+  printf 'webgl_smoke_page=%s\nwebgl_server_port=%s\nwebgl_server_pid=%s\n' \
+    "$webgl_smoke_page" "$webgl_server_port" "$webgl_server_pid" \
+    > "$results_dir/webgl-smoke-metadata.txt"
+}
+
+read_webgl_smoke_result() {
+  [[ "$webgl_smoke_requested" == true ]] || return 0
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25; do
+    [[ -s "$webgl_server_result_file" ]] && break
+    sleep 0.2
+  done
+  if [[ ! -s "$webgl_server_result_file" ]]; then
+    webgl_smoke_error_json='"result-not-received"'
+    record_failure 'WebGL smoke page did not POST a result'
+    return 1
+  fi
+  if ! jq -e '.schema == "phase3d-webgl-smoke-v1" and .page_loaded == true' \
+    "$webgl_server_result_file" >/dev/null; then
+    webgl_smoke_error_json='"invalid-result"'
+    record_failure 'WebGL smoke result failed schema or page-loaded validation'
+    return 1
+  fi
+  webgl_smoke_result_observed=true
+  webgl_page_loaded=true
+  webgl2_context_created=$(jq -r 'if .webgl2_context_created == true then "true" else "false" end' "$webgl_server_result_file")
+  webgl1_context_created=$(jq -r 'if .webgl1_context_created == true then "true" else "false" end' "$webgl_server_result_file")
+  webgl_draw_operation_completed=$(jq -r 'if .draw_operation_completed == true then "true" else "false" end' "$webgl_server_result_file")
+  webgl_renderer_json=$(jq -c '.renderer // null' "$webgl_server_result_file")
+  webgl_vendor_json=$(jq -c '.vendor // null' "$webgl_server_result_file")
+  webgl_version_json=$(jq -c '.version // null' "$webgl_server_result_file")
+  webgl_smoke_error_json=$(jq -c '{webgl2_error,webgl1_error,draw_error,post_error}' "$webgl_server_result_file")
+  {
+    printf 'schema=phase3d-webgl-smoke-result-v1\n'
+    printf 'result_file=%s\n' "$webgl_server_result_file"
+    printf 'page_loaded=%s\n' "$webgl_page_loaded"
+    printf 'webgl2_context_created=%s\n' "$webgl2_context_created"
+    printf 'webgl1_context_created=%s\n' "$webgl1_context_created"
+    printf 'draw_operation_completed=%s\n' "$webgl_draw_operation_completed"
+    printf 'renderer=%s\n' "$webgl_renderer_json"
+    printf 'vendor=%s\n' "$webgl_vendor_json"
+    printf 'version=%s\n' "$webgl_version_json"
+    printf 'errors=%s\n' "$webgl_smoke_error_json"
+  } > "$results_dir/webgl-smoke-summary.txt"
+}
+
+stop_webgl_smoke_server() {
+  [[ -n "$webgl_server_pid" ]] || return 0
+  if kill -0 "$webgl_server_pid" 2>/dev/null; then
+    if safe_webgl_server_process "$webgl_server_pid"; then
+      kill -TERM "$webgl_server_pid" 2>/dev/null || true
+    else
+      record_failure 'could not verify WebGL smoke server process for cleanup'
+      webgl_server_pid=''
+      return 1
+    fi
+  fi
+  set +e
+  wait "$webgl_server_pid"
+  set -e
+  webgl_server_pid=''
 }
 
 prepare_dynamic_angle_replacement() {
@@ -223,6 +346,16 @@ write_final_result() {
     printf 'GPU_DISABLED_FALLBACK_OBSERVED=%s\n' "$gpu_disabled_fallback_observed"
     printf 'EGL_INITIALIZATION_FAILURE_OBSERVED=%s\n' "$egl_initialization_failure_observed"
     printf 'DYNAMIC_ANGLE_OUTCOME=%s\n' "$dynamic_angle_outcome"
+    printf 'WEBGL_SMOKE_REQUESTED=%s\n' "$webgl_smoke_requested"
+    printf 'WEBGL_SMOKE_RESULT_OBSERVED=%s\n' "$webgl_smoke_result_observed"
+    printf 'WEBGL_PAGE_LOADED=%s\n' "$webgl_page_loaded"
+    printf 'WEBGL2_CONTEXT_CREATED=%s\n' "$webgl2_context_created"
+    printf 'WEBGL1_CONTEXT_CREATED=%s\n' "$webgl1_context_created"
+    printf 'WEBGL_DRAW_OPERATION_COMPLETED=%s\n' "$webgl_draw_operation_completed"
+    printf 'WEBGL_RENDERER_JSON=%s\n' "$webgl_renderer_json"
+    printf 'WEBGL_VENDOR_JSON=%s\n' "$webgl_vendor_json"
+    printf 'WEBGL_VERSION_JSON=%s\n' "$webgl_version_json"
+    printf 'WEBGL_SMOKE_ERROR_JSON=%s\n' "$webgl_smoke_error_json"
     printf 'OBSERVATION_COMPLETE=%s\n' "$observation_complete"
     printf 'LOG_STREAM_EXIT=%s\n' "$log_stream_exit"
     printf 'INFRASTRUCTURE_FAILURE=%s\n' "$infrastructure_failure"
@@ -469,6 +602,7 @@ finish_on_exit() {
   if [[ "$cleanup_done" != true && -n "$browser_pid" ]]; then
     cleanup_test_processes || { record_failure 'test browser cleanup failed'; status=1; }
   fi
+  stop_webgl_smoke_server || status=1
   stop_log_stream
   if [[ -n "$results_dir" && ! -f "$results_dir/authoritative-result.txt" ]]; then
     observation_complete=false
@@ -501,6 +635,9 @@ trap finish_on_exit EXIT
 for command in curl jq unzip shasum codesign spctl system_profiler ioreg ps lsof vmmap log plutil xattr tail mkfifo env install readlink file lipo otool find; do
   command -v "$command" >/dev/null 2>&1 || { record_failure "required command unavailable: $command"; exit 1; }
 done
+if [[ "$webgl_smoke_requested" == true ]]; then
+  command -v python3 >/dev/null 2>&1 || { record_failure 'required command unavailable: python3'; exit 1; }
+fi
 
 probe_tmp=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/phase3d-cft-probe.XXXXXX") || {
   record_failure 'could not create probe temporary directory'
@@ -519,6 +656,7 @@ mkdir "$extract_dir"
 date -u '+probe_started_utc=%Y-%m-%dT%H:%M:%SZ' > "$results_dir/probe-metadata.txt"
 printf 'requested_version=%s\nplatform=%s\nknown_good_json=%s\n' \
   "$chrome_version" "$EXPECTED_PLATFORM" "$KNOWN_GOOD_URL" >> "$results_dir/probe-metadata.txt"
+printf 'webgl_smoke_requested=%s\n' "$webgl_smoke_requested" >> "$results_dir/probe-metadata.txt"
 
 curl -fsSL "$KNOWN_GOOD_URL" -o "$artifact_json" || {
   record_failure 'could not download Chrome for Testing known-good versions JSON'
@@ -605,6 +743,8 @@ snapshot_crash_reports "$results_dir/crash-reports-before.txt"
 log stream --style compact --predicate "$log_predicate" > "$results_dir/unified-log-stream.txt" 2>&1 &
 log_stream_pid=$!
 
+start_webgl_smoke_server
+
 sampler_active="$probe_tmp/sampler-active"
 touch "$sampler_active"
 gpu_seen_dir="$probe_tmp/gpu-seen"
@@ -685,7 +825,11 @@ if [[ "$angle_flags_requested" == true ]]; then
     "${launch_args[@]}"
   )
 fi
-launch_args+=(about:blank)
+launch_target='about:blank'
+if [[ "$webgl_smoke_requested" == true ]]; then
+  launch_target="http://127.0.0.1:${webgl_server_port}/phase3d-webgl-smoke.html"
+fi
+launch_args+=("$launch_target")
 launch_utc=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 {
   printf 'launch_utc=%s\n' "$launch_utc"
@@ -693,6 +837,10 @@ launch_utc=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
   printf 'browser_command='
   printf '%q ' "$browser_executable" "${launch_args[@]}"
   printf '\nloader_trace=%s\n' "$loader_trace"
+  printf 'webgl_smoke_requested=%s\n' "$webgl_smoke_requested"
+  if [[ "$webgl_smoke_requested" == true ]]; then
+    printf 'webgl_smoke_url=http://127.0.0.1:%s/phase3d-webgl-smoke.html\n' "$webgl_server_port"
+  fi
 } > "$results_dir/launch-command.txt"
 if [[ "$loader_trace" == true ]]; then
   env DYLD_PRINT_LIBRARIES=1 "$browser_executable" "${launch_args[@]}" \
@@ -719,6 +867,8 @@ wait "$browser_pid"
 browser_exit=$?
 set -e
 browser_pid=''
+
+read_webgl_smoke_result || true
 
 : > "$sampler_active"
 rm -f "$sampler_active"
