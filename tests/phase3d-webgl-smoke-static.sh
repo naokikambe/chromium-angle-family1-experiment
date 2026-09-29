@@ -16,6 +16,7 @@ grep -F -- '--remote-debugging-address=127.0.0.1' "$probe" >/dev/null
 grep -F -- '--remote-debugging-port=' "$probe" >/dev/null
 grep -F 'webgl-devtools-json.txt' "$probe" >/dev/null
 grep -F 'file://$webgl_smoke_page' "$probe" >/dev/null
+grep -F "sed 's/&quot;/\"/g'" "$probe" >/dev/null
 grep -F 'WEBGL2_CONTEXT_CREATED=%s' "$probe" >/dev/null
 grep -F 'WEBGL1_CONTEXT_CREATED=%s' "$probe" >/dev/null
 grep -F 'WEBGL_DRAW_OPERATION_COMPLETED=%s' "$probe" >/dev/null
