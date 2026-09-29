@@ -71,15 +71,6 @@
   inspectContext('webgl2', 'webgl2_context_created', 'webgl2_error');
   inspectContext('webgl', 'webgl1_context_created', 'webgl1_error');
   status.textContent = JSON.stringify(result, null, 2);
-
-  fetch('/result', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(result),
-    cache: 'no-store',
-  }).catch((error) => {
-    result.post_error = String(error);
-    status.textContent = JSON.stringify(result, null, 2);
-  });
+  document.title = `phase3d-webgl-smoke:${JSON.stringify(result)}`;
 })();
 </script>
