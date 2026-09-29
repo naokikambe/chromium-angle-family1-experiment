@@ -42,7 +42,7 @@ for new real-device work. Any separately approved historical device-test record 
 | Phase 3A | legacy artifact記録 | Chrome `154.0.8037.45`向けartifact `35515036255`は過去の固定SHA・形式・依存・署名検証結果として記録する。新形式のrelease manifestを持たず、新しい実機試験には使用しない。 |
 | Phase 3B | synthetic fixture CI成功・実機試験未実施 | `angle-release-v1`はChrome/Chromium/ANGLE/depot_tools識別子、dylib SHA、artifact/run metadataを束縛する。test-copy manifestはrelease manifest SHAを記録し、Libraries baselineを保持したままANGLE 2本だけ追加する。正式なsynthetic fixture判定は下記のrunで成功した。ローカルfull fixtureは実行しない。retry0–12は保存済み履歴として不変保持し、新規attempt rootは別名で作成する。元Chromeのxattr、実署名、実機起動は行わない。 |
 | Phase 3B 以降 | synthetic 3B/3C成功、Phase 3D VM観測成功・新規実機試験未承認 | Phase 3D文書に記録された、別途承認済みの過去のユーザー所有機器テスト・署名・Chrome起動記録は履歴として保持する。今回確認した3B/3C/3D run metadataは新規の実機作業を承認しない。Phase 5の詳細な入場記録と専用stub CIは完了したが、署名・Chrome/KOOV操作は引き続き人間の承認境界にある。 |
-| Phase 5 | runtime artifact CI・Phase 3D VM/WebGL smoke観測成功、実機未実施 | 固定ANGLE revisionに対するtest-only stub CI [`36432392861`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36432392861)、runtime artifact CI [`36501314503`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36501314503)、Phase 3D VM観測 [`36507728136`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36507728136)、固定WebGL smoke付き再観測 [`36514821653`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36514821653)を記録した。runtime artifactはGPUプロセスから両dylibのdyldロードまで到達したが、EGL初期化失敗とGPU disabled fallbackが発生した。WebGL smokeはページ到達とcontext-null結果をdynamic/stock双方で記録し、実機の描画成功は示さない。署名、実機Chrome/KOOV操作は未実施。 |
+| Phase 5 | Chrome `154.0.8037.58` runtime artifact CI・Phase 3D VM/WebGL smoke観測成功、実機未実施 | `.58`向けruntime artifact CI [`36545744638`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36545744638)とPhase 3D VM/WebGL観測 [`36549980089`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36549980089)を追加記録した。両replacement dylibのGPU-correlated dyld loadは成功したが、EGL初期化失敗とGPU disabled fallbackが発生し、WebGL2/WebGL1 contextはdynamic/stockとも`context-null`だった。過去の`.57`記録は履歴として保持する。署名、実機Chrome/KOOV操作は未実施。 |
 
 ## Phase 3の一次記録（2026-09-26確認）
 
@@ -85,6 +85,22 @@ Phase 3D diagnostics artifactの`ANGLE_RELEASE_MANIFEST`はsidecar検証に成�
 | dylib SHA-256 | `libEGL.dylib=f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`; `libGLESv2.dylib=d0dedeeddb3b727e645648ee2b90462be43300c07914c3cc8ca7fc3de3b95e5c` |
 | build / validation | `libEGL=0`, `libGLESv2=0`; `verify-artifact.sh` and `verify-phase5-runtime-artifact.sh` passed; test-only stub marker absent |
 | device boundary | `RUNTIME_DEVICE_READY=false`; x86_64 Mach-O、未署名。署名、配置、Chrome起動、実機操作は未実施 |
+
+## Phase 5 Chrome 154.0.8037.58 rebuild一次記録（2026-09-29確認）
+
+| 項目 | 記録 |
+| --- | --- |
+| runtime workflow / run | `phase5-metal-family1.yml` / [`36545744638`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36545744638) / success |
+| commit | `7c034047a585986a52141b208f8b34bcda07ab84` |
+| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.58-angle-1ff8799c-36545744638` / GitHub digest `sha256:76a4a04c342edfb263cf4d65157e9a5d5ebfc5c5331d9c896a4614115e89b379` |
+| diagnostics artifact | `phase5-metal-family1-runtime-diagnostics-36545744638` / GitHub digest `sha256:cb7fa54575c6a59fab10da1c3d0c08852660552fadf76de27e3b2632b7e357e9` |
+| Chrome / Chromium | `154.0.8037.58` / `a654841425914cbb703a2931e07b70a83aedbafd` |
+| ANGLE / depot_tools | `1ff8799c596d4fc9acea28343610b1f33650a6fa` / `0306e4682b4ac35287c726fa35a983157a625902` |
+| runtime patch / manifest | `07d7e80d8ce1099cb3d9d3ad5654eabd39b3d33776932ad28e3d76deaf6d4070` / `c929c2fc2dcae41007599bbb2b86dd8daf7b923a868b85c1e7a2d5d2df12b64e` |
+| dylib SHA-256 | `libEGL.dylib=f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`; `libGLESv2.dylib=d0dedeeddb3b727e645648ee2b90462be43300c07914c3cc8ca7fc3de3b95e5c` |
+| device boundary | `RUNTIME_DEVICE_READY=false`; x86_64 Mach-O、未署名 |
+| Phase 3D VM/WebGL | [`36549980089`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36549980089) / diagnostics `phase3d-dynamic-angle-36545744638-36549980089` / digest `sha256:bd41e2e171a9b9337ad5139d63c617f29c2fba2bab0845f0375fa3abeb4c17fd` |
+| VM result | dynamic: both replacement libraries GPU-correlated loaded, EGL failure `true`, GPU fallback `true`; stock: EGL failure `false`, GPU fallback `true`; both WebGL context `false`, draw `false`, `context-null` |
 
 ## Phase 5次段階の実行方針（CI先行）
 
