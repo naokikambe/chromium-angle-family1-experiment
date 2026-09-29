@@ -22,6 +22,10 @@ grep -F 'path: ${{ runner.temp }}/phase3d-cft-launch-probe-results' "$workflow" 
 ! grep -E 'pull_request(_target)?|^[[:space:]]+push:|secrets\.|id-token:|contents:[[:space:]]+write|continue-on-error' "$workflow" >/dev/null
 grep -F 'known-good-versions-with-downloads.json' "$probe" >/dev/null
 grep -F 'mac-x64' "$probe" >/dev/null
+grep -F 'cft-download-urls.txt' "$probe" >/dev/null
+grep -F 'sort -u' "$probe" >/dev/null
+grep -F 'deterministic-version-url' "$probe" >/dev/null
+grep -F 'chrome-for-testing-public/${chrome_version}/${EXPECTED_PLATFORM}/chrome-mac-x64.zip' "$probe" >/dev/null
 grep -F 'gpu-pid-first-last.tsv' "$probe" >/dev/null
 grep -F 'gpu-pid-all-sources.tsv' "$probe" >/dev/null
 grep -F 'gpu-pid-events.tsv' "$probe" >/dev/null
