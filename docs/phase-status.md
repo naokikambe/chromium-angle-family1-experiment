@@ -69,6 +69,23 @@ Phase 3D diagnostics artifactの`ANGLE_RELEASE_MANIFEST`はsidecar検証に成�
 | artifact-files SHA-256 | `17b5ee8a79978f01255c13ffb3fb4f2ee01a89e1303d5faa5a681b5886916d0f` |
 | test result | exit `0` / 4 tests passed |
 
+## Phase 5 runtime artifact CI一次記録（2026-09-29確認）
+
+| 項目 | 記録 |
+| --- | --- |
+| workflow / run | `phase5-metal-family1.yml` / [`36501314503`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36501314503) / success |
+| commit | `b7cd00cb3383bf44eea7ce355f63de7e9ddaf524` |
+| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.57-angle-1ff8799c-36501314503` / schema `phase5-metal-family1-runtime-v1` / GitHub digest `sha256:ea859f38e4e0f64a00975b5c6d0574b8238e1d82cb2667a96580c96d404df5b2` |
+| diagnostics artifact | `phase5-metal-family1-runtime-diagnostics-36501314503` / GitHub digest `sha256:b11ee99fa11d66b78580cecfc7bd3874721a43e3aa6482b26944d51ba5cfc6b6` |
+| Chrome / Chromium | `154.0.8037.57` / `73c14f6228d7cd537c855007e8f88678969cc0eb` |
+| ANGLE / depot_tools | `1ff8799c596d4fc9acea28343610b1f33650a6fa` / `0306e4682b4ac35287c726fa35a983157a625902` |
+| runtime patch SHA-256 | `07d7e80d8ce1099cb3d9d3ad5654eabd39b3d33776932ad28e3d76deaf6d4070` |
+| manifest SHA-256 | `fc0c39145695fa5501039b7aa1093326aadf7af71022e6b30294f464604dbdc2` |
+| artifact-files SHA-256 | `fc9e1ab16fded2c9d5b28e4978e8bf1f8c7c487e7a58ae894044497a5be351ab` |
+| dylib SHA-256 | `libEGL.dylib=f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`; `libGLESv2.dylib=d0dedeeddb3b727e645648ee2b90462be43300c07914c3cc8ca7fc3de3b95e5c` |
+| build / validation | `libEGL=0`, `libGLESv2=0`; `verify-artifact.sh` and `verify-phase5-runtime-artifact.sh` passed; test-only stub marker absent |
+| device boundary | `RUNTIME_DEVICE_READY=false`; x86_64 Mach-O、未署名。署名、配置、Chrome起動、実機操作は未実施 |
+
 ## Phase 5次段階の実行方針（CI先行）
 
 Phase 5専用stub CIの成功は、test-only profileと初期化停止段階の検証完了を示す。実機試験へ進む前に、次のCI作業を完了させる。
@@ -79,4 +96,4 @@ Phase 5専用stub CIの成功は、test-only profileと初期化停止段階の�
 4. Phase 3D VMで動的ANGLEロード、GPU process引数、EGL初期化、fallbackを観測する。
 5. 必要ならVM WebGL smokeを追加する。KOOV、USB、Bluetooth、既存profileはCIの対象外とする。
 
-runtime artifact workflowは実装済みで、明示的runtime opt-inとしてCI dispatchを開始した。初回再run `36497660658`は固定ANGLE source・patch適用・GN監査に成功した後、初回未cacheの`ninja libEGL`が25分timeoutした。diagnostics artifact `phase5-metal-family1-runtime-diagnostics-36497660658`は保存済みで、ログは`1211/1314`まで進んだコンパイルtimeoutを示す。原因に合わせてlibEGL stepを40分（45分未満）へ修正し、次のCI runで再検証する。CI成功後も、実機用artifactの取得と実機操作にはHuman/Approverの個別承認が必要である。署名、xattr、Chrome起動、profile操作、KOOV操作は引き続き行わない。
+runtime artifact workflowは実装済みで、明示的runtime opt-inとしてCI dispatchを実施した。初回再run `36497660658`は固定ANGLE source・patch適用・GN監査に成功した後、初回未cacheの`ninja libEGL`が25分timeoutした。原因に合わせてlibEGL stepを40分（45分未満）へ修正し、run `36501314503`で`libEGL`、`libGLESv2`、symbol/manifest/artifact検証、uploadまで成功した。次はこの固定artifactを入力とするPhase 3D VM観測であり、VM成功を実機成功とは扱わない。署名、xattr、Chrome起動、profile操作、KOOV操作は引き続き行わない。
