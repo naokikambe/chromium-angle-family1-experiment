@@ -100,7 +100,7 @@ Phase 3D diagnostics artifactの`ANGLE_RELEASE_MANIFEST`はsidecar検証に成�
 | dylib SHA-256 | `libEGL.dylib=f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`; `libGLESv2.dylib=d0dedeeddb3b727e645648ee2b90462be43300c07914c3cc8ca7fc3de3b95e5c` |
 | device boundary | `RUNTIME_DEVICE_READY=false`; x86_64 Mach-O、未署名 |
 | Phase 3D VM/WebGL | [`36549980089`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36549980089) / diagnostics `phase3d-dynamic-angle-36545744638-36549980089` / digest `sha256:bd41e2e171a9b9337ad5139d63c617f29c2fba2bab0845f0375fa3abeb4c17fd` |
-| VM result | dynamic: both replacement libraries GPU-correlated loaded, EGL failure `true`, GPU fallback `true`; stock: EGL failure `false`, GPU fallback `true`; both WebGL context `false`, draw `false`, `context-null` |
+| VM result | dynamic: the old probe recorded GPU-correlated dyld evidence per library but did not establish same-PID loading; EGL failure `true`, GPU fallback `true`; stock: EGL failure `false`, GPU fallback `true`; both WebGL contexts `false`, draw `false`, `context-null` |
 
 ## Phase 5次段階の実行方針（CI先行）
 
@@ -114,7 +114,7 @@ Phase 5専用stub CIの成功は、記録時点でtest-only profileと初期化�
 
 runtime artifact workflowは実装済みで、明示的runtime opt-inとしてCI dispatchを実施した。初回再run `36497660658`のtimeout、修正後のruntime build run `36501314503`、続くPhase 3D VM観測と固定WebGL smoke観測は、それぞれ当時のCI/VM記録として完了している。VM成功を実機成功とは扱わない。実機試行の署名・Chrome起動は別途実施済みであり、その結果は「Phase 5実機試行の結果」と実機観測文書に記録する。KOOV操作は未実施である。
 
-Phase 3D VM観測run `36507728136`は、runtime artifact `36501314503`を固定入力として成功した。dynamic probeでは`BROWSER_STARTED=true`、`BROWSER_ALIVE_AT_DEADLINE=true`、両replacement dylibのGPUプロセス相関dyld loadが`true`、`EGL_INITIALIZATION_FAILURE_OBSERVED=true`、`GPU_DISABLED_FALLBACK_OBSERVED=true`、`PROBE_EXIT_STATUS=0`だった。stock controlではEGL初期化失敗は観測されず、両ケースともGPU disabled fallbackが発生したため、comparisonは`dynamic-angle-differs-from-stock-control`となった。これはruntime artifactがVM上のGPUプロセスへ到達した証拠だが、描画成功やIntel HD Graphics 5000実機互換性の証明ではない。
+Phase 3D VM観測run `36507728136`は、runtime artifact `36501314503`を固定入力として成功した。dynamic probeでは`BROWSER_STARTED=true`、`BROWSER_ALIVE_AT_DEADLINE=true`、各replacement dylibについてGPU process相関dyld signalが`true`、`EGL_INITIALIZATION_FAILURE_OBSERVED=true`、`GPU_DISABLED_FALLBACK_OBSERVED=true`、`PROBE_EXIT_STATUS=0`だった。旧probeはライブラリごとのsignalを独立集計していたため、両pathが同じGPU PIDに属するとは確認できない。従って記録済み`both-replacement-libraries-gpu-loaded`はsame-PID証明として扱わず、raw artifact再確認または修正後probeの再実行を要する。stock controlではEGL初期化失敗は観測されず、両ケースともGPU disabled fallbackが発生したため、comparisonは`dynamic-angle-differs-from-stock-control`となった。描画成功やIntel HD Graphics 5000実機互換性の証明ではない。
 
 ## Phase 5 実機試行の結果（2026-09-29）
 
@@ -134,7 +134,7 @@ runtime manifestの`RUNTIME_DEVICE_READY=false`は、CI artifactが未署名・�
 | commit | `73e04a42b0375e06a41b096fa45bd216d0f5abc7` |
 | input artifact | `angle-macos-x86_64-chrome-154.0.8037.57-angle-1ff8799c-36501314503` / manifest SHA-256 `fc0c39145695fa5501039b7aa1093326aadf7af71022e6b30294f464604dbdc2` |
 | diagnostics artifact | `phase3d-dynamic-angle-36501314503-36507728136` / GitHub digest `sha256:0e313e79fc1d16f76aa4c7cad6b1e65ad349031195e57cfc8f7695060c4f36ea` |
-| dynamic boundary | `DYNAMIC_ANGLE_OUTCOME=both-replacement-libraries-gpu-loaded`; browser/GPU ANGLE flags `true`; libEGL/libGLESv2 GPU-correlated dyld load `true` |
+| dynamic boundary | historical `DYNAMIC_ANGLE_OUTCOME=both-replacement-libraries-gpu-loaded`; browser/GPU ANGLE flags `true`; each library had GPU-correlated dyld evidence, but old aggregation did not establish same-PID loading |
 | initialization boundary | `EGL_INITIALIZATION_FAILURE_OBSERVED=true`; `GPU_DISABLED_FALLBACK_OBSERVED=true`; browser remained alive; probe exit `0` |
 | stock control | EGL initialization failure `false`; GPU disabled fallback `true`; `CONTROL_INTERPRETATION=dynamic-angle-differs-from-stock-control` |
 | evidence limits | process-map observation `false`; dynamic collector failure count `1`; post-run dylib SHA unchanged; VMはApple Paravirtualized Graphics Deviceで実機結果ではない |

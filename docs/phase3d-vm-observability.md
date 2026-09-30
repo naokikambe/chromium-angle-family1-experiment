@@ -68,7 +68,7 @@ this section is the current `.58` input and observation record.
 | observation run | [`36549980089`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36549980089) / success / 3m20s |
 | observation commit | `063c9c47905c87653ed5cc40ee3504e85b14519e` |
 | diagnostics artifact | `phase3d-dynamic-angle-36545744638-36549980089` / GitHub digest `sha256:bd41e2e171a9b9337ad5139d63c617f29c2fba2bab0845f0375fa3abeb4c17fd` |
-| dynamic result | browser/GPU ANGLE flags `true`; both replacement libraries GPU-correlated dyld-loaded; EGL initialization failure `true`; GPU disabled fallback `true`; `DYNAMIC_ANGLE_OUTCOME=both-replacement-libraries-gpu-loaded`; probe exit `0` |
+| dynamic result | browser/GPU ANGLE flags `true`; each replacement library had GPU-correlated dyld evidence, but same-PID attribution was not established by the old classifier; EGL initialization failure `true`; GPU disabled fallback `true`; historical outcome label `both-replacement-libraries-gpu-loaded`; probe exit `0` |
 | stock control | EGL initialization failure `false`; GPU disabled fallback `true`; comparison `dynamic-angle-differs-from-stock-control` |
 | WebGL result | dynamic/stockともページ到達 `true`、WebGL2/WebGL1 context `false`、draw `false`、`context-null` |
 | evidence limits | process-map observation `false`; dynamic collector failure count `0`; stock collector failure count `1`; VMはApple Paravirtualized Graphics Deviceで実機結果ではない |
@@ -78,10 +78,13 @@ time of the run. The probe therefore used the official version-fixed archive
 URL, recorded its archive SHA-256, and still required the extracted bundle
 version to equal `154.0.8037.58`. Distinct metadata URLs remain fatal.
 
-This `.58` VM result confirms the same software boundary as the earlier `.57`
-run: dynamic ANGLE reaches the GPU process, but EGL initialization fails and
-WebGL contexts are not created. It does not establish real-device rendering,
-Intel HD Graphics 5000 compatibility, signing success, or KOOV behavior.
+The `.58` VM run recorded GPU-correlated dyld evidence for each library, but its
+then-current classifier combined those signals independently and did not prove
+both paths belonged to the same GPU PID. The recorded EGL failure, fallback,
+and missing WebGL contexts remain valid observations. Same-PID loading requires
+raw per-PID artifact review or a rerun with the corrected classifier. The VM
+does not establish real-device rendering, Intel HD Graphics 5000 compatibility,
+signing success, or KOOV behavior.
 
 ## Phase 5 runtime artifact observation record
 
@@ -95,15 +98,17 @@ historical release artifact above.
 | input build run | `36501314503` / runtime artifact `angle-macos-x86_64-chrome-154.0.8037.57-angle-1ff8799c-36501314503` |
 | diagnostics artifact | `phase3d-dynamic-angle-36501314503-36507728136` / GitHub digest `sha256:0e313e79fc1d16f76aa4c7cad6b1e65ad349031195e57cfc8f7695060c4f36ea` |
 | release manifest | SHA-256 `fc0c39145695fa5501039b7aa1093326aadf7af71022e6b30294f464604dbdc2` / ANGLE `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
-| dynamic result | both replacement libraries GPU-correlated dyld-loaded; EGL initialization failure `true`; GPU disabled fallback `true`; probe exit `0` |
+| dynamic result | each replacement library had GPU-correlated dyld evidence; same-PID attribution was not established by the old classifier; EGL initialization failure `true`; GPU disabled fallback `true`; probe exit `0` |
 | stock control | EGL initialization failure `false`; GPU disabled fallback `true`; comparison `dynamic-angle-differs-from-stock-control` |
 | evidence limits | process-map observation `false`; dynamic collector failure count `1`; post-run replacement hashes unchanged |
 
-Interpretation: the runtime artifact reached the observed GPU process through dyld,
-but initialization did not reach a usable EGL state in the Apple Paravirtualized
-Graphics Device VM. This is a useful load/stop-boundary result, not a rendering
-pass and not evidence of Intel HD Graphics 5000 compatibility. The fixed WebGL
-smoke is recorded below; user-owned-device/KOOV testing remains separate.
+Interpretation: the historical probe recorded per-library GPU-correlated dyld
+signals, but the old aggregation did not prove that both paths were loaded by
+one GPU PID. EGL initialization did not reach a usable state in the Apple
+Paravirtualized Graphics Device VM. This is a useful failure-boundary result,
+not a rendering pass or evidence of Intel HD Graphics 5000 compatibility. The
+fixed WebGL smoke is recorded below; user-owned-device/KOOV testing remains
+separate.
 
 ## WebGL smoke observation
 
@@ -224,6 +229,12 @@ to have a captured command line, `lsof`, or `vmmap` record.
 `gpu-collector-status.tsv` records each best-effort collector outcome;
 `GPU_COLLECTOR_FAILURE_COUNT` reports its non-zero entries without converting a
 complete browser/process observation into an infrastructure failure.
+
+The outcome `both-replacement-libraries-gpu-loaded` requires both replacement
+paths from the same observed GPU PID. Separate PIDs may still set the
+per-library evidence booleans, but cannot satisfy the same-process outcome.
+EGL failure detection accepts the observed display-count form and the
+`GLDisplayEGL::Initialize failed` form while preserving the raw stderr.
 
 For the dynamic workflow, `dynamic-angle-placement.txt` binds the placement to
 the release manifest and concrete Framework version.

@@ -53,6 +53,59 @@ if test_copy_matches=$(phase3_snapshot_matching_processes "$process_snapshot" "$
   exit 1
 fi
 profile_dir=$(mktemp -d "${TMPDIR:-/tmp}/chrome-angle-${test_case}.XXXXXX")
+framework_dir="$test_app_real/Contents/Frameworks/Google Chrome Framework.framework"
+live_gpu_observations="$results_real/live-gpu-processes.tsv"
+live_gpu_observer_pid="$results_real/live-gpu-observer.pid"
+live_gpu_observer_done="$results_real/live-gpu-observer.done"
+: > "$live_gpu_observations"
+(
+  live_seen_dir="$results_real/live-gpu-seen"
+  mkdir "$live_seen_dir"
+  live_browser_pid=''
+  for live_launch_tick in $(seq 1 100); do
+    if [[ -f "$results_real/browser.pid" ]]; then
+      live_browser_pid=$(<"$results_real/browser.pid")
+      [[ "$live_browser_pid" =~ ^[0-9]+$ ]] && break
+      live_browser_pid=''
+    fi
+    sleep 0.1
+  done
+  if [[ ! "$live_browser_pid" =~ ^[0-9]+$ ]]; then
+    printf 'launch-timeout\n' > "$results_real/live-gpu-observer-status.txt"
+    printf 'complete\n' > "$live_gpu_observer_done"
+    exit 0
+  fi
+  live_completion='observer-deadline'
+  for live_tick in $(seq 1 1200); do
+    live_snapshot="$results_real/live-gpu-process-snapshot.txt"
+    ps -wwaxo pid=,ppid=,stat=,command= > "$live_snapshot" 2>/dev/null || true
+    while IFS= read -r live_line; do
+      read -r live_pid live_ppid live_stat live_command <<< "$live_line"
+      [[ "$live_pid" =~ ^[0-9]+$ && "$live_command" == "$framework_dir/"* &&
+        "$live_command" == *"--user-data-dir=$profile_dir"* &&
+        "$live_command" == *'--type=gpu-process'* ]] || continue
+      live_stamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+      printf '%s\t%s\t%s\t%s\t%s\n' "$live_stamp" "$live_pid" "$live_ppid" "$live_stat" "$live_command" >> "$live_gpu_observations"
+      if mkdir "$live_seen_dir/$live_pid" 2>/dev/null; then
+        printf '%s\n' "$live_line" > "$results_real/live-gpu-$live_pid-command.txt"
+        if command -v lsof >/dev/null 2>&1; then
+          lsof -nP -p "$live_pid" > "$results_real/live-gpu-$live_pid-lsof.txt" 2>&1 || true
+        fi
+        if command -v vmmap >/dev/null 2>&1; then
+          vmmap "$live_pid" > "$results_real/live-gpu-$live_pid-vmmap.txt" 2>&1 || true
+        fi
+      fi
+    done < "$live_snapshot"
+    if ! kill -0 "$live_browser_pid" 2>/dev/null; then
+      live_completion='browser-exit'
+      break
+    fi
+    sleep 0.1
+  done
+  printf '%s\n' "$live_completion" > "$results_real/live-gpu-observer-status.txt"
+  printf 'complete\n' > "$live_gpu_observer_done"
+) &
+printf '%s\n' "$!" > "$live_gpu_observer_pid"
 command=(
   "$chrome_executable"
   --use-gl=angle

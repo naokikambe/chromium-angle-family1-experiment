@@ -130,8 +130,18 @@ the Hardened Runtime may ignore those variables without the
 show EGL/GPU initialization failures, but do not prove external ANGLE loading.
 `stderr.log` and other process evidence remain independent of trace format. A
 trace, its requested flags, or its existence do not prove external ANGLE
-loading or an internal ANGLE stage. `lsof` or `vmmap` naming both test-copy
-dylib absolute paths remains the required load proof.
+loading or an internal ANGLE stage. Direct evidence naming both test-copy
+dylib absolute paths under the same GPU PID remains the required load proof;
+the two paths may be evidenced across `lsof` and `vmmap` records for that PID.
+
+The real-device launcher also starts a bounded live observer before Chrome is
+launched. It records GPU-process command lines and best-effort `lsof`/`vmmap`
+evidence while the process is alive, restricted to the test-copy Framework and
+isolated profile. The collector waits briefly for the observer's completion
+marker; browser exit is normal completion, while a launch timeout, observer
+deadline, or missing completion marker is recorded as incomplete. Live
+observation is evidence preservation only; it does not change the launch,
+signing, or fallback decision.
 
 ## Phase 3 results and transition to Family 1 work
 
@@ -141,10 +151,14 @@ and its manifest, sidecar, and two dylib hashes passed verification. Phase 3B
 and Phase 3C synthetic fixture workflows passed, including release-manifest,
 current-only Framework, attempt-root, signing, and diagnostic-mode assertions.
 
-The Phase 3D VM observation also passed its intended scope: the dynamic-replace
-case showed the external ANGLE libraries in the GPU process, while the stock
-control did not. This proves the dynamic loading and propagation path in the
-VM; it does not prove successful Metal initialization on the target Mac.
+The historical Phase 3D VM observation recorded GPU-correlated dyld evidence
+for each external ANGLE library, while the stock control did not. The probe at
+that time aggregated the two library signals independently, so it did not
+prove that both paths appeared under the same GPU PID. Treat the historical
+`both-replacement-libraries-gpu-loaded` label as unverified same-process
+evidence until the raw artifact is re-reviewed or a corrected probe reruns.
+Even confirmed same-PID loading would not prove successful Metal initialization
+on the target Mac.
 
 As a historical pre-`.58` Intel Mac attempt, a test copy was prepared and
 Apple Development signed with strict verification passing. The Keychain prompt

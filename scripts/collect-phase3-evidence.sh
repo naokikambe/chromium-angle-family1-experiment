@@ -62,6 +62,53 @@ gpu_pids_file="$results_real/gpu-processes.txt"
 # Chrome may run its GPU process from the generic Helper.app rather than the
 # dedicated Google Chrome Helper (GPU).app; the process type is the stable discriminator.
 phase3_snapshot_matching_processes "$process_snapshot" "$framework" '--type=gpu-process' > "$gpu_pids_file"
+live_observer_pid_file="$results_real/live-gpu-observer.pid"
+live_observer_done="$results_real/live-gpu-observer.done"
+if [[ -f "$live_observer_pid_file" ]]; then
+  live_observer_pid=$(<"$live_observer_pid_file")
+  if [[ "$live_observer_pid" =~ ^[0-9]+$ ]]; then
+    for wait_tick in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+      [[ -f "$live_observer_done" ]] && break
+      kill -0 "$live_observer_pid" 2>/dev/null || break
+      sleep 0.1
+    done
+  fi
+  if [[ ! -f "$live_observer_done" ]]; then
+    printf 'live GPU observer incomplete; retained evidence is best-effort.\n' > "$results_real/live-gpu-observer-status.txt"
+  elif [[ -f "$results_real/live-gpu-observer-status.txt" ]] &&
+    [[ "$(<"$results_real/live-gpu-observer-status.txt")" == browser-exit ]]; then
+    printf 'live GPU observer complete before final classification.\n' > "$results_real/live-gpu-observer-status.txt"
+  else
+    printf 'live GPU observer incomplete; deadline or launch timeout was reached.\n' > "$results_real/live-gpu-observer-status.txt"
+  fi
+else
+  printf 'live GPU observer PID marker is missing; completion cannot be verified.\n' \
+    > "$results_real/live-gpu-observer-status.txt"
+fi
+if [[ -s "$results_real/live-gpu-processes.tsv" ]]; then
+  awk -F '\t' 'NF >= 5 {print $2 " " $5}' "$results_real/live-gpu-processes.tsv" >> "$gpu_pids_file"
+  sort -u "$gpu_pids_file" -o "$gpu_pids_file"
+fi
+record_live_load_evidence() {
+  local gpu_pid=$1 live_evidence source egl_seen=false glesv2_seen=false
+  for source in lsof vmmap; do
+    live_evidence="$results_real/live-gpu-$gpu_pid-$source.txt"
+    [[ -f "$live_evidence" ]] || continue
+    grep -F -- "$libraries_dir/libEGL.dylib" "$live_evidence" >/dev/null && egl_seen=true
+    grep -F -- "$libraries_dir/libGLESv2.dylib" "$live_evidence" >/dev/null && glesv2_seen=true
+  done
+  if [[ "$egl_seen" == true && "$glesv2_seen" == true ]]; then
+    printf 'direct dynamic ANGLE load evidence: live maps confirmed both test-copy dylib absolute paths for GPU PID %s\n' \
+      "$gpu_pid" >> "$results_real/load-evidence.txt"
+  fi
+}
+[[ -f "$results_real/load-evidence.txt" ]] || : > "$results_real/load-evidence.txt"
+if [[ -s "$results_real/live-gpu-processes.tsv" ]]; then
+  while IFS=$'\t' read -r _ live_gpu_pid _ _ _; do
+    [[ "$live_gpu_pid" =~ ^[0-9]+$ ]] || continue
+    record_live_load_evidence "$live_gpu_pid"
+  done < "$results_real/live-gpu-processes.tsv"
+fi
 if [[ ! -s "$gpu_pids_file" ]]; then
   printf 'No matching GPU process was observed; dynamic ANGLE load is unconfirmed.\n' >> "$gpu_pids_file"
 else
@@ -83,7 +130,9 @@ else
     fi
   done < "$gpu_pids_file"
 fi
-[[ -f "$results_real/load-evidence.txt" ]] || printf 'No direct dylib load evidence was collected; do not report dynamic ANGLE as loaded.\n' > "$results_real/load-evidence.txt"
+if ! grep -F 'direct dynamic ANGLE load evidence:' "$results_real/load-evidence.txt" >/dev/null; then
+  printf 'No direct dylib load evidence was collected; do not report dynamic ANGLE as loaded.\n' > "$results_real/load-evidence.txt"
+fi
 if [[ -f "$results_real/stderr.log" ]]; then
   grep -Ei 'EGL|Metal|requireGpuFamily2|GL implementation|Display type|GL_VENDOR|GL_RENDERER|WebGL|Compositing|Rasterization|GPU process|crash' "$results_real/stderr.log" > "$results_real/chrome-log-extract.txt" || true
 fi

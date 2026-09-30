@@ -24,7 +24,7 @@ source ChromeとそのFrameworkは観測前後とも`154.0.8037.59`であり、�
 | manifest | Chrome `154.0.8037.59`; Chromium `b5a24985a2f5ed35909845221b7203c5d8995c8f`; ANGLE `1ff8799c596d4fc9acea28343610b1f33650a6fa`; release manifest SHA-256 `f07f5c27a0e0c8d79917a277dae393d8546697e75bc068d55f6476192b95fc47`; `RUNTIME_DEVICE_READY=false` |
 | runtime patch/libraries | Patch SHA-256 `07d7e80d8ce1099cb3d9d3ad5654eabd39b3d33776932ad28e3d76deaf6d4070`; `libEGL.dylib` SHA-256 `f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`; `libGLESv2.dylib` SHA-256 `d0dedeeddb3b727e645648ee2b90462be43300c07914c3cc8ca7fc3de3b95e5c` |
 | Phase 3D VM observation | [`36636862891`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36636862891) / success; diagnostics archive SHA-256 `c22e97e90c155bc440c6f3713f92f8024e10977b0ee2e39a734b6001b1d21a58` |
-| VM dynamic | Both replacement dylibs were directly observed in the GPU process; EGL initialization failed and Chrome fell back to `--use-gl=disabled`. WebGL page loaded, but neither WebGL 1 nor 2 context was created and no draw completed. |
+| VM dynamic | The old probe recorded GPU-correlated dyld evidence per replacement dylib, but did not establish that both belonged to the same GPU PID. EGL initialization failed and Chrome fell back to `--use-gl=disabled`. WebGL page loaded, but neither WebGL 1 nor 2 context was created and no draw completed. |
 | VM stock control | No replacement ANGLE load was requested; EGL initialization failure was not observed, but GPU fallback occurred. WebGL 1/2 contexts and drawing were also unavailable in this VM. |
 | Real-device preflight/signing | `.59` source/test-copy/Framework versions matched; preflight completed, Apple Development signing receipt recorded strict verification passed. |
 | Real-device Case B | JSON trace parsed; 3,434 events. Intel HD Graphics 5000 / Metal selected, then EGL failure, GPU-process exit and disabled fallback. WebGL/KOOV were not run. |
@@ -41,6 +41,12 @@ Case Bのprocess snapshotには、test Framework配下の`Google Chrome Helper.a
 `5cb3dbf`に記録した。専用helper形式・汎用helper形式のfocused fixtureはローカルでpassした。
 Phase 3B full suiteはPinned CIで確認する。collector修正後の実機再試行は別のretryにあたり、
 CI成功後に追加承認を得るまで実施しない。
+
+次回の実機試行では、起動前に開始するbounded live observerがGPU processのPID・command、
+生存中のbest-effort `lsof`/`vmmap`を保存し、collectorがobserver完了または未完了を明示する。
+これは短命processの事後snapshot取りこぼしを減らすが、focused fixtureだけでは実機の
+GPU process寿命やmacOS権限を証明しない。両replacement dylibのロード判定は、引き続き
+同一GPU PIDからの直接証拠が必要である。
 
 ### `.59`段階別判定
 
