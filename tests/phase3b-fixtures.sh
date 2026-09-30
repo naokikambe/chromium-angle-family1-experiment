@@ -231,6 +231,19 @@ EOF
 cat > "$stub_dir/ps" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "${PHASE3_FIXTURE_LIVE_OBSERVER:-0}" == 1 && " $* " == *' -wwaxo pid=,ppid=,stat=,command= '* ]]; then
+  live_state="${PHASE3_FIXTURE_LIVE_PS_STATE:?}"
+  live_count=0
+  if [[ -f "$live_state" ]]; then live_count=$(<"$live_state"); fi
+  live_count=$((live_count + 1))
+  printf '%s\n' "$live_count" > "$live_state"
+  if [[ "$live_count" -gt 1 ]]; then
+    live_profile=$(awk -F= '$1 == "user_data_dir" { print $2 }' "${PHASE3_FIXTURE_LIVE_RESULTS}/run-metadata.txt")
+    printf '777 1 S %s/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper --type=gpu-process --user-data-dir=%s\n' \
+      "${PHASE3_FIXTURE_LIVE_FRAMEWORK}" "$live_profile"
+    exit 0
+  fi
+fi
 if [[ " $* " == *' -wwaxo pid=,command= '* ]]; then
   cat "$PHASE3_FIXTURE_PS_SNAPSHOT"
   exit 0
@@ -277,7 +290,7 @@ cat > "$source_app/Contents/Info.plist" <<'EOF'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>154.0.8037.58</string><key>CFBundleExecutable</key><string>Google Chrome</string></dict></plist>
 EOF
-printf '#!/usr/bin/env bash\nexit 0\n' > "$source_app/Contents/MacOS/Google Chrome"
+printf '#!/usr/bin/env bash\nif [[ "${PHASE3_FIXTURE_SYNTHETIC_BROWSER_SLEEP:-0}" != 0 ]]; then sleep "${PHASE3_FIXTURE_SYNTHETIC_BROWSER_SLEEP}"; fi\nexit 0\n' > "$source_app/Contents/MacOS/Google Chrome"
 printf 'fixture legacy framework\n' > "$legacy_version/Google Chrome Framework"
 printf 'fixture current framework\n' > "$current_version/Google Chrome Framework"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$current_version/Helpers/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"
@@ -494,6 +507,75 @@ EOF
   grep -F '555 ' "$fixture/evidence both-libraries/gpu-processes.txt" >/dev/null
   ! grep -F '333 ' "$fixture/evidence both-libraries/gpu-processes.txt"
   fixture_checkpoint evidence-after-both-libraries
+
+  # A short-lived GPU process can be absent from the final snapshot. The
+  # live observer's saved per-PID map must still provide same-PID proof.
+  live_observer_results="$fixture/evidence live-observer"
+  live_observer_state="$fixture/live-observer-ps-state"
+  live_observer_framework="$focused_output/Contents/Frameworks/Google Chrome Framework.framework"
+  printf '111 /unrelated/Google Chrome Framework.framework/Helpers/Google Chrome Helper --type=gpu-process\n' > "$focused_process_snapshot"
+  export PHASE3_FIXTURE_LIVE_OBSERVER=1
+  export PHASE3_FIXTURE_LIVE_PS_STATE="$live_observer_state"
+  export PHASE3_FIXTURE_LIVE_RESULTS="$live_observer_results"
+  export PHASE3_FIXTURE_LIVE_FRAMEWORK="$live_observer_framework"
+  export PHASE3_FIXTURE_LSOF_BOTH=1
+  export PHASE3_FIXTURE_SYNTHETIC_BROWSER_SLEEP=2
+  "$run" CASE_B "$focused_output" "$live_observer_results"
+  for live_done_tick in $(seq 1 100); do
+    [[ -f "$live_observer_results/live-gpu-observer.done" ]] && break
+    sleep 0.1
+  done
+  test -f "$live_observer_results/live-gpu-observer.done"
+  grep -F $'\t777\t' "$live_observer_results/live-gpu-processes.tsv" >/dev/null
+  test -f "$live_observer_results/live-gpu-777-lsof.txt"
+  "$collect" "$focused_output" "$live_observer_results"
+  grep -F 'live maps confirmed both test-copy dylib absolute paths for GPU PID 777' \
+    "$live_observer_results/load-evidence.txt" >/dev/null
+  unset PHASE3_FIXTURE_LIVE_OBSERVER PHASE3_FIXTURE_LIVE_PS_STATE \
+    PHASE3_FIXTURE_LIVE_RESULTS PHASE3_FIXTURE_LIVE_FRAMEWORK \
+    PHASE3_FIXTURE_SYNTHETIC_BROWSER_SLEEP
+  export PHASE3_FIXTURE_PS_SNAPSHOT="$focused_process_snapshot"
+
+  # Separate PIDs carrying one library each must not be merged into success.
+  split_live_results="$fixture/evidence split-live"
+  mkdir "$split_live_results"
+  printf 'timestamp\t777\t1\tS\tshort-lived EGL GPU\n' > "$split_live_results/live-gpu-processes.tsv"
+  printf 'timestamp\t778\t1\tS\tshort-lived GLES GPU\n' >> "$split_live_results/live-gpu-processes.tsv"
+  printf '%s\n' "$focused_libraries/libEGL.dylib" > "$split_live_results/live-gpu-777-lsof.txt"
+  printf '%s\n' "$focused_libraries/libGLESv2.dylib" > "$split_live_results/live-gpu-778-lsof.txt"
+  "$collect" "$focused_output" "$split_live_results"
+  ! grep -F 'direct dynamic ANGLE load evidence:' "$split_live_results/load-evidence.txt"
+  grep -Fx 'live GPU observer PID marker is missing; completion cannot be verified.' \
+    "$split_live_results/live-gpu-observer-status.txt" >/dev/null
+
+  # Both libraries in one saved PID map are accepted even when that PID has exited.
+  same_live_results="$fixture/evidence same-live"
+  mkdir "$same_live_results"
+  printf 'timestamp\t779\t1\tS\tshort-lived GPU\n' > "$same_live_results/live-gpu-processes.tsv"
+  printf '%s\n' "$focused_libraries/libEGL.dylib" > "$same_live_results/live-gpu-779-lsof.txt"
+  printf '%s\n' "$focused_libraries/libGLESv2.dylib" > "$same_live_results/live-gpu-779-vmmap.txt"
+  "$collect" "$focused_output" "$same_live_results"
+  grep -F 'live maps confirmed both test-copy dylib absolute paths for GPU PID 779' \
+    "$same_live_results/load-evidence.txt" >/dev/null
+
+  # Exercise the VM helper directly with synthetic per-PID maps. Split PIDs
+  # remain inconclusive; a single PID may combine lsof and vmmap evidence.
+  source "$repo_root/scripts/phase3-gpu-evidence.sh"
+  vm_evidence="$fixture/vm-evidence"
+  mkdir "$vm_evidence"
+  printf '%s\n' "$focused_libraries/libEGL.dylib" > "$vm_evidence/gpu-777-lsof-1.txt"
+  printf '%s\n' "$focused_libraries/libGLESv2.dylib" > "$vm_evidence/gpu-778-lsof-1.txt"
+  ! phase3_gpu_process_map_has_both_paths "$vm_evidence" \
+    "$focused_libraries/libEGL.dylib" "$focused_libraries/libGLESv2.dylib"
+  printf '%s\n' "$focused_libraries/libGLESv2.dylib" > "$vm_evidence/gpu-777-vmmap.txt"
+  test "$(phase3_gpu_process_map_has_both_paths "$vm_evidence" \
+    "$focused_libraries/libEGL.dylib" "$focused_libraries/libGLESv2.dylib")" = 777
+  printf '%s\n' 'Initialization of all (1) EGL display types failed' > "$vm_evidence/egl-one.log"
+  printf '%s\n' 'Initialization of all (2) EGL display types failed' > "$vm_evidence/egl-two.log"
+  printf '%s\n' 'GLDisplayEGL::Initialize failed for all display types' > "$vm_evidence/egl-display.log"
+  phase3_egl_initialization_failure_observed "$vm_evidence/egl-one.log"
+  phase3_egl_initialization_failure_observed "$vm_evidence/egl-two.log"
+  phase3_egl_initialization_failure_observed "$vm_evidence/egl-display.log"
 
   mkdir "$fixture/evidence invalid-signature" "$fixture/evidence nonadhoc"
   fixture_checkpoint evidence-before-invalid-signature

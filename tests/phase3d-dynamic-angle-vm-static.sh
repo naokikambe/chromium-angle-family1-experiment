@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
 workflow="$repo_root/.github/workflows/phase3d-dynamic-angle-vm.yml"
 probe="$repo_root/scripts/run-phase3d-chrome-launch-probe.sh"
+evidence_helper="$repo_root/scripts/phase3-gpu-evidence.sh"
 
 grep -F 'workflow_dispatch:' "$workflow" >/dev/null
 grep -F 'angle_build_run_id:' "$workflow" >/dev/null
@@ -40,6 +41,10 @@ grep -F 'DYNAMIC_ANGLE_OUTCOME=%s' "$probe" >/dev/null
 grep -F 'replacement-library-post-run.sha256' "$probe" >/dev/null
 grep -F 'ANGLE_FLAGS_REQUESTED=%s' "$probe" >/dev/null
 grep -F 'dynamic-angle-evidence.txt' "$probe" >/dev/null
+grep -F 'same_gpu_pid_process_map=' "$probe" >/dev/null
+grep -F 'phase3-gpu-evidence.sh' "$probe" >/dev/null
+grep -F 'Initialization of all \([0-9]+\) EGL display types failed' "$evidence_helper" >/dev/null
+grep -F 'GLDisplayEGL::Initialize' "$evidence_helper" >/dev/null
 ! grep -E '(^|[[:space:]])sudo([[:space:]]|$)|xattr[[:space:]]+-c|codesign[^[:cntrl:]]*--sign|/Applications/Google Chrome\.app' "$workflow" "$probe" >/dev/null
 
 printf '%s\n' 'phase3d dynamic ANGLE VM static audit passed'

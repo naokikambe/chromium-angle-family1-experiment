@@ -4,6 +4,7 @@ set -euo pipefail
 PHASE3_SCRIPT_NAME='run-phase3d-chrome-launch-probe'
 readonly PHASE3_SCRIPT_NAME
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/phase3-test-copy-common.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/phase3-gpu-evidence.sh"
 
 usage() {
   printf 'usage: %s CHROME_VERSION RESULTS_DIRECTORY [--loader-trace] [--dynamic-angle-flags] [--angle-artifact DIRECTORY] [--webgl-smoke-page FILE]\n' "$0" >&2
@@ -343,6 +344,20 @@ gpu_process_map_has_path() {
     fi
   done < <(find "$results_dir" -maxdepth 1 -type f \
     \( -name 'gpu-*-lsof-*.txt' -o -name 'gpu-*-vmmap.txt' \) -print0)
+  return 1
+}
+
+gpu_dyld_has_both_paths() {
+  local libegl=$1 libglesv2=$2 gpu_pid
+  while IFS=$'\t' read -r _ _ gpu_pid _; do
+    [[ "$gpu_pid" =~ ^[0-9]+$ ]] || continue
+    if awk -v marker="dyld[$gpu_pid]:" -v egl="$libegl" -v glesv2="$libglesv2" \
+      'index($0, marker) && index($0, egl) {egl_seen=1} index($0, marker) && index($0, glesv2) {glesv2_seen=1} END {exit(egl_seen && glesv2_seen ? 0 : 1)}' \
+      "$results_dir/browser-stderr.txt"; then
+      printf '%s\n' "$gpu_pid"
+      return 0
+    fi
+  done < "$results_dir/gpu-pid-all-sources.tsv"
   return 1
 }
 
@@ -881,7 +896,7 @@ grep -E 'dyld\[[0-9]+\].*(Libraries/(libEGL|libGLESv2)\.dylib|Google Chrome for 
 if grep -F -- '--use-gl=disabled' "$results_dir/process-snapshots-during.txt" "$results_dir/browser-stderr.txt" >/dev/null; then
   gpu_disabled_fallback_observed=true
 fi
-if grep -F 'Initialization of all (1) EGL display types failed' "$results_dir/browser-stderr.txt" >/dev/null; then
+if phase3_egl_initialization_failure_observed "$results_dir/browser-stderr.txt"; then
   egl_initialization_failure_observed=true
 fi
 if [[ "$probe_mode" == dynamic-angle ]]; then
@@ -916,8 +931,13 @@ if [[ "$probe_mode" == dynamic-angle ]]; then
   phase3_verify_hash "$replacement_libraries_dir/libGLESv2.dylib" "$expected_libglesv2_sha256"
   shasum -a 256 "$replacement_libraries_dir/libEGL.dylib" \
     "$replacement_libraries_dir/libGLESv2.dylib" > "$results_dir/replacement-library-post-run.sha256"
-  if [[ "$libegl_gpu_dyld_load_observed" == true && "$libglesv2_gpu_dyld_load_observed" == true ]] ||
-    [[ "$libegl_process_map_observed" == true && "$libglesv2_process_map_observed" == true ]]; then
+  gpu_same_pid_dyld=''
+  gpu_same_pid_map=''
+  gpu_same_pid_dyld=$(gpu_dyld_has_both_paths "$replacement_libraries_dir/libEGL.dylib" \
+    "$replacement_libraries_dir/libGLESv2.dylib" || true)
+  gpu_same_pid_map=$(phase3_gpu_process_map_has_both_paths "$results_dir" "$replacement_libraries_dir/libEGL.dylib" \
+    "$replacement_libraries_dir/libGLESv2.dylib" || true)
+  if [[ -n "$gpu_same_pid_dyld" || -n "$gpu_same_pid_map" ]]; then
     dynamic_angle_outcome='both-replacement-libraries-gpu-loaded'
   elif [[ "$libegl_dyld_load_observed" == true && "$libglesv2_dyld_load_observed" == true ]]; then
     dynamic_angle_outcome='both-replacement-libraries-dyld-loaded'
@@ -940,6 +960,8 @@ if [[ "$probe_mode" == dynamic-angle ]]; then
     printf 'libGLESv2_gpu_dyld_load_observed=%s\n' "$libglesv2_gpu_dyld_load_observed"
     printf 'libEGL_process_map_observed=%s\n' "$libegl_process_map_observed"
     printf 'libGLESv2_process_map_observed=%s\n' "$libglesv2_process_map_observed"
+    printf 'same_gpu_pid_dyld=%s\n' "${gpu_same_pid_dyld:-none}"
+    printf 'same_gpu_pid_process_map=%s\n' "${gpu_same_pid_map:-none}"
     printf 'gpu_disabled_fallback_observed=%s\n' "$gpu_disabled_fallback_observed"
     printf 'egl_initialization_failure_observed=%s\n' "$egl_initialization_failure_observed"
   } > "$results_dir/dynamic-angle-evidence.txt"

@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
 workflow="$repo_root/.github/workflows/phase3d-chrome-launch-probe.yml"
 probe="$repo_root/scripts/run-phase3d-chrome-launch-probe.sh"
+evidence_helper="$repo_root/scripts/phase3-gpu-evidence.sh"
 
 grep -F 'workflow_dispatch:' "$workflow" >/dev/null
 grep -F 'required: true' "$workflow" >/dev/null
@@ -51,6 +52,11 @@ grep -F 'crash-report-snapshot-errors.txt' "$probe" >/dev/null
 grep -F 'cp "$crash_report" "$results_dir/new-crash-reports/" || true' "$probe" >/dev/null
 grep -F 'lsof -nP -p' "$probe" >/dev/null
 grep -F 'vmmap "$pid"' "$probe" >/dev/null
+grep -F 'gpu_process_map_has_both_paths' "$probe" >/dev/null
+grep -F 'gpu_dyld_has_both_paths' "$probe" >/dev/null
+grep -F 'same_gpu_pid_dyld=' "$probe" >/dev/null
+grep -F 'phase3-gpu-evidence.sh' "$probe" >/dev/null
+grep -F 'GLDisplayEGL::Initialize' "$evidence_helper" >/dev/null
 ! grep -E '(^|[[:space:]])sudo([[:space:]]|$)|fs_usage|dtruss|xattr[[:space:]]+-c|codesign[^\n]*--sign' "$probe" >/dev/null
 ! grep -E -- '--angle-artifact|--use-dynamic-angle|--use-angle|--use-gl' "$workflow" >/dev/null
 grep -F -- '--angle-artifact' "$probe" >/dev/null
