@@ -1,7 +1,7 @@
 diff --git a/src/common/apple_platform_utils.mm b/src/common/apple_platform_utils.mm
 --- a/src/common/apple_platform_utils.mm
 +++ b/src/common/apple_platform_utils.mm
-@@ -110,5 +110,7 @@
+@@ -73,5 +73,7 @@
      if (!machineModelSufficient)
      {
 +        INFO() << "[ANGLE_PHASE5_METAL_INIT] machine_model_gate=reject";
@@ -9,7 +9,7 @@ diff --git a/src/common/apple_platform_utils.mm b/src/common/apple_platform_util
          return false;
      }
 +    INFO() << "[ANGLE_PHASE5_METAL_INIT] machine_model_gate=pass";
-@@ -130,5 +132,7 @@
+@@ -101,5 +103,7 @@
              auto device = [MTLCreateSystemDefaultDevice() ANGLE_APPLE_AUTORELEASE];
              if (!device)
              {
@@ -17,23 +17,21 @@ diff --git a/src/common/apple_platform_utils.mm b/src/common/apple_platform_util
                  return false;
              }
 +            INFO() << "[ANGLE_PHASE5_METAL_INIT] default_metal_device=present";
-@@ -140,1 +147,4 @@
+@@ -108,1 +112,4 @@
 -            return [device supportsFamily:MTLGPUFamilyMacCatalyst2];
 +            const bool familySufficient = [device supportsFamily:MTLGPUFamilyMacCatalyst2];
 +            INFO() << "[ANGLE_PHASE5_METAL_INIT] mac_catalyst_gpu_family2_supported="
 +                   << (familySufficient ? "true" : "false");
 +            return familySufficient;
-@@ -150,1 +160,4 @@
+@@ -111,1 +118,4 @@
 -            return [device supportsFamily:MTLGPUFamilyMac2];
 +            const bool familySufficient = [device supportsFamily:MTLGPUFamilyMac2];
 +            INFO() << "[ANGLE_PHASE5_METAL_INIT] mac_gpu_family2_supported="
 +                   << (familySufficient ? "true" : "false");
 +            return familySufficient;
-@@ -155,2 +168,3 @@
- #else
+@@ -112,0 +113,1 @@
 +            INFO() << "[ANGLE_PHASE5_METAL_INIT] gpu_family_requirement=not_applicable";
-             return true;
-@@ -160,1 +175,3 @@
+@@ -119,1 +131,3 @@
      }();
 +    INFO() << "[ANGLE_PHASE5_METAL_INIT] renderer_availability="
 +           << (gpuFamilySufficient ? "available" : "unavailable");
@@ -41,18 +39,18 @@ diff --git a/src/common/apple_platform_utils.mm b/src/common/apple_platform_util
 diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/metal/DisplayMtl.mm
 --- a/src/libANGLE/renderer/metal/DisplayMtl.mm
 +++ b/src/libANGLE/renderer/metal/DisplayMtl.mm
-@@ -120,1 +120,4 @@
+@@ -93,1 +93,4 @@
 -    return angle::IsMetalRendererAvailable();
 +    const bool rendererAvailable = angle::IsMetalRendererAvailable();
 +    INFO() << "[ANGLE_PHASE5_METAL_INIT] display_renderer_availability="
 +           << (rendererAvailable ? "available" : "unavailable");
 +    return rendererAvailable;
-@@ -130,2 +130,4 @@
+@@ -113,2 +116,4 @@
      angle::Result result = initializeImpl(display);
 +    INFO() << "[ANGLE_PHASE5_METAL_INIT] display_initialize_result="
 +           << (result == angle::Result::Continue ? "success" : "failure");
      if (result != angle::Result::Continue)
-@@ -134,6 +136,8 @@
+@@ -130,6 +133,8 @@
          mMetalDevice = getMetalDeviceMatchingAttribute(display->getAttributeMap());
          // If we can't create a device, fail initialization.
          if (!mMetalDevice.get())
@@ -61,8 +59,7 @@ diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/m
              return angle::Result::Stop;
          }
 +        INFO() << "[ANGLE_PHASE5_METAL_INIT] metal_device_selection=success";
-@@ -150,3 +151,19 @@
-         initializeFeatures();
+@@ -141,2 +148,18 @@
 -        if (mFeatures.requireGpuFamily2.enabled && !supportsEitherGPUFamily(1, 2))
 +        const bool requireGpuFamily2Enabled = mFeatures.requireGpuFamily2.enabled;
 +        const bool requireGpuFamily2HasOverride = mFeatures.requireGpuFamily2.hasOverride;
@@ -82,7 +79,7 @@ diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/m
 +               << (requireGpuFamily2HasOverride ? "true" : "false");
 +        if (requireGpuFamily2Enabled && !supportsRequiredGpuFamily)
          {
-@@ -165,2 +182,14 @@
+@@ -147,2 +170,14 @@
 -        if (mFeatures.disableMetalOnNvidia.enabled && isNVIDIA())
 +        const bool disableMetalOnNvidiaEnabled = mFeatures.disableMetalOnNvidia.enabled;
 +        bool isNvidiaDevice = false;
@@ -98,8 +95,7 @@ diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/m
 +        }
 +        if (disableMetalOnNvidiaEnabled && isNvidiaDevice)
          {
-@@ -175,3 +205,13 @@
-         mCmdQueue = angle::adoptObjCPtr([mMetalDevice newCommandQueue]);
+@@ -153,0 +188,7 @@
 +        if (!mCmdQueue)
 +        {
 +            INFO() << "[ANGLE_PHASE5_METAL_INIT] command_queue=failed";
@@ -107,12 +103,14 @@ diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/m
 +        }
 +        INFO() << "[ANGLE_PHASE5_METAL_INIT] command_queue=success";
 +        INFO() << "[ANGLE_PHASE5_METAL_INIT] format_table=begin";
+@@ -155,1 +197,2 @@
          ANGLE_TRY(mFormatTable.initialize(this));
 +        INFO() << "[ANGLE_PHASE5_METAL_INIT] format_table=success";
+@@ -156,1 +200,3 @@
 +        INFO() << "[ANGLE_PHASE5_METAL_INIT] shader_library=begin";
          ANGLE_TRY(initializeShaderLibrary());
 +        INFO() << "[ANGLE_PHASE5_METAL_INIT] shader_library=success";
-@@ -180,1 +231,3 @@
+@@ -158,1 +203,3 @@
 -        mUtils = std::make_unique<mtl::RenderUtils>();
 +        INFO() << "[ANGLE_PHASE5_METAL_INIT] render_utils=begin";
 +        mUtils = std::make_unique<mtl::RenderUtils>();
