@@ -1,0 +1,415 @@
+name: Phase 5 Metal Family 1 runtime artifact
+
+on:
+  workflow_call:
+    inputs:
+      angle_revision:
+        description: Exact ANGLE revision used by the Phase 5 runtime artifact
+        required: true
+        type: string
+      chrome_version:
+        description: Chrome release version whose DEPS ANGLE pin must match
+        required: true
+        type: string
+      runtime_patch_sha256:
+        description: SHA-256 of the checked-in Phase 5 runtime patch
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      angle_revision:
+        description: Exact ANGLE revision used by the Phase 5 runtime artifact
+        required: true
+        default: 1ff8799c596d4fc9acea28343610b1f33650a6fa
+        type: string
+      chrome_version:
+        description: Chrome release version whose DEPS ANGLE pin must match
+        required: true
+        default: 154.0.8037.59
+        type: string
+      runtime_patch_sha256:
+        description: SHA-256 of the checked-in Phase 5 runtime patch
+        required: true
+        default: 15c7947d3d40dc121b1c6e1bb007f4c03ddfa83a3cdd75cb2d9177c3869a1af9
+        type: string
+
+concurrency:
+  group: phase5-metal-family1-runtime-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  phase5-runtime-build:
+    name: phase5-runtime-macos-intel
+    runs-on: macos-15-intel
+    timeout-minutes: 120
+    env:
+      ANGLE_REPOSITORY: https://chromium.googlesource.com/angle/angle.git
+      CHROMIUM_REPOSITORY: https://chromium.googlesource.com/chromium/src.git
+      DEPOT_TOOLS_REPOSITORY: https://chromium.googlesource.com/chromium/tools/depot_tools.git
+      DEPOT_TOOLS_REVISION: 0306e4682b4ac35287c726fa35a983157a625902
+      DEPOT_TOOLS_UPDATE: "0"
+      ANGLE_REVISION: ${{ inputs.angle_revision }}
+      CHROME_VERSION: ${{ inputs.chrome_version }}
+      RUNTIME_PATCH_PATH: patches/phase5-metal-family1-runtime.patch
+      RUNTIME_PATCH_SHA256: ${{ inputs.runtime_patch_sha256 }}
+
+    steps:
+      - name: Check out workflow repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Initialize runner paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf 'DIAG_DIR=%s\n' "$RUNNER_TEMP/phase5-metal-family1-runtime"
+            printf 'ANGLE_ROOT=%s\n' "$RUNNER_TEMP/phase5-runtime-angle-source"
+            printf 'CHROMIUM_ROOT=%s\n' "$RUNNER_TEMP/phase5-runtime-chromium-source"
+            printf 'DEPOT_TOOLS_ROOT=%s\n' "$RUNNER_TEMP/phase5-runtime-depot-tools"
+            printf 'ARTIFACT_DIR=%s\n' "$RUNNER_TEMP/phase5-metal-family1-runtime-artifact"
+          } >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/phase5-metal-family1-runtime"
+          printf '%s\n' not-run > "$RUNNER_TEMP/phase5-metal-family1-runtime/libegl-result.txt"
+          printf '%s\n' not-run > "$RUNNER_TEMP/phase5-metal-family1-runtime/libglesv2-result.txt"
+
+      - name: Static workflow and patch audit
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/phase5-metal-family1-runtime-static.sh \
+            .github/workflows/phase5-metal-family1-runtime.yml \
+            "$RUNTIME_PATCH_PATH"
+          bash -n scripts/verify-phase5-runtime-artifact.sh
+          ruby -e 'require "yaml"; YAML.parse_file(".github/workflows/phase5-metal-family1-runtime.yml")'
+
+      - name: Validate exact source and patch inputs
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$ANGLE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          test "$ANGLE_REVISION" = 1ff8799c596d4fc9acea28343610b1f33650a6fa
+          [[ "$CHROME_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$CHROME_VERSION" = 154.0.8037.59
+          [[ "$RUNTIME_PATCH_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test -f "$RUNTIME_PATCH_PATH"
+          test "$(shasum -a 256 "$RUNTIME_PATCH_PATH" | awk '{print $1}')" = "$RUNTIME_PATCH_SHA256"
+          ! grep -E 'test-stub|TEST_STUB|DisplayMtlFamily1Test' "$RUNTIME_PATCH_PATH" >/dev/null
+          {
+            printf 'ANGLE_REVISION=%s\n' "$ANGLE_REVISION"
+            printf 'CHROME_VERSION=%s\n' "$CHROME_VERSION"
+            printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"
+            printf 'RUNTIME_PATCH_SHA256=%s\n' "$RUNTIME_PATCH_SHA256"
+          } | tee "$DIAG_DIR/source-input.txt"
+
+      - name: Resolve Chromium tag and ANGLE revision
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="refs/tags/$CHROME_VERSION"
+          git init "$CHROMIUM_ROOT"
+          git -C "$CHROMIUM_ROOT" remote add origin "$CHROMIUM_REPOSITORY"
+          git -C "$CHROMIUM_ROOT" fetch --depth=1 origin "$tag"
+          chromium_revision=$(git -C "$CHROMIUM_ROOT" rev-parse FETCH_HEAD^{commit})
+          chromium_version=$(git -C "$CHROMIUM_ROOT" show "$chromium_revision:chrome/VERSION" | \
+            awk -F= '$1 == "MAJOR" {a=$2} $1 == "MINOR" {b=$2} $1 == "BUILD" {c=$2} $1 == "PATCH" {d=$2} END {printf "%s.%s.%s.%s", a,b,c,d}')
+          test "$chromium_version" = "$CHROME_VERSION"
+          resolved_angle_revision=$(git -C "$CHROMIUM_ROOT" show "$chromium_revision:DEPS" | \
+            sed -nE "s/^[[:space:]]*'angle_revision':[[:space:]]*'([0-9a-f]{40})'.*/\\1/p" | head -n 1)
+          [[ "$resolved_angle_revision" =~ ^[0-9a-f]{40}$ ]]
+          test "$resolved_angle_revision" = "$ANGLE_REVISION"
+          {
+            printf 'CHROMIUM_REVISION=%s\n' "$chromium_revision"
+            printf 'ANGLE_REVISION=%s\n' "$ANGLE_REVISION"
+            printf 'ANGLE_SHORT_REVISION=%s\n' "${ANGLE_REVISION:0:8}"
+          } >> "$GITHUB_ENV"
+          {
+            printf 'CHROMIUM_REVISION=%s\n' "$chromium_revision"
+            printf 'CHROMIUM_VERSION=%s\n' "$chromium_version"
+            printf 'ANGLE_REVISION_FROM_DEPS=%s\n' "$resolved_angle_revision"
+          } > "$DIAG_DIR/chromium-angle-resolution.txt"
+
+      - name: Get and bootstrap pinned depot_tools
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init "$DEPOT_TOOLS_ROOT"
+          git -C "$DEPOT_TOOLS_ROOT" remote add origin "$DEPOT_TOOLS_REPOSITORY"
+          git -C "$DEPOT_TOOLS_ROOT" fetch --depth=1 origin "$DEPOT_TOOLS_REVISION"
+          git -C "$DEPOT_TOOLS_ROOT" checkout --detach FETCH_HEAD
+          test "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)" = "$DEPOT_TOOLS_REVISION"
+          printf '%s\n' "$DEPOT_TOOLS_ROOT" >> "$GITHUB_PATH"
+          "$DEPOT_TOOLS_ROOT/ensure_bootstrap"
+          test "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)" = "$DEPOT_TOOLS_REVISION"
+          {
+            printf 'DEPOT_TOOLS_REVISION=%s\n' "$DEPOT_TOOLS_REVISION"
+            printf 'DEPOT_TOOLS_PYTHON=%s\n' "$("$DEPOT_TOOLS_ROOT/python-bin/python3" --version 2>&1)"
+          } > "$DIAG_DIR/depot-tools.txt"
+
+      - name: Fetch and bootstrap exact ANGLE source
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init "$ANGLE_ROOT"
+          git -C "$ANGLE_ROOT" remote add origin "$ANGLE_REPOSITORY"
+          git -C "$ANGLE_ROOT" fetch --depth=1 origin "$ANGLE_REVISION"
+          git -C "$ANGLE_ROOT" checkout --detach FETCH_HEAD
+          test "$(git -C "$ANGLE_ROOT" rev-parse HEAD)" = "$ANGLE_REVISION"
+          cd "$ANGLE_ROOT"
+          python3 scripts/bootstrap.py
+          python3 - <<'PY'
+          from pathlib import Path
+          from pprint import pformat
+
+          path = Path('.gclient')
+          scope = {}
+          exec(path.read_text(encoding='utf-8'), {'__builtins__': {}}, scope)
+          solutions = scope.get('solutions')
+          if not isinstance(solutions, list) or len(solutions) != 1:
+              raise SystemExit('unexpected .gclient solutions; refusing to edit it')
+          custom_vars = solutions[0].get('custom_vars', {})
+          if not isinstance(custom_vars, dict):
+              raise SystemExit('unexpected custom_vars type; refusing to edit it')
+          custom_vars = dict(custom_vars)
+          custom_vars.update({
+              'checkout_angle_cl_deps': False,
+              'checkout_angle_dawn_deps': False,
+              'checkout_angle_internal': False,
+              'checkout_angle_mesa': False,
+              'checkout_angle_partition_alloc': False,
+              'checkout_angle_restricted_traces': False,
+              'checkout_extra_traces': False,
+          })
+          solutions[0]['custom_vars'] = custom_vars
+          path.write_text('solutions = ' + pformat(solutions, sort_dicts=False) + '\n', encoding='utf-8')
+          PY
+          gclient sync --no-history
+          test "$(git rev-parse HEAD)" = "$ANGLE_REVISION"
+          test "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)" = "$DEPOT_TOOLS_REVISION"
+          {
+            printf 'ANGLE_SOURCE_REVISION=%s\n' "$(git rev-parse HEAD)"
+            printf 'DEPOT_TOOLS_REVISION=%s\n' "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)"
+            printf 'ANGLE_SOURCE_STATUS=\n'
+            git status --short --branch
+          } > "$DIAG_DIR/source-before-patch.txt"
+
+      - name: Apply and record runtime patch
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ANGLE_ROOT"
+          git apply --unidiff-zero --check -- "$GITHUB_WORKSPACE/$RUNTIME_PATCH_PATH"
+          git apply --unidiff-zero -- "$GITHUB_WORKSPACE/$RUNTIME_PATCH_PATH"
+          expected_source_paths=$(printf '%s\n' \
+              'src/common/apple_platform_utils.mm' \
+              'src/libANGLE/renderer/metal/DisplayMtl.mm')
+          test "$(git status --short | sed 's/^.. //' | LC_ALL=C sort)" = "$expected_source_paths"
+          {
+            printf 'SOURCE_REVISION=%s\n' "$(git rev-parse HEAD)"
+            printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"
+            printf 'RUNTIME_PATCH_SHA256=%s\n' "$RUNTIME_PATCH_SHA256"
+            git status --short
+          } > "$DIAG_DIR/source-state.txt"
+
+      - name: Generate runtime GN files and audit target graph
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ANGLE_ROOT"
+          mkdir -p out/Phase5
+          cat > out/Phase5/args.gn <<'EOF'
+          is_debug = false
+          is_component_build = false
+          target_cpu = "x64"
+          use_system_xcode = true
+          clang_use_chrome_plugins = false
+          mac_deployment_target = "13.0"
+          mac_min_system_version = "13.0"
+          angle_assert_always_on = false
+          angle_enable_metal = true
+          angle_enable_gl = false
+          angle_enable_vulkan = false
+          angle_enable_swiftshader = false
+          angle_enable_null = false
+          angle_enable_wgpu = false
+          angle_enable_cl = false
+          angle_build_tests = false
+          build_angle_deqp_tests = false
+          symbol_level = 0
+          EOF
+          shasum -a 256 out/Phase5/args.gn > "$DIAG_DIR/gn-args.sha256"
+          gn gen out/Phase5 > "$DIAG_DIR/gn-stdout.log" 2> "$DIAG_DIR/gn-stderr.log"
+          {
+            printf '%s\n' '--- libEGL sources ---'
+            gn desc out/Phase5 //:libEGL sources
+            printf '%s\n' '--- libGLESv2 sources ---'
+            gn desc out/Phase5 //:libGLESv2 sources
+            printf '%s\n' '--- libEGL outputs ---'
+            gn desc out/Phase5 //:libEGL outputs
+            printf '%s\n' '--- libGLESv2 outputs ---'
+            gn desc out/Phase5 //:libGLESv2 outputs
+          } > "$DIAG_DIR/runtime-gn-desc.log"
+          ! grep -E 'DisplayMtlFamily1Test|ANGLE_MetalFamily1Test|ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB' \
+            "$DIAG_DIR/runtime-gn-desc.log" >/dev/null
+          ! grep -E 'angle_enable_metal_family1_test_stub|angle_build_tests[[:space:]]*=[[:space:]]*true' \
+            out/Phase5/args.gn >/dev/null
+
+      - name: Build libEGL
+        # The uncached macos-15-intel build can need more than 25 minutes.
+        # Keep this below the historical 45-minute action budget while leaving
+        # room for the first-run dependency fan-in.
+        timeout-minutes: 40
+        shell: bash
+        run: |
+          set -uo pipefail
+          cd "$ANGLE_ROOT"
+          ninja -C out/Phase5 libEGL > "$DIAG_DIR/libegl-build.log" 2>&1
+          result=$?
+          printf '%s\n' "$result" > "$DIAG_DIR/libegl-result.txt"
+          exit "$result"
+
+      - name: Build libGLESv2
+        timeout-minutes: 25
+        shell: bash
+        run: |
+          set -uo pipefail
+          cd "$ANGLE_ROOT"
+          ninja -C out/Phase5 libGLESv2 > "$DIAG_DIR/libglesv2-build.log" 2>&1
+          result=$?
+          printf '%s\n' "$result" > "$DIAG_DIR/libglesv2-result.txt"
+          exit "$result"
+
+      - name: Audit runtime libraries and assemble artifact
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ANGLE_ROOT"
+          test -f out/Phase5/libEGL.dylib
+          test -f out/Phase5/libGLESv2.dylib
+          for library in out/Phase5/libEGL.dylib out/Phase5/libGLESv2.dylib; do
+            nm -gU "$library" > "$DIAG_DIR/$(basename "$library").symbols.txt"
+            ! grep -E 'ANGLE_MetalFamily1Test|DisplayMtlFamily1Test|ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB' \
+              "$DIAG_DIR/$(basename "$library").symbols.txt" >/dev/null
+          done
+          mkdir -p "$ARTIFACT_DIR/licenses"
+          install -m 0755 out/Phase5/libEGL.dylib "$ARTIFACT_DIR/libEGL.dylib"
+          install -m 0755 out/Phase5/libGLESv2.dylib "$ARTIFACT_DIR/libGLESv2.dylib"
+          printf '%s\n' "$ANGLE_REVISION" > "$ARTIFACT_DIR/ANGLE_REVISION"
+          install -m 0644 out/Phase5/args.gn "$ARTIFACT_DIR/args.gn"
+          install -m 0644 "$GITHUB_WORKSPACE/$RUNTIME_PATCH_PATH" "$ARTIFACT_DIR/runtime-patch.diff"
+          install -m 0644 LICENSE "$ARTIFACT_DIR/LICENSE"
+          while IFS= read -r -d '' license_file; do
+            relative_path=${license_file#"$ANGLE_ROOT"/}
+            destination="$ARTIFACT_DIR/licenses/$relative_path"
+            mkdir -p "$(dirname "$destination")"
+            install -m 0644 "$license_file" "$destination"
+          done < <(find "$ANGLE_ROOT" -type f \( -iname 'LICENSE*' -o -iname 'NOTICE*' \) \
+            -not -path "$ANGLE_ROOT/.git/*" -not -path "$ANGLE_ROOT/out/*" -print0)
+          {
+            printf 'CHROME_VERSION=%s\n' "$CHROME_VERSION"
+            printf 'CHROMIUM_REVISION=%s\n' "$CHROMIUM_REVISION"
+            printf 'ANGLE_EXPECTED_REVISION=%s\n' "$ANGLE_REVISION"
+            printf 'ANGLE_ACTUAL_REVISION=%s\n' "$(git rev-parse HEAD)"
+            printf 'DEPOT_TOOLS_EXPECTED_REVISION=%s\n' "$DEPOT_TOOLS_REVISION"
+            printf 'DEPOT_TOOLS_ACTUAL_REVISION=%s\n' "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)"
+            printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"
+            printf 'RUNTIME_PATCH_SHA256=%s\n' "$RUNTIME_PATCH_SHA256"
+            printf 'RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21\n'
+            printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
+            printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
+            printf 'CPU_ARCHITECTURE=%s\n' "$(uname -m)"
+            xcodebuild -version
+            printf 'MACOS_SDK_VERSION=%s\n' "$(xcrun --show-sdk-version)"
+            xcrun clang --version
+            python3 --version
+            printf 'NINJA_VERSION=%s\n' "$(ninja --version)"
+            printf 'NINJA_TARGETS=libEGL libGLESv2\n'
+          } > "$ARTIFACT_DIR/build-environment.txt"
+          artifact_name="angle-macos-x86_64-chrome-$CHROME_VERSION-angle-$ANGLE_SHORT_REVISION-$GITHUB_RUN_ID"
+          gn_args_sha256=$(shasum -a 256 "$ARTIFACT_DIR/args.gn" | awk '{print $1}')
+          {
+            printf 'SCHEMA=angle-release-v1\n'
+            printf 'ARTIFACT_SCHEMA=angle-artifact-v1\n'
+            printf 'RUNTIME_ARTIFACT_SCHEMA=phase5-metal-family1-runtime-v1\n'
+            printf 'RUNTIME_PROFILE=phase5-metal-family1-control-v1\n'
+            printf 'RUNTIME_PATCH_MODE=source-patch\n'
+            printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"
+            printf 'RUNTIME_PATCH_SHA256=%s\n' "$RUNTIME_PATCH_SHA256"
+            printf 'RUNTIME_PATCH_APPLIED=true\n'
+            printf 'RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21\n'
+            printf 'TEST_ONLY_STUB=absent\n'
+            printf 'RUNTIME_DEVICE_READY=false\n'
+            printf 'CHROME_VERSION=%s\n' "$CHROME_VERSION"
+            printf 'CHROMIUM_REVISION=%s\n' "$CHROMIUM_REVISION"
+            printf 'ANGLE_REVISION=%s\n' "$ANGLE_REVISION"
+            printf 'DEPOT_TOOLS_REVISION=%s\n' "$DEPOT_TOOLS_REVISION"
+            printf 'LIBEGL_SHA256=%s\n' "$(shasum -a 256 "$ARTIFACT_DIR/libEGL.dylib" | awk '{print $1}')"
+            printf 'LIBGLESV2_SHA256=%s\n' "$(shasum -a 256 "$ARTIFACT_DIR/libGLESv2.dylib" | awk '{print $1}')"
+            printf 'ARTIFACT_NAME=%s\n' "$artifact_name"
+            printf 'BUILD_RUN_ID=%s\n' "$GITHUB_RUN_ID"
+            printf 'BUILT_AT_UTC=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            printf 'GN_ARGS_SHA256=%s\n' "$gn_args_sha256"
+          } > "$ARTIFACT_DIR/ANGLE_RELEASE_MANIFEST"
+          shasum -a 256 "$ARTIFACT_DIR/ANGLE_RELEASE_MANIFEST" | \
+            awk '{print $1 "  ANGLE_RELEASE_MANIFEST"}' > "$ARTIFACT_DIR/ANGLE_RELEASE_MANIFEST.sha256"
+          bash "$GITHUB_WORKSPACE/scripts/verify-artifact.sh" "$ARTIFACT_DIR"
+          bash "$GITHUB_WORKSPACE/scripts/verify-phase5-runtime-artifact.sh" "$ARTIFACT_DIR"
+          (
+            cd "$ARTIFACT_DIR"
+            find . -type f ! -name artifact-files.sha256 ! -name artifact.sha256 -print0 | \
+              LC_ALL=C sort -z | xargs -0 shasum -a 256
+          ) > "$ARTIFACT_DIR/artifact-files.sha256"
+          shasum -a 256 "$ARTIFACT_DIR/artifact-files.sha256" | \
+            awk '{print $1 "  artifact-files.sha256"}' > "$ARTIFACT_DIR/artifact.sha256"
+
+      - name: Upload runtime ANGLE artifact
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: angle-macos-x86_64-chrome-${{ inputs.chrome_version }}-angle-${{ env.ANGLE_SHORT_REVISION }}-${{ github.run_id }}
+          path: ${{ env.ARTIFACT_DIR }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Write runtime diagnostics manifest
+        if: always()
+        shell: bash
+        run: |
+          set -u
+          mkdir -p "$DIAG_DIR"
+          source_revision=not-fetched
+          if [[ -d "$ANGLE_ROOT/.git" ]]; then
+            source_revision=$(git -C "$ANGLE_ROOT" rev-parse HEAD 2>/dev/null || printf '%s' not-resolved)
+          fi
+          {
+            printf 'SCHEMA=phase5-metal-family1-runtime-diagnostics-v1\n'
+            printf 'ANGLE_REVISION=%s\n' "$ANGLE_REVISION"
+            printf 'SOURCE_REVISION=%s\n' "$source_revision"
+            printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"
+            printf 'RUNTIME_PATCH_SHA256=%s\n' "$RUNTIME_PATCH_SHA256"
+            printf 'RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21\n'
+            printf 'LIBEGL_RESULT=%s\n' "$(cat "$DIAG_DIR/libegl-result.txt" 2>/dev/null || printf '%s' unavailable)"
+            printf 'LIBGLESV2_RESULT=%s\n' "$(cat "$DIAG_DIR/libglesv2-result.txt" 2>/dev/null || printf '%s' unavailable)"
+          } > "$DIAG_DIR/manifest.txt"
+          shasum -a 256 "$DIAG_DIR/manifest.txt" > "$DIAG_DIR/manifest.sha256"
+
+      - name: Upload runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase5-metal-family1-runtime-diagnostics-${{ github.run_id }}
+          path: ${{ env.DIAG_DIR }}
+          if-no-files-found: error
+          retention-days: 14
