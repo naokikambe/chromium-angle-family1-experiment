@@ -30,7 +30,7 @@ on:
       runtime_patch_sha256:
         description: SHA-256 of the checked-in Phase 5 runtime patch
         required: true
-        default: 07d7e80d8ce1099cb3d9d3ad5654eabd39b3d33776932ad28e3d76deaf6d4070
+        default: 15c7947d3d40dc121b1c6e1bb007f4c03ddfa83a3cdd75cb2d9177c3869a1af9
         type: string
 
 concurrency:
@@ -210,8 +210,10 @@ jobs:
           cd "$ANGLE_ROOT"
           git apply --unidiff-zero --check -- "$GITHUB_WORKSPACE/$RUNTIME_PATCH_PATH"
           git apply --unidiff-zero -- "$GITHUB_WORKSPACE/$RUNTIME_PATCH_PATH"
-          test "$(git status --short | sed 's/^.. //' | LC_ALL=C sort)" = \
-            'src/libANGLE/renderer/metal/DisplayMtl.mm'
+          expected_source_paths=$(printf '%s\n' \
+              'src/common/apple_platform_utils.mm' \
+              'src/libANGLE/renderer/metal/DisplayMtl.mm')
+          test "$(git status --short | sed 's/^.. //' | LC_ALL=C sort)" = "$expected_source_paths"
           {
             printf 'SOURCE_REVISION=%s\n' "$(git rev-parse HEAD)"
             printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"

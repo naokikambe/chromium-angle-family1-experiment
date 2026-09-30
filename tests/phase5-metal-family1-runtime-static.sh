@@ -6,11 +6,15 @@ patch=${2:?patch path}
 
 test -f "$workflow"
 test -f "$patch"
-test "$(shasum -a 256 "$patch" | awk '{print $1}')" = \
-  07d7e80d8ce1099cb3d9d3ad5654eabd39b3d33776932ad28e3d76deaf6d4070
-git apply --numstat "$patch" >/dev/null
+patch_sha256=$(shasum -a 256 "$patch" | awk '{print $1}')
+test "$patch_sha256" = 15c7947d3d40dc121b1c6e1bb007f4c03ddfa83a3cdd75cb2d9177c3869a1af9
+patch_paths=$(git apply --numstat "$patch" | awk '{print $3}' | LC_ALL=C sort)
+expected_patch_paths=$(printf '%s\n' \
+  src/common/apple_platform_utils.mm \
+  src/libANGLE/renderer/metal/DisplayMtl.mm)
+test "$patch_paths" = "$expected_patch_paths"
 grep -F 'phase5-metal-family1-runtime.patch' "$workflow" >/dev/null
-grep -F '07d7e80d8ce1099cb3d9d3ad5654eabd39b3d33776932ad28e3d76deaf6d4070' "$workflow" >/dev/null
+grep -F "$patch_sha256" "$workflow" >/dev/null
 grep -F '1ff8799c596d4fc9acea28343610b1f33650a6fa' "$workflow" >/dev/null
 grep -F '154.0.8037.59' "$workflow" >/dev/null
 grep -F 'workflow_dispatch:' "$workflow" >/dev/null
@@ -41,8 +45,57 @@ grep -F 'RUNTIME_DEVICE_READY=false' "$workflow" >/dev/null
 grep -F 'if: success()' "$workflow" >/dev/null
 grep -F 'if: always()' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-runtime-diagnostics-' "$workflow" >/dev/null
+test "$(grep -Fc 'src/common/apple_platform_utils.mm' "$workflow")" -eq 1
+test "$(grep -Fc 'src/libANGLE/renderer/metal/DisplayMtl.mm' "$workflow")" -eq 1
+grep -F 'expected_source_paths=$(printf' "$workflow" >/dev/null
+grep -F "'src/common/apple_platform_utils.mm'" "$workflow" >/dev/null
+grep -F "'src/libANGLE/renderer/metal/DisplayMtl.mm'" "$workflow" >/dev/null
+grep -F '"$expected_source_paths"' "$workflow" >/dev/null
 ! grep -F 'angle_enable_metal_family1_test_stub' "$workflow" >/dev/null
 ! grep -E '(^|[^A-Za-z])(codesign|xattr|security|sudo|git push|force-push|KOOV|--user-data-dir|Google Chrome|open -a)([^A-Za-z]|$)' "$workflow" >/dev/null
 ! grep -E 'ANGLE_MetalFamily1Test|DisplayMtlFamily1Test|ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB' "$patch" >/dev/null
+
+for marker in \
+  'machine_model_gate=pass' \
+  'machine_model_gate=reject' \
+  'default_metal_device=present' \
+  'default_metal_device=missing' \
+  'mac_gpu_family2_supported=' \
+  'mac_catalyst_gpu_family2_supported=' \
+  'gpu_family_requirement=not_applicable' \
+  'renderer_availability=' \
+  'display_renderer_availability=' \
+  'metal_device_selection=success' \
+  'metal_device_selection=failure' \
+  'require_gpu_family2 enabled=' \
+  'require_gpu_family2 family_check=checked supported=' \
+  'require_gpu_family2 family_check=skipped' \
+  'nvidia_gate enabled=' \
+  'command_queue=' \
+  'format_table=begin' \
+  'format_table=success' \
+  'shader_library=begin' \
+  'shader_library=success' \
+  'render_utils=begin' \
+  'render_utils=success' \
+  'display_initialize_result='; do
+  grep -F "[ANGLE_PHASE5_METAL_INIT] $marker" "$patch" >/dev/null
+done
+
+test "$(grep -Ec '^\+.*supportsEitherGPUFamily\(1, 2\)' "$patch")" -eq 1
+test "$(grep -Ec '^\+.*supportsFamily:MTLGPUFamily(Mac2|MacCatalyst2)' "$patch")" -eq 2
+grep -F '+            supportsRequiredGpuFamily = supportsEitherGPUFamily(1, 2);' "$patch" >/dev/null
+grep -F '+        if (requireGpuFamily2Enabled && !supportsRequiredGpuFamily)' "$patch" >/dev/null
+grep -F '+        if (disableMetalOnNvidiaEnabled && isNvidiaDevice)' "$patch" >/dev/null
+grep -F '         ANGLE_TRY(mFormatTable.initialize(this));' "$patch" >/dev/null
+grep -F '         ANGLE_TRY(initializeShaderLibrary());' "$patch" >/dev/null
+awk '
+  /^\+        if \(!mCmdQueue\)$/ { guard = NR }
+  /^\+            return angle::Result::Stop;$/ && guard { stop = NR }
+  /^         ANGLE_TRY\(mFormatTable\.initialize\(this\)\);$/ { format = NR }
+  END { exit !(guard && stop > guard && format > stop) }
+' "$patch"
+! grep -E '^\+.*(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB|DisplayMtlFamily1Test|ANGLE_MetalFamily1Test|--[[:alnum:]-]+|getenv[[:space:]]*\(|setenv[[:space:]]*\(|unsetenv[[:space:]]*\(|argv\[|argc|family.?bypass|force.?family)' "$patch" >/dev/null
+! grep -E '^\+.*return (true|angle::Result::Continue);' "$patch" >/dev/null
 
 printf '%s\n' 'phase5-metal-family1-runtime-static: success'
