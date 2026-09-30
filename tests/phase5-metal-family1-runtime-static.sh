@@ -7,7 +7,7 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 patch_sha256=$(shasum -a 256 "$patch" | awk '{print $1}')
-test "$patch_sha256" = f694cf32baef58e01dae3cd31acd0871c942144045f975344001e6dc35646afe
+test "$patch_sha256" = 6f650ba96b5e76a77789c9f4ba9698b2ef1e4bdd3fb897ab4df20a538154e521
 patch_paths=$(git apply --numstat "$patch" | awk '{print $3}' | LC_ALL=C sort)
 expected_patch_paths=$(printf '%s\n' \
   src/common/apple_platform_utils.mm \
@@ -54,6 +54,10 @@ grep -F '"$expected_source_paths"' "$workflow" >/dev/null
 ! grep -F 'angle_enable_metal_family1_test_stub' "$workflow" >/dev/null
 ! grep -E '(^|[^A-Za-z])(codesign|xattr|security|sudo|git push|force-push|KOOV|--user-data-dir|Google Chrome|open -a)([^A-Za-z]|$)' "$workflow" >/dev/null
 ! grep -E 'ANGLE_MetalFamily1Test|DisplayMtlFamily1Test|ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB' "$patch" >/dev/null
+grep -F '[ANGLE_PHASE5_LOAD] libGLESv2_loaded' "$patch" >/dev/null
+grep -F '+__attribute__((constructor)) static void Phase5LogMetalLibraryLoaded()' "$patch" >/dev/null
+! grep -E '^\+.*INFO\(\)' "$patch" >/dev/null
+grep -E '^\+.*ERR\(\)' "$patch" >/dev/null
 
 for marker in \
   'machine_model_gate=pass' \

@@ -4,50 +4,57 @@ diff --git a/src/common/apple_platform_utils.mm b/src/common/apple_platform_util
 @@ -73,5 +73,7 @@
      if (!machineModelSufficient)
      {
-+        INFO() << "[ANGLE_PHASE5_METAL_INIT] machine_model_gate=reject";
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] machine_model_gate=reject";
          ASSERT(queriedMachineModel);
          return false;
      }
-+    INFO() << "[ANGLE_PHASE5_METAL_INIT] machine_model_gate=pass";
++    ERR() << "[ANGLE_PHASE5_METAL_INIT] machine_model_gate=pass";
 @@ -101,5 +103,7 @@
              auto device = [MTLCreateSystemDefaultDevice() ANGLE_APPLE_AUTORELEASE];
              if (!device)
              {
-+                INFO() << "[ANGLE_PHASE5_METAL_INIT] default_metal_device=missing";
++                ERR() << "[ANGLE_PHASE5_METAL_INIT] default_metal_device=missing";
                  return false;
              }
-+            INFO() << "[ANGLE_PHASE5_METAL_INIT] default_metal_device=present";
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] default_metal_device=present";
 @@ -108,1 +112,4 @@
 -            return [device supportsFamily:MTLGPUFamilyMacCatalyst2];
 +            const bool familySufficient = [device supportsFamily:MTLGPUFamilyMacCatalyst2];
-+            INFO() << "[ANGLE_PHASE5_METAL_INIT] mac_catalyst_gpu_family2_supported="
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] mac_catalyst_gpu_family2_supported="
 +                   << (familySufficient ? "true" : "false");
 +            return familySufficient;
 @@ -111,1 +118,4 @@
 -            return [device supportsFamily:MTLGPUFamilyMac2];
 +            const bool familySufficient = [device supportsFamily:MTLGPUFamilyMac2];
-+            INFO() << "[ANGLE_PHASE5_METAL_INIT] mac_gpu_family2_supported="
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] mac_gpu_family2_supported="
 +                   << (familySufficient ? "true" : "false");
 +            return familySufficient;
 @@ -112,0 +113,1 @@
-+            INFO() << "[ANGLE_PHASE5_METAL_INIT] gpu_family_requirement=not_applicable";
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] gpu_family_requirement=not_applicable";
 @@ -119,1 +131,3 @@
      }();
-+    INFO() << "[ANGLE_PHASE5_METAL_INIT] renderer_availability="
++    ERR() << "[ANGLE_PHASE5_METAL_INIT] renderer_availability="
 +           << (gpuFamilySufficient ? "available" : "unavailable");
      return gpuFamilySufficient;
 diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/metal/DisplayMtl.mm
 --- a/src/libANGLE/renderer/metal/DisplayMtl.mm
 +++ b/src/libANGLE/renderer/metal/DisplayMtl.mm
+@@ -80,1 +80,6 @@
+ #include "EGL/eglext.h"
++__attribute__((constructor)) static void Phase5LogMetalLibraryLoaded()
++{
++    ERR() << "[ANGLE_PHASE5_LOAD] libGLESv2_loaded";
++}
++
 @@ -93,1 +93,4 @@
 -    return angle::IsMetalRendererAvailable();
 +    const bool rendererAvailable = angle::IsMetalRendererAvailable();
-+    INFO() << "[ANGLE_PHASE5_METAL_INIT] display_renderer_availability="
++    ERR() << "[ANGLE_PHASE5_METAL_INIT] display_renderer_availability="
 +           << (rendererAvailable ? "available" : "unavailable");
 +    return rendererAvailable;
 @@ -113,2 +116,4 @@
      angle::Result result = initializeImpl(display);
-+    INFO() << "[ANGLE_PHASE5_METAL_INIT] display_initialize_result="
++    ERR() << "[ANGLE_PHASE5_METAL_INIT] display_initialize_result="
 +           << (result == angle::Result::Continue ? "success" : "failure");
      if (result != angle::Result::Continue)
 @@ -130,6 +133,8 @@
@@ -55,10 +62,10 @@ diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/m
          // If we can't create a device, fail initialization.
          if (!mMetalDevice.get())
          {
-+            INFO() << "[ANGLE_PHASE5_METAL_INIT] metal_device_selection=failure";
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] metal_device_selection=failure";
              return angle::Result::Stop;
          }
-+        INFO() << "[ANGLE_PHASE5_METAL_INIT] metal_device_selection=success";
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] metal_device_selection=success";
 @@ -141,2 +148,18 @@
 -        if (mFeatures.requireGpuFamily2.enabled && !supportsEitherGPUFamily(1, 2))
 +        const bool requireGpuFamily2Enabled = mFeatures.requireGpuFamily2.enabled;
@@ -67,14 +74,14 @@ diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/m
 +        if (requireGpuFamily2Enabled)
 +        {
 +            supportsRequiredGpuFamily = supportsEitherGPUFamily(1, 2);
-+            INFO() << "[ANGLE_PHASE5_METAL_INIT] require_gpu_family2 family_check=checked supported="
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] require_gpu_family2 family_check=checked supported="
 +                   << (supportsRequiredGpuFamily ? "true" : "false");
 +        }
 +        else
 +        {
-+            INFO() << "[ANGLE_PHASE5_METAL_INIT] require_gpu_family2 family_check=skipped";
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] require_gpu_family2 family_check=skipped";
 +        }
-+        INFO() << "[ANGLE_PHASE5_METAL_INIT] require_gpu_family2 enabled="
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] require_gpu_family2 enabled="
 +               << (requireGpuFamily2Enabled ? "true" : "false") << " has_override="
 +               << (requireGpuFamily2HasOverride ? "true" : "false");
 +        if (requireGpuFamily2Enabled && !supportsRequiredGpuFamily)
@@ -86,32 +93,32 @@ diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/m
 +        if (disableMetalOnNvidiaEnabled)
 +        {
 +            isNvidiaDevice = isNVIDIA();
-+            INFO() << "[ANGLE_PHASE5_METAL_INIT] nvidia_gate enabled=true is_nvidia="
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] nvidia_gate enabled=true is_nvidia="
 +                   << (isNvidiaDevice ? "true" : "false");
 +        }
 +        else
 +        {
-+            INFO() << "[ANGLE_PHASE5_METAL_INIT] nvidia_gate enabled=false is_nvidia=skipped";
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] nvidia_gate enabled=false is_nvidia=skipped";
 +        }
 +        if (disableMetalOnNvidiaEnabled && isNvidiaDevice)
          {
 @@ -153,0 +188,7 @@
 +        if (!mCmdQueue)
 +        {
-+            INFO() << "[ANGLE_PHASE5_METAL_INIT] command_queue=failed";
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] command_queue=failed";
 +            return angle::Result::Stop;
 +        }
-+        INFO() << "[ANGLE_PHASE5_METAL_INIT] command_queue=success";
-+        INFO() << "[ANGLE_PHASE5_METAL_INIT] format_table=begin";
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] command_queue=success";
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] format_table=begin";
 @@ -155,1 +197,2 @@
          ANGLE_TRY(mFormatTable.initialize(this));
-+        INFO() << "[ANGLE_PHASE5_METAL_INIT] format_table=success";
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] format_table=success";
 @@ -156,1 +200,3 @@
-+        INFO() << "[ANGLE_PHASE5_METAL_INIT] shader_library=begin";
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] shader_library=begin";
          ANGLE_TRY(initializeShaderLibrary());
-+        INFO() << "[ANGLE_PHASE5_METAL_INIT] shader_library=success";
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] shader_library=success";
 @@ -158,1 +203,3 @@
 -        mUtils = std::make_unique<mtl::RenderUtils>();
-+        INFO() << "[ANGLE_PHASE5_METAL_INIT] render_utils=begin";
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] render_utils=begin";
 +        mUtils = std::make_unique<mtl::RenderUtils>();
-+        INFO() << "[ANGLE_PHASE5_METAL_INIT] render_utils=success";
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] render_utils=success";
