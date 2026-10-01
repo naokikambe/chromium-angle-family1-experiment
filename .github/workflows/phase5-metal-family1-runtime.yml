@@ -15,6 +15,16 @@ on:
         description: SHA-256 of the checked-in Phase 5 runtime patch
         required: true
         type: string
+      family1_experiment:
+        description: Build the explicitly unsupported Family 1 experiment artifact
+        required: false
+        default: false
+        type: boolean
+      family1_experiment_patch_sha256:
+        description: SHA-256 of the Family 1 experiment patch
+        required: false
+        default: b364519e8067d2f0dcb0ad3e41cb26ffc63cd40b70f53a8b37fb2a7cc4fab857
+        type: string
   workflow_dispatch:
     inputs:
       angle_revision:
@@ -31,6 +41,16 @@ on:
         description: SHA-256 of the checked-in Phase 5 runtime patch
         required: true
         default: 7ea07260623f77d0b065c300930d8765bde4cc26912670b73fce1ab3bf959c6a
+        type: string
+      family1_experiment:
+        description: Build the explicitly unsupported Family 1 experiment artifact
+        required: false
+        default: false
+        type: boolean
+      family1_experiment_patch_sha256:
+        description: SHA-256 of the Family 1 experiment patch
+        required: false
+        default: b364519e8067d2f0dcb0ad3e41cb26ffc63cd40b70f53a8b37fb2a7cc4fab857
         type: string
 
 concurrency:
@@ -55,6 +75,9 @@ jobs:
       CHROME_VERSION: ${{ inputs.chrome_version }}
       RUNTIME_PATCH_PATH: patches/phase5-metal-family1-runtime.patch
       RUNTIME_PATCH_SHA256: ${{ inputs.runtime_patch_sha256 }}
+      FAMILY1_EXPERIMENT: ${{ inputs.family1_experiment }}
+      FAMILY1_EXPERIMENT_PATCH_PATH: patches/phase5-metal-family1-family1-experiment.patch
+      FAMILY1_EXPERIMENT_PATCH_SHA256: ${{ inputs.family1_experiment_patch_sha256 }}
 
     steps:
       - name: Check out workflow repository
@@ -85,6 +108,10 @@ jobs:
           bash tests/phase5-metal-family1-runtime-static.sh \
             .github/workflows/phase5-metal-family1-runtime.yml \
             "$RUNTIME_PATCH_PATH"
+          bash tests/phase5-metal-family1-family1-experiment-static.sh \
+            .github/workflows/phase5-metal-family1-runtime.yml \
+            "$RUNTIME_PATCH_PATH" \
+            "$FAMILY1_EXPERIMENT_PATCH_PATH"
           bash -n scripts/verify-phase5-runtime-artifact.sh
           ruby -e 'require "yaml"; YAML.parse_file(".github/workflows/phase5-metal-family1-runtime.yml")'
 
@@ -101,11 +128,23 @@ jobs:
           test -f "$RUNTIME_PATCH_PATH"
           test "$(shasum -a 256 "$RUNTIME_PATCH_PATH" | awk '{print $1}')" = "$RUNTIME_PATCH_SHA256"
           ! grep -E 'test-stub|TEST_STUB|DisplayMtlFamily1Test' "$RUNTIME_PATCH_PATH" >/dev/null
+          [[ "$FAMILY1_EXPERIMENT" == true || "$FAMILY1_EXPERIMENT" == false ]]
+          [[ "$FAMILY1_EXPERIMENT_PATCH_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test -f "$FAMILY1_EXPERIMENT_PATCH_PATH"
+          test "$(shasum -a 256 "$FAMILY1_EXPERIMENT_PATCH_PATH" | awk '{print $1}')" = "$FAMILY1_EXPERIMENT_PATCH_SHA256"
+          if [[ "$FAMILY1_EXPERIMENT" == true ]]; then
+            grep -F '#define ANGLE_PHASE5_METAL_FAMILY1_EXPERIMENT 1' "$FAMILY1_EXPERIMENT_PATCH_PATH" >/dev/null
+          else
+            ! grep -F '#define ANGLE_PHASE5_METAL_FAMILY1_EXPERIMENT 1' "$RUNTIME_PATCH_PATH" >/dev/null
+          fi
           {
             printf 'ANGLE_REVISION=%s\n' "$ANGLE_REVISION"
             printf 'CHROME_VERSION=%s\n' "$CHROME_VERSION"
             printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"
             printf 'RUNTIME_PATCH_SHA256=%s\n' "$RUNTIME_PATCH_SHA256"
+            printf 'FAMILY1_EXPERIMENT=%s\n' "$FAMILY1_EXPERIMENT"
+            printf 'FAMILY1_EXPERIMENT_PATCH_PATH=%s\n' "$FAMILY1_EXPERIMENT_PATCH_PATH"
+            printf 'FAMILY1_EXPERIMENT_PATCH_SHA256=%s\n' "$FAMILY1_EXPERIMENT_PATCH_SHA256"
           } | tee "$DIAG_DIR/source-input.txt"
 
       - name: Resolve Chromium tag and ANGLE revision
@@ -210,6 +249,10 @@ jobs:
           cd "$ANGLE_ROOT"
           git apply --unidiff-zero --check -- "$GITHUB_WORKSPACE/$RUNTIME_PATCH_PATH"
           git apply --unidiff-zero -- "$GITHUB_WORKSPACE/$RUNTIME_PATCH_PATH"
+          if [[ "$FAMILY1_EXPERIMENT" == true ]]; then
+            git apply --unidiff-zero --check -- "$GITHUB_WORKSPACE/$FAMILY1_EXPERIMENT_PATCH_PATH"
+            git apply --unidiff-zero -- "$GITHUB_WORKSPACE/$FAMILY1_EXPERIMENT_PATCH_PATH"
+          fi
           expected_source_paths=$(printf '%s\n' \
               'src/common/apple_platform_utils.mm' \
               'src/libANGLE/Display.cpp' \
@@ -220,6 +263,9 @@ jobs:
             printf 'SOURCE_REVISION=%s\n' "$(git rev-parse HEAD)"
             printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"
             printf 'RUNTIME_PATCH_SHA256=%s\n' "$RUNTIME_PATCH_SHA256"
+            printf 'FAMILY1_EXPERIMENT=%s\n' "$FAMILY1_EXPERIMENT"
+            printf 'FAMILY1_EXPERIMENT_PATCH_PATH=%s\n' "$FAMILY1_EXPERIMENT_PATCH_PATH"
+            printf 'FAMILY1_EXPERIMENT_PATCH_SHA256=%s\n' "$FAMILY1_EXPERIMENT_PATCH_SHA256"
             git status --short
           } > "$DIAG_DIR/source-state.txt"
 
@@ -311,6 +357,10 @@ jobs:
           printf '%s\n' "$ANGLE_REVISION" > "$ARTIFACT_DIR/ANGLE_REVISION"
           install -m 0644 out/Phase5/args.gn "$ARTIFACT_DIR/args.gn"
           install -m 0644 "$GITHUB_WORKSPACE/$RUNTIME_PATCH_PATH" "$ARTIFACT_DIR/runtime-patch.diff"
+          if [[ "$FAMILY1_EXPERIMENT" == true ]]; then
+            install -m 0644 "$GITHUB_WORKSPACE/$FAMILY1_EXPERIMENT_PATCH_PATH" \
+              "$ARTIFACT_DIR/family1-experiment-patch.diff"
+          fi
           install -m 0644 LICENSE "$ARTIFACT_DIR/LICENSE"
           while IFS= read -r -d '' license_file; do
             relative_path=${license_file#"$ANGLE_ROOT"/}
@@ -328,6 +378,9 @@ jobs:
             printf 'DEPOT_TOOLS_ACTUAL_REVISION=%s\n' "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)"
             printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"
             printf 'RUNTIME_PATCH_SHA256=%s\n' "$RUNTIME_PATCH_SHA256"
+            printf 'FAMILY1_EXPERIMENT=%s\n' "$FAMILY1_EXPERIMENT"
+            printf 'FAMILY1_EXPERIMENT_PATCH_PATH=%s\n' "$FAMILY1_EXPERIMENT_PATCH_PATH"
+            printf 'FAMILY1_EXPERIMENT_PATCH_SHA256=%s\n' "$FAMILY1_EXPERIMENT_PATCH_SHA256"
             printf 'RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21\n'
             printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
             printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
@@ -340,16 +393,35 @@ jobs:
             printf 'NINJA_TARGETS=libEGL libGLESv2\n'
           } > "$ARTIFACT_DIR/build-environment.txt"
           artifact_name="angle-macos-x86_64-chrome-$CHROME_VERSION-angle-$ANGLE_SHORT_REVISION-$GITHUB_RUN_ID"
+          if [[ "$FAMILY1_EXPERIMENT" == true ]]; then
+            artifact_name="angle-macos-x86_64-chrome-$CHROME_VERSION-angle-$ANGLE_SHORT_REVISION-family1-experiment-$GITHUB_RUN_ID"
+          fi
+          printf 'ARTIFACT_NAME=%s\n' "$artifact_name" >> "$GITHUB_ENV"
           gn_args_sha256=$(shasum -a 256 "$ARTIFACT_DIR/args.gn" | awk '{print $1}')
           {
             printf 'SCHEMA=angle-release-v1\n'
             printf 'ARTIFACT_SCHEMA=angle-artifact-v1\n'
-            printf 'RUNTIME_ARTIFACT_SCHEMA=phase5-metal-family1-runtime-v1\n'
-            printf 'RUNTIME_PROFILE=phase5-metal-family1-control-v1\n'
+            if [[ "$FAMILY1_EXPERIMENT" == true ]]; then
+              printf 'RUNTIME_ARTIFACT_SCHEMA=phase5-metal-family1-family1-experiment-v1\n'
+              printf 'RUNTIME_PROFILE=phase5-metal-family1-family1-experiment-v1\n'
+            else
+              printf 'RUNTIME_ARTIFACT_SCHEMA=phase5-metal-family1-runtime-v1\n'
+              printf 'RUNTIME_PROFILE=phase5-metal-family1-control-v1\n'
+            fi
             printf 'RUNTIME_PATCH_MODE=source-patch\n'
             printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"
             printf 'RUNTIME_PATCH_SHA256=%s\n' "$RUNTIME_PATCH_SHA256"
             printf 'RUNTIME_PATCH_APPLIED=true\n'
+            if [[ "$FAMILY1_EXPERIMENT" == true ]]; then
+              printf 'FAMILY1_EXPERIMENT=true\n'
+              printf 'FAMILY1_EXPERIMENT_PATCH_PATH=%s\n' "$FAMILY1_EXPERIMENT_PATCH_PATH"
+              printf 'FAMILY1_EXPERIMENT_PATCH_SHA256=%s\n' "$FAMILY1_EXPERIMENT_PATCH_SHA256"
+              printf 'FAMILY1_EXPERIMENT_COMPILE_TIME_DEFINE=ANGLE_PHASE5_METAL_FAMILY1_EXPERIMENT\n'
+              printf 'UNSUPPORTED_HARDWARE_OVERRIDE=true\n'
+            else
+              printf 'FAMILY1_EXPERIMENT=false\n'
+              printf 'UNSUPPORTED_HARDWARE_OVERRIDE=false\n'
+            fi
             printf 'RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21\n'
             printf 'TEST_ONLY_STUB=absent\n'
             printf 'RUNTIME_DEVICE_READY=false\n'
@@ -380,7 +452,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: angle-macos-x86_64-chrome-${{ inputs.chrome_version }}-angle-${{ env.ANGLE_SHORT_REVISION }}-${{ github.run_id }}
+          name: ${{ env.ARTIFACT_NAME }}
           path: ${{ env.ARTIFACT_DIR }}
           if-no-files-found: error
           retention-days: 14
@@ -401,6 +473,9 @@ jobs:
             printf 'SOURCE_REVISION=%s\n' "$source_revision"
             printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"
             printf 'RUNTIME_PATCH_SHA256=%s\n' "$RUNTIME_PATCH_SHA256"
+            printf 'FAMILY1_EXPERIMENT=%s\n' "$FAMILY1_EXPERIMENT"
+            printf 'FAMILY1_EXPERIMENT_PATCH_PATH=%s\n' "$FAMILY1_EXPERIMENT_PATCH_PATH"
+            printf 'FAMILY1_EXPERIMENT_PATCH_SHA256=%s\n' "$FAMILY1_EXPERIMENT_PATCH_SHA256"
             printf 'RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21\n'
             printf 'LIBEGL_RESULT=%s\n' "$(cat "$DIAG_DIR/libegl-result.txt" 2>/dev/null || printf '%s' unavailable)"
             printf 'LIBGLESV2_RESULT=%s\n' "$(cat "$DIAG_DIR/libglesv2-result.txt" 2>/dev/null || printf '%s' unavailable)"

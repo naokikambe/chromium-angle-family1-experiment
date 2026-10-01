@@ -1,0 +1,25 @@
+diff --git a/src/common/apple_platform_utils.mm b/src/common/apple_platform_utils.mm
+--- a/src/common/apple_platform_utils.mm
++++ b/src/common/apple_platform_utils.mm
+@@ -13,5 +13,8 @@
+ #include <Foundation/Foundation.h>
+ #include <Metal/Metal.h>
++#include <cstdio>
++
++#define ANGLE_PHASE5_METAL_FAMILY1_EXPERIMENT 1
+-
++
+ namespace angle
+ {
+@@ -19,5 +22,11 @@
+ bool IsMetalRendererAvailable()
+ {
++#if defined(ANGLE_PHASE5_METAL_FAMILY1_EXPERIMENT)
++    ::fprintf(stderr, "[ANGLE_PHASE5_METAL_INIT] family1_experiment_availability=bypass\n");
++    ::fflush(stderr);
++    return true;
++#endif
++
+ #if defined(ANGLE_PLATFORM_MACOS) || defined(ANGLE_PLATFORM_MACCATALYST)
+     static bool queriedMachineModel    = false;
+     static bool machineModelSufficient = true;

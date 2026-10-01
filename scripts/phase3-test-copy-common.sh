@@ -18,6 +18,7 @@ PHASE3_RELEASE_BUILD_RUN_ID=''
 PHASE3_RELEASE_BUILT_AT_UTC=''
 PHASE3_RELEASE_GN_ARGS_SHA256=''
 PHASE3_RELEASE_MANIFEST_SHA256=''
+PHASE3_RELEASE_FAMILY1_EXPERIMENT='false'
 
 phase3_fail() {
   printf '%s: %s\n' "${PHASE3_SCRIPT_NAME:-phase3}" "$1" >&2
@@ -114,6 +115,20 @@ phase3_release_value() {
   phase3_manifest_value "$(phase3_release_manifest_path "$1")" "$2"
 }
 
+phase3_manifest_value_optional() {
+  local manifest=$1
+  local key=$2
+  local matches
+  local count
+  matches=$(grep -E "^${key}=" "$manifest" || true)
+  count=$(printf '%s\n' "$matches" | sed '/^$/d' | wc -l | tr -d ' ')
+  case "$count" in
+    0) return 0 ;;
+    1) printf '%s\n' "${matches#*=}" ;;
+    *) phase3_fail "invalid or duplicate optional manifest key: $key" ;;
+  esac
+}
+
 phase3_validate_release_manifest() {
   local artifact_dir=$1 metadata_only=${2:-false} manifest sidecar schema actual_gn_hash
   manifest=$(phase3_release_manifest_path "$artifact_dir")
@@ -135,7 +150,15 @@ phase3_validate_release_manifest() {
   PHASE3_RELEASE_ARTIFACT_NAME=$(phase3_manifest_value "$manifest" ARTIFACT_NAME)
   PHASE3_RELEASE_BUILD_RUN_ID=$(phase3_manifest_value "$manifest" BUILD_RUN_ID)
   [[ "$PHASE3_RELEASE_BUILD_RUN_ID" =~ ^[0-9]+$ ]] || phase3_fail 'invalid release build run ID'
-  [[ "$PHASE3_RELEASE_ARTIFACT_NAME" == "angle-macos-x86_64-chrome-${PHASE3_RELEASE_CHROME_VERSION}-angle-${PHASE3_RELEASE_ANGLE_REVISION:0:8}-${PHASE3_RELEASE_BUILD_RUN_ID}" ]] || phase3_fail 'release artifact name does not match manifest inputs'
+  PHASE3_RELEASE_FAMILY1_EXPERIMENT=$(phase3_manifest_value_optional "$manifest" FAMILY1_EXPERIMENT)
+  PHASE3_RELEASE_FAMILY1_EXPERIMENT=${PHASE3_RELEASE_FAMILY1_EXPERIMENT:-false}
+  [[ "$PHASE3_RELEASE_FAMILY1_EXPERIMENT" == false || "$PHASE3_RELEASE_FAMILY1_EXPERIMENT" == true ]] ||
+    phase3_fail 'invalid FAMILY1_EXPERIMENT value'
+  expected_artifact_name="angle-macos-x86_64-chrome-${PHASE3_RELEASE_CHROME_VERSION}-angle-${PHASE3_RELEASE_ANGLE_REVISION:0:8}-${PHASE3_RELEASE_BUILD_RUN_ID}"
+  if [[ "$PHASE3_RELEASE_FAMILY1_EXPERIMENT" == true ]]; then
+    expected_artifact_name="angle-macos-x86_64-chrome-${PHASE3_RELEASE_CHROME_VERSION}-angle-${PHASE3_RELEASE_ANGLE_REVISION:0:8}-family1-experiment-${PHASE3_RELEASE_BUILD_RUN_ID}"
+  fi
+  [[ "$PHASE3_RELEASE_ARTIFACT_NAME" == "$expected_artifact_name" ]] || phase3_fail 'release artifact name does not match manifest inputs'
   PHASE3_RELEASE_BUILT_AT_UTC=$(phase3_manifest_value "$manifest" BUILT_AT_UTC)
   [[ "$PHASE3_RELEASE_BUILT_AT_UTC" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || phase3_fail 'invalid release build timestamp'
   PHASE3_RELEASE_GN_ARGS_SHA256=$(phase3_manifest_value "$manifest" GN_ARGS_SHA256)

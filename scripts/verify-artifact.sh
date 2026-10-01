@@ -168,6 +168,16 @@ manifest_value() {
   [[ $(printf '%s\n' "$matches" | sed '/^$/d' | wc -l | tr -d ' ') == 1 ]] || fail "invalid release manifest key: $key"
   printf '%s\n' "${matches#*=}"
 }
+manifest_value_optional() {
+  local key=$1 matches count
+  matches=$(grep -E "^${key}=" "$release_manifest" || true)
+  count=$(printf '%s\n' "$matches" | sed '/^$/d' | wc -l | tr -d ' ')
+  case "$count" in
+    0) return 0 ;;
+    1) printf '%s\n' "${matches#*=}" ;;
+    *) fail "invalid or duplicate optional release manifest key: $key" ;;
+  esac
+}
 [[ "$(manifest_value SCHEMA)" == angle-release-v1 ]] || fail 'unsupported release manifest schema'
 [[ "$(manifest_value ARTIFACT_SCHEMA)" == angle-artifact-v1 ]] || fail 'unsupported artifact schema'
 chrome_version=$(manifest_value CHROME_VERSION)
@@ -179,11 +189,18 @@ gles_sha=$(manifest_value LIBGLESV2_SHA256)
 artifact_name=$(manifest_value ARTIFACT_NAME)
 run_id=$(manifest_value BUILD_RUN_ID)
 gn_args_sha=$(manifest_value GN_ARGS_SHA256)
+family1_experiment=$(manifest_value_optional FAMILY1_EXPERIMENT)
+family1_experiment=${family1_experiment:-false}
 [[ "$chrome_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'invalid Chrome version in release manifest'
 for revision in "$chromium_revision" "$angle_revision" "$depot_revision"; do [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || fail 'invalid source revision in release manifest'; done
 for checksum in "$libegl_sha" "$gles_sha" "$gn_args_sha"; do [[ "$checksum" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid SHA-256 in release manifest'; done
 [[ "$run_id" =~ ^[0-9]+$ ]] || fail 'invalid build run ID in release manifest'
-[[ "$artifact_name" == "angle-macos-x86_64-chrome-${chrome_version}-angle-${angle_revision:0:8}-${run_id}" ]] || fail 'artifact name does not match release manifest fields'
+[[ "$family1_experiment" == false || "$family1_experiment" == true ]] || fail 'invalid FAMILY1_EXPERIMENT in release manifest'
+expected_artifact_name="angle-macos-x86_64-chrome-${chrome_version}-angle-${angle_revision:0:8}-${run_id}"
+if [[ "$family1_experiment" == true ]]; then
+  expected_artifact_name="angle-macos-x86_64-chrome-${chrome_version}-angle-${angle_revision:0:8}-family1-experiment-${run_id}"
+fi
+[[ "$artifact_name" == "$expected_artifact_name" ]] || fail 'artifact name does not match release manifest fields'
 [[ "$(shasum -a 256 libEGL.dylib | awk '{print $1}')" == "$libegl_sha" ]] || fail 'libEGL SHA-256 does not match release manifest'
 [[ "$(shasum -a 256 libGLESv2.dylib | awk '{print $1}')" == "$gles_sha" ]] || fail 'libGLESv2 SHA-256 does not match release manifest'
 [[ "$(shasum -a 256 args.gn | awk '{print $1}')" == "$gn_args_sha" ]] || fail 'args.gn SHA-256 does not match release manifest'
