@@ -7,10 +7,11 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 patch_sha256=$(shasum -a 256 "$patch" | awk '{print $1}')
-test "$patch_sha256" = 7ea07260623f77d0b065c300930d8765bde4cc26912670b73fce1ab3bf959c6a
+test "$patch_sha256" = 8fcfdffb904eb98aff5be72dd12ff53c2eb38b35ba547f8fc22f2d94873ef3ea
 patch_paths=$(git apply --numstat "$patch" | awk '{print $3}' | LC_ALL=C sort)
 expected_patch_paths=$(printf '%s\n' \
   src/common/apple_platform_utils.mm \
+  src/libANGLE/Context.cpp \
   src/libANGLE/Display.cpp \
   src/libANGLE/renderer/metal/DisplayMtl.mm \
   src/libEGL/libEGL_autogen.cpp)
@@ -48,11 +49,13 @@ grep -F 'if: success()' "$workflow" >/dev/null
 grep -F 'if: always()' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-runtime-diagnostics-' "$workflow" >/dev/null
 test "$(grep -Fc 'src/common/apple_platform_utils.mm' "$workflow")" -eq 1
+test "$(grep -Fc 'src/libANGLE/Context.cpp' "$workflow")" -eq 1
 test "$(grep -Fc 'src/libANGLE/Display.cpp' "$workflow")" -eq 1
 test "$(grep -Fc 'src/libEGL/libEGL_autogen.cpp' "$workflow")" -eq 1
 test "$(grep -Fc 'src/libANGLE/renderer/metal/DisplayMtl.mm' "$workflow")" -eq 1
 grep -F 'expected_source_paths=$(printf' "$workflow" >/dev/null
 grep -F "'src/common/apple_platform_utils.mm'" "$workflow" >/dev/null
+grep -F "'src/libANGLE/Context.cpp'" "$workflow" >/dev/null
 grep -F "'src/libANGLE/renderer/metal/DisplayMtl.mm'" "$workflow" >/dev/null
 grep -F '"$expected_source_paths"' "$workflow" >/dev/null
 ! grep -F 'angle_enable_metal_family1_test_stub' "$workflow" >/dev/null
@@ -66,6 +69,14 @@ grep -F 'pragma clang diagnostic ignored "-Wglobal-constructors"' "$patch" >/dev
 grep -F 'display_initialize_backend_failure id=' "$patch" >/dev/null
 grep -F 'display_initialize_backend_success' "$patch" >/dev/null
 grep -F 'display_initialize_begin' "$patch" >/dev/null
+grep -F 'eglChooseConfig_return success=%s num_config=%d' "$patch" >/dev/null
+grep -F 'eglGetConfigAttrib attribute=0x%04x success=%s value=%d' "$patch" >/dev/null
+grep -F 'eglCreateContext_config=no_config' "$patch" >/dev/null
+grep -F 'eglCreateContext_attribute key=0x%04x value=%d' "$patch" >/dev/null
+grep -F 'context_version_check requested=%u.%u max_supported=%u.%u' "$patch" >/dev/null
+grep -F 'context_version_rejected reason=max_supported_version' "$patch" >/dev/null
+grep -F 'max_es_version_gpu_family4_or1=' "$patch" >/dev/null
+grep -F 'max_es_version=2.0' "$patch" >/dev/null
 grep -F '+__attribute__((constructor)) static void Phase5LogMetalLibraryLoaded()' "$patch" >/dev/null
 ! grep -E '^\+.*INFO\(\)' "$patch" >/dev/null
 grep -E '^\+.*ERR\(\)' "$patch" >/dev/null

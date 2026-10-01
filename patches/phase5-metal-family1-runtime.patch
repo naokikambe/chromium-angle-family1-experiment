@@ -150,19 +150,68 @@ diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/m
 +        mUtils = std::make_unique<mtl::RenderUtils>();
 +        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] render_utils=success");
 +        ERR() << "[ANGLE_PHASE5_METAL_INIT] render_utils=success";
+@@ -427,14 +427,18 @@
+ gl::Version DisplayMtl::getMaxSupportedESVersion() const
+ {
+ #if TARGET_OS_SIMULATOR
+     // Simulator should be able to support ES3, despite not supporting iOS GPU
+     // Family 3 in its entirety.
+     // FIXME: None of the feature conditions are checked for simulator support.
+     return gl::Version(3, 0);
+ #else
+-    if (supportsEitherGPUFamily(4, 1))
++    const bool supportsGpuFamily4Or1 = supportsEitherGPUFamily(4, 1);
++    ERR() << "[ANGLE_PHASE5_METAL_INIT] max_es_version_gpu_family4_or1="
++           << (supportsGpuFamily4Or1 ? "true" : "false");
++    if (supportsGpuFamily4Or1)
+     {
+         return mtl::kMaxSupportedGLVersion;
+     }
++    ERR() << "[ANGLE_PHASE5_METAL_INIT] max_es_version=2.0";
+     return gl::Version(2, 0);
+ #endif
+ }
 diff --git a/src/libEGL/libEGL_autogen.cpp b/src/libEGL/libEGL_autogen.cpp
 --- a/src/libEGL/libEGL_autogen.cpp
 +++ b/src/libEGL/libEGL_autogen.cpp
 @@ -14,1 +14,2 @@
  #include <memory>
 +#include <cstdio>
-@@ -22,3 +23,9 @@
+@@ -22,3 +23,37 @@
  namespace
  {
 +void Phase5LogEGL(const char *event)
 +{
 +    ::fprintf(stderr, "[ANGLE_PHASE5_EGL] %s\n", event);
 +    ::fflush(stderr);
++}
++
++void Phase5LogEGLContextAttributes(const EGLint *attrib_list)
++{
++    if (!attrib_list)
++    {
++        Phase5LogEGL("eglCreateContext_attributes=null");
++        return;
++    }
++
++    Phase5LogEGL("eglCreateContext_attributes=begin");
++    constexpr int kMaxAttributePairs = 32;
++    for (int index = 0; index < kMaxAttributePairs; ++index)
++    {
++        const EGLint key = attrib_list[index * 2];
++        if (key == EGL_NONE)
++        {
++            Phase5LogEGL("eglCreateContext_attributes=end");
++            return;
++        }
++
++        const EGLint value = attrib_list[index * 2 + 1];
++        ::fprintf(stderr,
++                  "[ANGLE_PHASE5_EGL] eglCreateContext_attribute key=0x%04x value=%d\n",
++                  static_cast<unsigned int>(key), static_cast<int>(value));
++        ::fflush(stderr);
++    }
++    Phase5LogEGL("eglCreateContext_attributes=truncated");
 +}
 +
  #if defined(ANGLE_USE_EGL_LOADER)
@@ -181,6 +230,56 @@ diff --git a/src/libEGL/libEGL_autogen.cpp b/src/libEGL/libEGL_autogen.cpp
 +#endif
 +#endif
  extern "C" {
+@@ -61,9 +74,15 @@
+ EGLBoolean EGLAPIENTRY eglChooseConfig(EGLDisplay dpy,
+                                        const EGLint *attrib_list,
+                                        EGLConfig *configs,
+                                        EGLint config_size,
+                                        EGLint *num_config)
+ {
+     EnsureEGLLoaded();
+-    return EGL_ChooseConfig(dpy, attrib_list, configs, config_size, num_config);
++    Phase5LogEGL("eglChooseConfig_enter");
++    EGLBoolean returnValue = EGL_ChooseConfig(dpy, attrib_list, configs, config_size, num_config);
++    ::fprintf(stderr,
++              "[ANGLE_PHASE5_EGL] eglChooseConfig_return success=%s num_config=%d\n",
++              returnValue ? "true" : "false", num_config ? *num_config : -1);
++    ::fflush(stderr);
++    return returnValue;
+ }
+@@ -79,8 +98,15 @@
+ EGLContext EGLAPIENTRY eglCreateContext(EGLDisplay dpy,
+                                         EGLConfig config,
+                                         EGLContext share_context,
+                                         const EGLint *attrib_list)
+ {
+     EnsureEGLLoaded();
+-    return EGL_CreateContext(dpy, config, share_context, attrib_list);
++    Phase5LogEGL("eglCreateContext_enter");
++    Phase5LogEGL(config == EGL_NO_CONFIG_KHR ? "eglCreateContext_config=no_config"
++                                             : "eglCreateContext_config=selected");
++    Phase5LogEGLContextAttributes(attrib_list);
++    EGLContext returnValue = EGL_CreateContext(dpy, config, share_context, attrib_list);
++    Phase5LogEGL(returnValue == EGL_NO_CONTEXT ? "eglCreateContext_return_no_context"
++                                               : "eglCreateContext_return_context");
++    return returnValue;
+ }
+@@ -126,8 +152,14 @@
+ EGLBoolean EGLAPIENTRY eglGetConfigAttrib(EGLDisplay dpy,
+                                           EGLConfig config,
+                                           EGLint attribute,
+                                           EGLint *value)
+ {
+     EnsureEGLLoaded();
+-    return EGL_GetConfigAttrib(dpy, config, attribute, value);
++    EGLBoolean returnValue = EGL_GetConfigAttrib(dpy, config, attribute, value);
++    ::fprintf(stderr,
++              "[ANGLE_PHASE5_EGL] eglGetConfigAttrib attribute=0x%04x success=%s value=%d\n",
++              static_cast<unsigned int>(attribute), returnValue ? "true" : "false",
++              value ? static_cast<int>(*value) : -1);
++    ::fflush(stderr);
++    return returnValue;
+ }
 @@ -156,5 +171,9 @@
  EGLDisplay EGLAPIENTRY eglGetDisplay(EGLNativeDisplayType display_id)
  {
@@ -271,3 +370,22 @@ diff --git a/src/libANGLE/Display.cpp b/src/libANGLE/Display.cpp
 +        ::fflush(stderr);
          mImplementation->terminate();
          return egl::Error(EGL_NOT_INITIALIZED, "No configs were generated.");
+diff --git a/src/libANGLE/Context.cpp b/src/libANGLE/Context.cpp
+--- a/src/libANGLE/Context.cpp
++++ b/src/libANGLE/Context.cpp
+@@ -789,4 +789,14 @@
+-    if (getClientVersion() > getDisplay()->getMaxSupportedESVersion())
++    const Version requestedVersion    = getClientVersion();
++    const Version maxSupportedVersion = getDisplay()->getMaxSupportedESVersion();
++    ::fprintf(stderr,
++              "[ANGLE_PHASE5_EGL] context_version_check requested=%u.%u max_supported=%u.%u\n",
++              requestedVersion.getMajor(), requestedVersion.getMinor(),
++              maxSupportedVersion.getMajor(), maxSupportedVersion.getMinor());
++    ::fflush(stderr);
++    if (requestedVersion > maxSupportedVersion)
+     {
++        ::fprintf(stderr,
++                  "[ANGLE_PHASE5_EGL] context_version_rejected reason=max_supported_version\n");
++        ::fflush(stderr);
+         return egl::Error(EGL_BAD_ATTRIBUTE, "Requested version is not supported");
+     }
