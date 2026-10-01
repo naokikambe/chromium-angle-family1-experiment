@@ -215,8 +215,8 @@ diff --git a/src/libEGL/libEGL_autogen.cpp b/src/libEGL/libEGL_autogen.cpp
  }
 @@ -316,7 +328,11 @@
  EGLDisplay EGLAPIENTRY eglGetPlatformDisplay(EGLenum platform,
-                                               void *native_display,
-                                               const EGLAttrib *attrib_list)
+                                              void *native_display,
+                                              const EGLAttrib *attrib_list)
  {
      EnsureEGLLoaded();
 -    return EGL_GetPlatformDisplay(platform, native_display, attrib_list);
@@ -228,8 +228,8 @@ diff --git a/src/libEGL/libEGL_autogen.cpp b/src/libEGL/libEGL_autogen.cpp
  }
 @@ -605,7 +623,11 @@
  EGLDisplay EGLAPIENTRY eglGetPlatformDisplayEXT(EGLenum platform,
-                                                  void *native_display,
-                                                  const EGLint *attrib_list)
+                                                 void *native_display,
+                                                 const EGLint *attrib_list)
  {
      EnsureEGLLoaded();
 -    return EGL_GetPlatformDisplayEXT(platform, native_display, attrib_list);
