@@ -123,11 +123,11 @@ if [[ "$diagnostic_gpu_startup" == true ]]; then
   # allows them, whereas these flags leave the signed code unchanged.
   startup_trace="$results_real/chrome-gpu-startup-trace.json"
   command+=(
-    '--vmodule=gl_display=2,gl_initializer_mac=2'
-    '--trace-startup=gpu,disabled-by-default-gpu.angle'
+    '--vmodule=gl_display=3,gl_initializer_mac=3'
+    '--trace-startup=gpu,disabled-by-default-gpu.angle,disabled-by-default-gpu.service'
     '--trace-startup-format=json'
     "--trace-startup-file=$startup_trace"
-    '--trace-startup-duration=15'
+    '--trace-startup-duration=30'
   )
 fi
 if [[ "$test_case" == 'CASE_C' ]]; then
