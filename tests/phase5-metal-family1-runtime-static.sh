@@ -48,6 +48,8 @@ grep -F 'if: success()' "$workflow" >/dev/null
 grep -F 'if: always()' "$workflow" >/dev/null
 grep -F 'phase5-metal-family1-runtime-diagnostics-' "$workflow" >/dev/null
 test "$(grep -Fc 'src/common/apple_platform_utils.mm' "$workflow")" -eq 1
+test "$(grep -Fc 'src/libANGLE/Display.cpp' "$workflow")" -eq 1
+test "$(grep -Fc 'src/libEGL/libEGL_autogen.cpp' "$workflow")" -eq 1
 test "$(grep -Fc 'src/libANGLE/renderer/metal/DisplayMtl.mm' "$workflow")" -eq 1
 grep -F 'expected_source_paths=$(printf' "$workflow" >/dev/null
 grep -F "'src/common/apple_platform_utils.mm'" "$workflow" >/dev/null

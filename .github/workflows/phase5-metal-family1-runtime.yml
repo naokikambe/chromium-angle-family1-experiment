@@ -212,6 +212,8 @@ jobs:
           git apply --unidiff-zero -- "$GITHUB_WORKSPACE/$RUNTIME_PATCH_PATH"
           expected_source_paths=$(printf '%s\n' \
               'src/common/apple_platform_utils.mm' \
+              'src/libANGLE/Display.cpp' \
+              'src/libEGL/libEGL_autogen.cpp' \
               'src/libANGLE/renderer/metal/DisplayMtl.mm')
           test "$(git status --short | sed 's/^.. //' | LC_ALL=C sort)" = "$expected_source_paths"
           {
