@@ -23,7 +23,7 @@ on:
       family1_experiment_patch_sha256:
         description: SHA-256 of the Family 1 experiment patch
         required: false
-        default: b364519e8067d2f0dcb0ad3e41cb26ffc63cd40b70f53a8b37fb2a7cc4fab857
+        default: 7bb9d8a09276f60d0d62a5d4cefd2d553ca12a59635a8240d146d5262dbf212e
         type: string
   workflow_dispatch:
     inputs:
@@ -50,7 +50,7 @@ on:
       family1_experiment_patch_sha256:
         description: SHA-256 of the Family 1 experiment patch
         required: false
-        default: b364519e8067d2f0dcb0ad3e41cb26ffc63cd40b70f53a8b37fb2a7cc4fab857
+        default: 7bb9d8a09276f60d0d62a5d4cefd2d553ca12a59635a8240d146d5262dbf212e
         type: string
 
 concurrency:
