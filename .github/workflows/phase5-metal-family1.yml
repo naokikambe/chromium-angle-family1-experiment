@@ -27,6 +27,16 @@ on:
         required: false
         default: 7ea07260623f77d0b065c300930d8765bde4cc26912670b73fce1ab3bf959c6a
         type: string
+      run_family1_experiment:
+        description: Run the explicitly unsupported Family 1 experiment artifact
+        required: false
+        default: false
+        type: boolean
+      family1_experiment_patch_sha256:
+        description: SHA-256 of the Family 1 experiment patch
+        required: false
+        default: b364519e8067d2f0dcb0ad3e41cb26ffc63cd40b70f53a8b37fb2a7cc4fab857
+        type: string
 
 concurrency:
   group: phase5-metal-family1-${{ github.ref }}
@@ -272,5 +282,7 @@ jobs:
       angle_revision: ${{ inputs.angle_revision }}
       chrome_version: ${{ inputs.runtime_chrome_version }}
       runtime_patch_sha256: ${{ inputs.runtime_patch_sha256 }}
+      family1_experiment: ${{ inputs.run_family1_experiment }}
+      family1_experiment_patch_sha256: ${{ inputs.family1_experiment_patch_sha256 }}
     permissions:
       contents: read
