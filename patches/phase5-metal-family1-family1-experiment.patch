@@ -18,8 +18,12 @@ diff --git a/src/common/apple_platform_utils.mm b/src/common/apple_platform_util
 +    ::fprintf(stderr, "[ANGLE_PHASE5_METAL_INIT] family1_experiment_availability=bypass\n");
 +    ::fflush(stderr);
 +    return true;
-+#endif
 +
++#else
  #if defined(ANGLE_PLATFORM_MACOS) || defined(ANGLE_PLATFORM_MACCATALYST)
      static bool queriedMachineModel    = false;
      static bool machineModelSufficient = true;
+@@ -119,2 +128,3 @@
+     return gpuFamilySufficient;
++#endif
+ }

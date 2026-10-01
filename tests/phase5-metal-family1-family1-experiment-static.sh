@@ -9,7 +9,7 @@ test -f "$workflow"
 test -f "$base_patch"
 test -f "$experiment_patch"
 experiment_patch_sha256=$(shasum -a 256 "$experiment_patch" | awk '{print $1}')
-test "$experiment_patch_sha256" = b364519e8067d2f0dcb0ad3e41cb26ffc63cd40b70f53a8b37fb2a7cc4fab857
+test "$experiment_patch_sha256" = 7bb9d8a09276f60d0d62a5d4cefd2d553ca12a59635a8240d146d5262dbf212e
 experiment_patch_paths=$(git apply --numstat "$experiment_patch" | awk '{print $3}' | LC_ALL=C sort)
 test "$experiment_patch_paths" = src/common/apple_platform_utils.mm
 
@@ -33,6 +33,8 @@ grep -F 'scripts/verify-phase5-runtime-artifact.sh' "$workflow" >/dev/null
 grep -F '#define ANGLE_PHASE5_METAL_FAMILY1_EXPERIMENT 1' "$experiment_patch" >/dev/null
 grep -F 'family1_experiment_availability=bypass' "$experiment_patch" >/dev/null
 grep -F 'return true;' "$experiment_patch" >/dev/null
+grep -F '+#else' "$experiment_patch" >/dev/null
+grep -F '+#endif' "$experiment_patch" >/dev/null
 ! grep -E 'getenv[[:space:]]*\(|setenv[[:space:]]*\(|unsetenv[[:space:]]*\(|argv\[|argc|DYLD_' "$experiment_patch" >/dev/null
 ! grep -E 'ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB|DisplayMtlFamily1Test|ANGLE_MetalFamily1Test' "$experiment_patch" >/dev/null
 
