@@ -258,7 +258,7 @@ jobs:
               'src/common/apple_platform_utils.mm' \
               'src/libANGLE/Display.cpp' \
               'src/libANGLE/renderer/metal/DisplayMtl.mm' \
-              'src/libEGL/libEGL_autogen.cpp')
+              'src/libEGL/libEGL_autogen.cpp' | LC_ALL=C sort)
           test "$(git status --short | sed 's/^.. //' | LC_ALL=C sort)" = "$expected_source_paths"
           {
             printf 'SOURCE_REVISION=%s\n' "$(git rev-parse HEAD)"
