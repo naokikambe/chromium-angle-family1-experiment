@@ -40,7 +40,7 @@ on:
       runtime_patch_sha256:
         description: SHA-256 of the checked-in Phase 5 runtime patch
         required: true
-        default: 7ea07260623f77d0b065c300930d8765bde4cc26912670b73fce1ab3bf959c6a
+        default: 8fcfdffb904eb98aff5be72dd12ff53c2eb38b35ba547f8fc22f2d94873ef3ea
         type: string
       family1_experiment:
         description: Build the explicitly unsupported Family 1 experiment artifact
@@ -254,6 +254,7 @@ jobs:
             git apply --unidiff-zero -- "$GITHUB_WORKSPACE/$FAMILY1_EXPERIMENT_PATCH_PATH"
           fi
           expected_source_paths=$(printf '%s\n' \
+              'src/libANGLE/Context.cpp' \
               'src/common/apple_platform_utils.mm' \
               'src/libANGLE/Display.cpp' \
               'src/libANGLE/renderer/metal/DisplayMtl.mm' \
