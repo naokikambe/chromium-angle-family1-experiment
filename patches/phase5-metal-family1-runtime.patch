@@ -166,12 +166,19 @@ diff --git a/src/libEGL/libEGL_autogen.cpp b/src/libEGL/libEGL_autogen.cpp
 +}
 +
  #if defined(ANGLE_USE_EGL_LOADER)
-@@ -53,1 +53,7 @@
+@@ -53,1 +53,14 @@
 +#if defined(__APPLE__)
++#if defined(__clang__)
++#    pragma clang diagnostic push
++#    pragma clang diagnostic ignored "-Wglobal-constructors"
++#endif
 +__attribute__((constructor)) static void Phase5LogEGLibraryLoaded()
 +{
 +    Phase5LogEGL("[ANGLE_PHASE5_LOAD] libEGL_loaded");
 +}
++#if defined(__clang__)
++#    pragma clang diagnostic pop
++#endif
 +#endif
  extern "C" {
 @@ -156,5 +171,9 @@

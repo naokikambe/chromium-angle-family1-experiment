@@ -7,7 +7,7 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 patch_sha256=$(shasum -a 256 "$patch" | awk '{print $1}')
-test "$patch_sha256" = edc6f34510e3bc04158844c77eac8fc86ed5d5659af3a11df01f15eccc3886e9
+test "$patch_sha256" = 93573c6b846ee70d379af56cb571b3bd203b99688f5c90338a8d9dcc92b3e9d6
 patch_paths=$(git apply --numstat "$patch" | awk '{print $3}' | LC_ALL=C sort)
 expected_patch_paths=$(printf '%s\n' \
   src/common/apple_platform_utils.mm \
@@ -62,6 +62,7 @@ grep -F '[ANGLE_PHASE5_LOAD] libGLESv2_loaded' "$patch" >/dev/null
 grep -F '[ANGLE_PHASE5_LOAD] libEGL_loaded' "$patch" >/dev/null
 grep -F 'eglInitialize_return_failure' "$patch" >/dev/null
 grep -F 'eglGetError_return=0x%04x' "$patch" >/dev/null
+grep -F 'pragma clang diagnostic ignored "-Wglobal-constructors"' "$patch" >/dev/null
 grep -F 'display_initialize_backend_failure id=' "$patch" >/dev/null
 grep -F 'display_initialize_backend_success' "$patch" >/dev/null
 grep -F 'display_initialize_begin' "$patch" >/dev/null
