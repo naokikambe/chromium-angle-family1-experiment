@@ -7,7 +7,7 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 patch_sha256=$(shasum -a 256 "$patch" | awk '{print $1}')
-test "$patch_sha256" = 6f650ba96b5e76a77789c9f4ba9698b2ef1e4bdd3fb897ab4df20a538154e521
+test "$patch_sha256" = 728c6bc8acc1009f583b5739a9d5058e7707e81cc90d8d2a4ecda6a3958ceb20
 patch_paths=$(git apply --numstat "$patch" | awk '{print $3}' | LC_ALL=C sort)
 expected_patch_paths=$(printf '%s\n' \
   src/common/apple_platform_utils.mm \
@@ -94,10 +94,11 @@ grep -F '+        if (disableMetalOnNvidiaEnabled && isNvidiaDevice)' "$patch" >
 grep -F '         ANGLE_TRY(mFormatTable.initialize(this));' "$patch" >/dev/null
 grep -F '         ANGLE_TRY(initializeShaderLibrary());' "$patch" >/dev/null
 awk '
+  /^         mCmdQueue = angle::adoptObjCPtr\(\[mMetalDevice newCommandQueue\]\);$/ { assignment = NR }
   /^\+        if \(!mCmdQueue\)$/ { guard = NR }
   /^\+            return angle::Result::Stop;$/ && guard { stop = NR }
   /^         ANGLE_TRY\(mFormatTable\.initialize\(this\)\);$/ { format = NR }
-  END { exit !(guard && stop > guard && format > stop) }
+  END { exit !(assignment && guard > assignment && stop > guard && format > stop) }
 ' "$patch"
 ! grep -E '^\+.*(ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB|DisplayMtlFamily1Test|ANGLE_MetalFamily1Test|--[[:alnum:]-]+|getenv[[:space:]]*\(|setenv[[:space:]]*\(|unsetenv[[:space:]]*\(|argv\[|argc|family.?bypass|force.?family)' "$patch" >/dev/null
 ! grep -E '^\+.*return (true|angle::Result::Continue);' "$patch" >/dev/null

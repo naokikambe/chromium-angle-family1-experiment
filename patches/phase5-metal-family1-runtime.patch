@@ -39,12 +39,15 @@ diff --git a/src/common/apple_platform_utils.mm b/src/common/apple_platform_util
 diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/metal/DisplayMtl.mm
 --- a/src/libANGLE/renderer/metal/DisplayMtl.mm
 +++ b/src/libANGLE/renderer/metal/DisplayMtl.mm
-@@ -80,1 +80,6 @@
+@@ -80,1 +80,9 @@
  #include "EGL/eglext.h"
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wglobal-constructors"
 +__attribute__((constructor)) static void Phase5LogMetalLibraryLoaded()
 +{
 +    ERR() << "[ANGLE_PHASE5_LOAD] libGLESv2_loaded";
 +}
++#pragma clang diagnostic pop
 +
 @@ -93,1 +93,4 @@
 -    return angle::IsMetalRendererAvailable();
@@ -102,7 +105,8 @@ diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/m
 +        }
 +        if (disableMetalOnNvidiaEnabled && isNvidiaDevice)
          {
-@@ -153,0 +188,7 @@
+@@ -153,1 +153,8 @@
+         mCmdQueue = angle::adoptObjCPtr([mMetalDevice newCommandQueue]);
 +        if (!mCmdQueue)
 +        {
 +            ERR() << "[ANGLE_PHASE5_METAL_INIT] command_queue=failed";
