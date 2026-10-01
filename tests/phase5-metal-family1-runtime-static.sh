@@ -7,7 +7,7 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 patch_sha256=$(shasum -a 256 "$patch" | awk '{print $1}')
-test "$patch_sha256" = 93573c6b846ee70d379af56cb571b3bd203b99688f5c90338a8d9dcc92b3e9d6
+test "$patch_sha256" = 5f4dbd4f8ba7a8103ffa61198fed3f301c4631edaf5f30d8a9852b705af3b3ab
 patch_paths=$(git apply --numstat "$patch" | awk '{print $3}' | LC_ALL=C sort)
 expected_patch_paths=$(printf '%s\n' \
   src/common/apple_platform_utils.mm \
