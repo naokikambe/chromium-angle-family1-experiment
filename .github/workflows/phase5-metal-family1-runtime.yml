@@ -213,8 +213,8 @@ jobs:
           expected_source_paths=$(printf '%s\n' \
               'src/common/apple_platform_utils.mm' \
               'src/libANGLE/Display.cpp' \
-              'src/libEGL/libEGL_autogen.cpp' \
-              'src/libANGLE/renderer/metal/DisplayMtl.mm')
+              'src/libANGLE/renderer/metal/DisplayMtl.mm' \
+              'src/libEGL/libEGL_autogen.cpp')
           test "$(git status --short | sed 's/^.. //' | LC_ALL=C sort)" = "$expected_source_paths"
           {
             printf 'SOURCE_REVISION=%s\n' "$(git rev-parse HEAD)"
