@@ -39,12 +39,22 @@ diff --git a/src/common/apple_platform_utils.mm b/src/common/apple_platform_util
 diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/metal/DisplayMtl.mm
 --- a/src/libANGLE/renderer/metal/DisplayMtl.mm
 +++ b/src/libANGLE/renderer/metal/DisplayMtl.mm
-@@ -80,1 +80,9 @@
+@@ -80,1 +80,19 @@
  #include "EGL/eglext.h"
++#include <cstdio>
++namespace
++{
++void Phase5RawLog(const char *event)
++{
++    ::fprintf(stderr, "%s\n", event);
++    ::fflush(stderr);
++}
++}
 +#pragma clang diagnostic push
 +#pragma clang diagnostic ignored "-Wglobal-constructors"
 +__attribute__((constructor)) static void Phase5LogMetalLibraryLoaded()
 +{
++    Phase5RawLog("[ANGLE_PHASE5_LOAD] libGLESv2_loaded");
 +    ERR() << "[ANGLE_PHASE5_LOAD] libGLESv2_loaded";
 +}
 +#pragma clang diagnostic pop
@@ -55,19 +65,25 @@ diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/m
 +    ERR() << "[ANGLE_PHASE5_METAL_INIT] display_renderer_availability="
 +           << (rendererAvailable ? "available" : "unavailable");
 +    return rendererAvailable;
-@@ -113,2 +116,4 @@
+@@ -113,2 +116,8 @@
++    Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] display_initialize_begin");
      angle::Result result = initializeImpl(display);
++    Phase5RawLog(result == angle::Result::Continue
++                     ? "[ANGLE_PHASE5_METAL_INIT] display_initialize_result=success"
++                     : "[ANGLE_PHASE5_METAL_INIT] display_initialize_result=failure");
 +    ERR() << "[ANGLE_PHASE5_METAL_INIT] display_initialize_result="
 +           << (result == angle::Result::Continue ? "success" : "failure");
      if (result != angle::Result::Continue)
-@@ -130,6 +133,8 @@
+@@ -130,6 +133,10 @@
          mMetalDevice = getMetalDeviceMatchingAttribute(display->getAttributeMap());
          // If we can't create a device, fail initialization.
          if (!mMetalDevice.get())
          {
++            Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] metal_device_selection=failure");
 +            ERR() << "[ANGLE_PHASE5_METAL_INIT] metal_device_selection=failure";
              return angle::Result::Stop;
          }
++        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] metal_device_selection=success");
 +        ERR() << "[ANGLE_PHASE5_METAL_INIT] metal_device_selection=success";
 @@ -141,2 +148,18 @@
 -        if (mFeatures.requireGpuFamily2.enabled && !supportsEitherGPUFamily(1, 2))
@@ -105,24 +121,120 @@ diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/m
 +        }
 +        if (disableMetalOnNvidiaEnabled && isNvidiaDevice)
          {
-@@ -153,1 +153,8 @@
+@@ -153,1 +153,11 @@
          mCmdQueue = angle::adoptObjCPtr([mMetalDevice newCommandQueue]);
 +        if (!mCmdQueue)
 +        {
++            Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] command_queue=failed");
 +            ERR() << "[ANGLE_PHASE5_METAL_INIT] command_queue=failed";
 +            return angle::Result::Stop;
 +        }
++        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] command_queue=success");
 +        ERR() << "[ANGLE_PHASE5_METAL_INIT] command_queue=success";
++        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] format_table=begin");
 +        ERR() << "[ANGLE_PHASE5_METAL_INIT] format_table=begin";
-@@ -155,1 +197,2 @@
+@@ -155,1 +197,3 @@
          ANGLE_TRY(mFormatTable.initialize(this));
++        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] format_table=success");
 +        ERR() << "[ANGLE_PHASE5_METAL_INIT] format_table=success";
-@@ -156,1 +200,3 @@
+@@ -156,1 +200,5 @@
++        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] shader_library=begin");
 +        ERR() << "[ANGLE_PHASE5_METAL_INIT] shader_library=begin";
          ANGLE_TRY(initializeShaderLibrary());
++        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] shader_library=success");
 +        ERR() << "[ANGLE_PHASE5_METAL_INIT] shader_library=success";
-@@ -158,1 +203,3 @@
+@@ -158,1 +203,5 @@
 -        mUtils = std::make_unique<mtl::RenderUtils>();
++        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] render_utils=begin");
 +        ERR() << "[ANGLE_PHASE5_METAL_INIT] render_utils=begin";
 +        mUtils = std::make_unique<mtl::RenderUtils>();
++        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] render_utils=success");
 +        ERR() << "[ANGLE_PHASE5_METAL_INIT] render_utils=success";
+diff --git a/src/libEGL/libEGL_autogen.cpp b/src/libEGL/libEGL_autogen.cpp
+--- a/src/libEGL/libEGL_autogen.cpp
++++ b/src/libEGL/libEGL_autogen.cpp
+@@ -14,1 +14,2 @@
+ #include <memory>
++#include <cstdio>
+@@ -22,3 +23,9 @@
+ namespace
+ {
++void Phase5LogEGL(const char *event)
++{
++    ::fprintf(stderr, "[ANGLE_PHASE5_EGL] %s\n", event);
++    ::fflush(stderr);
++}
++
+ #if defined(ANGLE_USE_EGL_LOADER)
+@@ -53,1 +53,7 @@
++#if defined(__APPLE__)
++__attribute__((constructor)) static void Phase5LogEGLibraryLoaded()
++{
++    Phase5LogEGL("[ANGLE_PHASE5_LOAD] libEGL_loaded");
++}
++#endif
+ extern "C" {
+@@ -156,5 +171,9 @@
+ EGLDisplay EGLAPIENTRY eglGetDisplay(EGLNativeDisplayType display_id)
+ {
+     EnsureEGLLoaded();
+-    return EGL_GetDisplay(display_id);
++    Phase5LogEGL("eglGetDisplay_enter");
++    EGLDisplay returnValue = EGL_GetDisplay(display_id);
++    Phase5LogEGL(returnValue == EGL_NO_DISPLAY ? "eglGetDisplay_return_no_display"
++                                                : "eglGetDisplay_return_display");
++    return returnValue;
+ }
+@@ -162,5 +182,9 @@
+ EGLint EGLAPIENTRY eglGetError()
+ {
+     EnsureEGLLoaded();
+-    return EGL_GetError();
++    EGLint returnValue = EGL_GetError();
++    ::fprintf(stderr, "[ANGLE_PHASE5_EGL] eglGetError_return=0x%04x\n",
++              static_cast<unsigned int>(returnValue));
++    ::fflush(stderr);
++    return returnValue;
+ }
+@@ -174,5 +199,8 @@
+ EGLBoolean EGLAPIENTRY eglInitialize(EGLDisplay dpy, EGLint *major, EGLint *minor)
+ {
+     EnsureEGLLoaded();
+-    return EGL_Initialize(dpy, major, minor);
++    Phase5LogEGL("eglInitialize_enter");
++    EGLBoolean returnValue = EGL_Initialize(dpy, major, minor);
++    Phase5LogEGL(returnValue ? "eglInitialize_return_success" : "eglInitialize_return_failure");
++    return returnValue;
+ }
+diff --git a/src/libANGLE/Display.cpp b/src/libANGLE/Display.cpp
+--- a/src/libANGLE/Display.cpp
++++ b/src/libANGLE/Display.cpp
+@@ -14,4 +14,5 @@
+ #include <algorithm>
+ #include <iterator>
+ #include <sstream>
++#include <cstdio>
+ #include <vector>
+@@ -1183,1 +1183,3 @@
++    ::fprintf(stderr, "[ANGLE_PHASE5_EGL] display_initialize_backend_begin\n");
++    ::fflush(stderr);
+     Error error = mImplementation->initialize(this);
+@@ -1185,3 +1185,6 @@
+     if (error.isError())
+     {
++        ::fprintf(stderr, "[ANGLE_PHASE5_EGL] display_initialize_backend_failure id=%d\n",
++                  static_cast<int>(error.getID()));
++        ::fflush(stderr);
+         // Log extended error message here
+@@ -1192,1 +1192,3 @@
++    ::fprintf(stderr, "[ANGLE_PHASE5_EGL] display_initialize_backend_success\n");
++    ::fflush(stderr);
+     mCaps = mImplementation->getCaps();
+@@ -1192,5 +1204,7 @@
+     mConfigSet = mImplementation->generateConfigs();
+     if (mConfigSet.size() == 0)
+     {
++        ::fprintf(stderr, "[ANGLE_PHASE5_EGL] config_generation_failure\n");
++        ::fflush(stderr);
+         mImplementation->terminate();
+         return egl::Error(EGL_NOT_INITIALIZED, "No configs were generated.");

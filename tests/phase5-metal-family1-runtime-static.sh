@@ -7,11 +7,13 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 patch_sha256=$(shasum -a 256 "$patch" | awk '{print $1}')
-test "$patch_sha256" = 728c6bc8acc1009f583b5739a9d5058e7707e81cc90d8d2a4ecda6a3958ceb20
+test "$patch_sha256" = edc6f34510e3bc04158844c77eac8fc86ed5d5659af3a11df01f15eccc3886e9
 patch_paths=$(git apply --numstat "$patch" | awk '{print $3}' | LC_ALL=C sort)
 expected_patch_paths=$(printf '%s\n' \
   src/common/apple_platform_utils.mm \
-  src/libANGLE/renderer/metal/DisplayMtl.mm)
+  src/libANGLE/Display.cpp \
+  src/libANGLE/renderer/metal/DisplayMtl.mm \
+  src/libEGL/libEGL_autogen.cpp)
 test "$patch_paths" = "$expected_patch_paths"
 grep -F 'phase5-metal-family1-runtime.patch' "$workflow" >/dev/null
 grep -F "$patch_sha256" "$workflow" >/dev/null
@@ -55,6 +57,12 @@ grep -F '"$expected_source_paths"' "$workflow" >/dev/null
 ! grep -E '(^|[^A-Za-z])(codesign|xattr|security|sudo|git push|force-push|KOOV|--user-data-dir|Google Chrome|open -a)([^A-Za-z]|$)' "$workflow" >/dev/null
 ! grep -E 'ANGLE_MetalFamily1Test|DisplayMtlFamily1Test|ANGLE_ENABLE_METAL_FAMILY1_TEST_STUB' "$patch" >/dev/null
 grep -F '[ANGLE_PHASE5_LOAD] libGLESv2_loaded' "$patch" >/dev/null
+grep -F '[ANGLE_PHASE5_LOAD] libEGL_loaded' "$patch" >/dev/null
+grep -F 'eglInitialize_return_failure' "$patch" >/dev/null
+grep -F 'eglGetError_return=0x%04x' "$patch" >/dev/null
+grep -F 'display_initialize_backend_failure id=' "$patch" >/dev/null
+grep -F 'display_initialize_backend_success' "$patch" >/dev/null
+grep -F 'display_initialize_begin' "$patch" >/dev/null
 grep -F '+__attribute__((constructor)) static void Phase5LogMetalLibraryLoaded()' "$patch" >/dev/null
 ! grep -E '^\+.*INFO\(\)' "$patch" >/dev/null
 grep -E '^\+.*ERR\(\)' "$patch" >/dev/null
