@@ -119,12 +119,10 @@ if [[ "$context_es2_fallback_experiment" == true ]]; then
   grep -F '#define ANGLE_PHASE5_METAL_FAMILY1_ES2_FALLBACK_EXPERIMENT 1' \
     "$artifact_dir/context-es2-fallback-patch.diff" >/dev/null ||
     fail 'context fallback compile-time define is missing'
-  [[ "$(manifest_value CONTEXT_ES2_FALLBACK_COMPILE_TIME_DEFINE)" ==
-     ANGLE_PHASE5_METAL_FAMILY1_ES2_FALLBACK_EXPERIMENT ]] ||
+  [[ "$(manifest_value CONTEXT_ES2_FALLBACK_COMPILE_TIME_DEFINE)" == ANGLE_PHASE5_METAL_FAMILY1_ES2_FALLBACK_EXPERIMENT ]] ||
     fail 'context fallback compile-time define provenance is missing'
 else
-  [[ "$(manifest_value_optional CONTEXT_ES2_FALLBACK_COMPILE_TIME_DEFINE)" !=
-     ANGLE_PHASE5_METAL_FAMILY1_ES2_FALLBACK_EXPERIMENT ]] ||
+  [[ "$(manifest_value_optional CONTEXT_ES2_FALLBACK_COMPILE_TIME_DEFINE)" != ANGLE_PHASE5_METAL_FAMILY1_ES2_FALLBACK_EXPERIMENT ]] ||
     fail 'base runtime artifact unexpectedly enables context fallback'
 fi
 
