@@ -252,6 +252,40 @@ also copied to `dyld-library-loads.txt`.  Missing loader lines mean only that
 this mechanism did not observe a load; they are not proof that a library was
 never considered.
 
+## Phase 5 context-creation boundary
+
+The Phase 5 Family 1 experiment was re-observed with the approved runtime
+opt-in applied by the VM probe.  This is a CI-only use of the manifest value;
+the real-device Case C command remains unchanged until separately approved.
+
+| item | record |
+| --- | --- |
+| VM run | `36945717201` / success |
+| observation commit | `a67b655a4b239119aca731dd7341d5442a41b6b4` |
+| input runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.59-angle-1ff8799c-family1-experiment-36940729814` |
+| diagnostics artifact | `phase3d-dynamic-angle-36940729814-36945717201` / GitHub digest `sha256:1e7f235f7638d86478e59d2fb306c47f447dc04cdf5a2b8c89a3679ec7d77155` |
+| runtime opt-in | `--disable-angle-features=requireGpuFamily2,requireMsl21` / applied `true` |
+| manifest / ANGLE | `3bb097dd9edbb4d3732898b5dbe0f224a70c9214a9299b56285e00859ea667dc` / `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
+
+With the opt-in, the VM reached Metal device selection, command queue,
+format table, shader library, render utilities, and successful EGL display
+initialization.  The runtime trace then showed the same no-config attribute
+list on each context attempt.  The ES 3.0 attempt used `0x3098=3` and was
+rejected by `context_version_check requested=3.0 max_supported=2.0`; the
+otherwise identical ES 2.0 attempt used `0x3098=2` and returned a context.
+The trace reported `eglGetError_return=0x3004`, and Chrome labelled the
+failure `EGL_BAD_ATTRIBUTE`.  Therefore, in this VM run the observed
+`EGL_BAD_ATTRIBUTE` is the ANGLE unsupported-context-version path, with
+`0x3098` changing from 2 to 3, not an independently rejected attribute from
+the remaining list.  The VM still created no WebGL context because Chrome's
+ES 3.0 initialization path failed and fallback remained disabled for that
+attempt.
+
+This does not identify the behavior of Intel HD Graphics 5000.  The VM
+reported an Apple Paravirtualized Graphics Device, and the artifact remains
+`RUNTIME_DEVICE_READY=false`; real-device evidence is still required to
+confirm whether the same max-version boundary and error mapping occur there.
+
 ## Explicit limits
 
 Phase 3D cannot establish correct real-device rendering, graphics performance,
