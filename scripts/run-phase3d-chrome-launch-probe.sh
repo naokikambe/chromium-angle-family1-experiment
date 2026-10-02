@@ -104,6 +104,8 @@ angle_release_manifest_sha256=''
 angle_revision=''
 expected_libegl_sha256=''
 expected_libglesv2_sha256=''
+runtime_opt_in=''
+runtime_opt_in_applied=false
 replacement_libraries_dir=''
 browser_angle_flags_observed=false
 gpu_angle_flags_observed=false
@@ -213,6 +215,10 @@ prepare_dynamic_angle_replacement() {
   angle_revision=$PHASE3_RELEASE_ANGLE_REVISION
   expected_libegl_sha256=$PHASE3_RELEASE_LIBEGL_SHA256
   expected_libglesv2_sha256=$PHASE3_RELEASE_LIBGLESV2_SHA256
+  runtime_opt_in=$PHASE3_RELEASE_RUNTIME_OPT_IN
+  if [[ -n "$runtime_opt_in" ]]; then
+    runtime_opt_in_applied=true
+  fi
 
   framework="$browser_app/Contents/Frameworks/Google Chrome for Testing Framework.framework"
   versions_dir="$framework/Versions"
@@ -304,6 +310,8 @@ write_final_result() {
     printf 'ANGLE_REVISION=%s\n' "$angle_revision"
     printf 'EXPECTED_LIBEGL_SHA256=%s\n' "$expected_libegl_sha256"
     printf 'EXPECTED_LIBGLESV2_SHA256=%s\n' "$expected_libglesv2_sha256"
+    printf 'RUNTIME_OPT_IN=%s\n' "$runtime_opt_in"
+    printf 'RUNTIME_OPT_IN_APPLIED=%s\n' "$runtime_opt_in_applied"
     printf 'BROWSER_ANGLE_FLAGS_OBSERVED=%s\n' "$browser_angle_flags_observed"
     printf 'GPU_ANGLE_FLAGS_OBSERVED=%s\n' "$gpu_angle_flags_observed"
     printf 'LIBEGL_DYLD_LOAD_OBSERVED=%s\n' "$libegl_dyld_load_observed"
@@ -690,8 +698,9 @@ printf 'loader_trace_requested=%s\n' "$loader_trace" >> "$results_dir/probe-meta
 printf 'probe_mode=%s\n' "$probe_mode" >> "$results_dir/probe-metadata.txt"
 if [[ "$probe_mode" == dynamic-angle ]]; then
   prepare_dynamic_angle_replacement || exit 1
-  printf 'angle_release_manifest_sha256=%s\nangle_revision=%s\n' \
-    "$angle_release_manifest_sha256" "$angle_revision" >> "$results_dir/probe-metadata.txt"
+  printf 'angle_release_manifest_sha256=%s\nangle_revision=%s\nruntime_opt_in=%s\nruntime_opt_in_applied=%s\n' \
+    "$angle_release_manifest_sha256" "$angle_revision" "$runtime_opt_in" \
+    "$runtime_opt_in_applied" >> "$results_dir/probe-metadata.txt"
 fi
 
 sw_vers > "$results_dir/runner-sw-vers.txt" 2>&1 || true
@@ -817,6 +826,9 @@ if [[ "$angle_flags_requested" == true ]]; then
     "${launch_args[@]}"
   )
 fi
+if [[ "$runtime_opt_in_applied" == true ]]; then
+  launch_args+=("$runtime_opt_in")
+fi
 launch_target='about:blank'
 if [[ "$webgl_smoke_requested" == true ]]; then
   launch_args+=("--remote-debugging-address=127.0.0.1" "--remote-debugging-port=$webgl_debug_port")
@@ -830,6 +842,8 @@ launch_utc=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
   printf 'browser_command='
   printf '%q ' "$browser_executable" "${launch_args[@]}"
   printf '\nloader_trace=%s\n' "$loader_trace"
+  printf 'runtime_opt_in=%s\nruntime_opt_in_applied=%s\n' \
+    "$runtime_opt_in" "$runtime_opt_in_applied"
   printf 'webgl_smoke_requested=%s\n' "$webgl_smoke_requested"
   if [[ "$webgl_smoke_requested" == true ]]; then
     printf 'webgl_smoke_url=file://%s\n' "$webgl_smoke_page"

@@ -6,6 +6,7 @@ readonly PHASE3_ARTIFACT_SCHEMA='angle-artifact-v1'
 readonly PHASE3_COPY_POLICY='norsrc,noextattr,noacl,noqtn'
 readonly PHASE3_LIBRARIES_SYMLINK_TARGET='Versions/Current/Libraries'
 readonly PHASE3_FRAMEWORK_VERSION_POLICY='current-only'
+readonly PHASE3_APPROVED_RUNTIME_OPT_IN='--disable-angle-features=requireGpuFamily2,requireMsl21'
 
 PHASE3_RELEASE_CHROME_VERSION=''
 PHASE3_RELEASE_CHROMIUM_REVISION=''
@@ -19,6 +20,7 @@ PHASE3_RELEASE_BUILT_AT_UTC=''
 PHASE3_RELEASE_GN_ARGS_SHA256=''
 PHASE3_RELEASE_MANIFEST_SHA256=''
 PHASE3_RELEASE_FAMILY1_EXPERIMENT='false'
+PHASE3_RELEASE_RUNTIME_OPT_IN=''
 
 phase3_fail() {
   printf '%s: %s\n' "${PHASE3_SCRIPT_NAME:-phase3}" "$1" >&2
@@ -154,6 +156,16 @@ phase3_validate_release_manifest() {
   PHASE3_RELEASE_FAMILY1_EXPERIMENT=${PHASE3_RELEASE_FAMILY1_EXPERIMENT:-false}
   [[ "$PHASE3_RELEASE_FAMILY1_EXPERIMENT" == false || "$PHASE3_RELEASE_FAMILY1_EXPERIMENT" == true ]] ||
     phase3_fail 'invalid FAMILY1_EXPERIMENT value'
+  PHASE3_RELEASE_RUNTIME_OPT_IN=$(phase3_manifest_value_optional "$manifest" RUNTIME_OPT_IN)
+  PHASE3_RELEASE_RUNTIME_OPT_IN=${PHASE3_RELEASE_RUNTIME_OPT_IN:-}
+  if [[ -n "$PHASE3_RELEASE_RUNTIME_OPT_IN" ]]; then
+    [[ "$PHASE3_RELEASE_RUNTIME_OPT_IN" == "$PHASE3_APPROVED_RUNTIME_OPT_IN" ]] ||
+      phase3_fail 'release runtime opt-in does not match the approved feature override'
+  fi
+  if [[ "$PHASE3_RELEASE_FAMILY1_EXPERIMENT" == true ]]; then
+    [[ "$PHASE3_RELEASE_RUNTIME_OPT_IN" == "$PHASE3_APPROVED_RUNTIME_OPT_IN" ]] ||
+      phase3_fail 'Family 1 experiment release lacks the approved runtime opt-in'
+  fi
   expected_artifact_name="angle-macos-x86_64-chrome-${PHASE3_RELEASE_CHROME_VERSION}-angle-${PHASE3_RELEASE_ANGLE_REVISION:0:8}-${PHASE3_RELEASE_BUILD_RUN_ID}"
   if [[ "$PHASE3_RELEASE_FAMILY1_EXPERIMENT" == true ]]; then
     expected_artifact_name="angle-macos-x86_64-chrome-${PHASE3_RELEASE_CHROME_VERSION}-angle-${PHASE3_RELEASE_ANGLE_REVISION:0:8}-family1-experiment-${PHASE3_RELEASE_BUILD_RUN_ID}"

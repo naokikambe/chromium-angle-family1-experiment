@@ -26,6 +26,12 @@ grep -F 'path: ${{ runner.temp }}/phase3d-dynamic-angle-results' "$workflow" >/d
 ! grep -E 'pull_request(_target)?|^[[:space:]]+push:|id-token:|contents:[[:space:]]+write|actions:[[:space:]]+write|continue-on-error' "$workflow" >/dev/null
 
 grep -F 'phase3_validate_release_manifest "$angle_artifact_dir"' "$probe" >/dev/null
+grep -F 'PHASE3_APPROVED_RUNTIME_OPT_IN' "$repo_root/scripts/phase3-test-copy-common.sh" >/dev/null
+grep -F 'PHASE3_RELEASE_RUNTIME_OPT_IN' "$repo_root/scripts/phase3-test-copy-common.sh" >/dev/null
+grep -F 'runtime_opt_in_applied' "$probe" >/dev/null
+grep -F 'launch_args+=("$runtime_opt_in")' "$probe" >/dev/null
+grep -F 'RUNTIME_OPT_IN_APPLIED=%s' "$probe" >/dev/null
+grep -F 'RUNTIME_OPT_IN=%s' "$probe" >/dev/null
 grep -F 'PHASE3_RELEASE_CHROME_VERSION' "$probe" >/dev/null
 grep -F 'refusing existing CfT replacement target' "$probe" >/dev/null
 grep -F 'phase3_verify_hash "$destination_file"' "$probe" >/dev/null

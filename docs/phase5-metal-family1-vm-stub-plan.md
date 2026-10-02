@@ -311,7 +311,7 @@ Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での
 
 実機試行の詳細は[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)に記録する。`.58`のCase B/Cでは、Intel HD Graphics 5000 / Metalのadapter選択後にEGL初期化が失敗し、GPU processが終了して`--use-gl=disabled`へfallbackした。Case Cの`requireGpuFamily2`指定はGPU processへ渡ったが、初期化成功やfeature overrideの認識を示す証拠ではない。runtime patchは`newCommandQueue`のnil guardを追加するだけで、Family 1 availability gateを迂回しない。
 
-runtime manifestは`RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21`を記録する一方、既存のCase Cスクリプトは`requireGpuFamily2`だけを指定する。固定revisionで`requireMsl21`の存在と効果は確認できていないため、次の実機試行へ暗黙に追加しない。
+runtime manifestは`RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21`を記録する一方、既存のCase Cスクリプトは`requireGpuFamily2`だけを指定する。固定revisionで`requireMsl21`の存在と効果は確認できていないため、次の実機試行へ暗黙に追加しない。なお、Phase 3DのCI VM probeでは、manifestの値が承認済みの固定値と一致する場合に限り、このruntime opt-inをCI用Chrome起動へ適用し、適用結果を起動記録へ残す。これはCI VM内の切り分け専用であり、実機Case Cのコマンドや承認境界を変更しない。
 
 次の判断順序は、保存済みGPU startup traceとstderrの読み取り専用分析、必要に応じた診断用の直接ロード・feature override証明、固定revisionのFamily 1 gateとruntime patchのソース診断、修正のCI/VM検証、新しい実機試行の承認である。GPU初期化が成功するまでWebGL、続いてKOOVへ進めない。
 
