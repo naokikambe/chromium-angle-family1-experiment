@@ -265,10 +265,10 @@ the real-device Case C command remains unchanged until separately approved.
 
 | item | record |
 | --- | --- |
-| VM run | `36945717201` / success |
-| observation commit | `a67b655a4b239119aca731dd7341d5442a41b6b4` |
+| VM run | `36946879622` / success |
+| observation commit | `a3d1954772057ae9ce8dff663d326a1238e19570` |
 | input runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.59-angle-1ff8799c-family1-experiment-36940729814` |
-| diagnostics artifact | `phase3d-dynamic-angle-36940729814-36945717201` / GitHub digest `sha256:1e7f235f7638d86478e59d2fb306c47f447dc04cdf5a2b8c89a3679ec7d77155` |
+| diagnostics artifact | `phase3d-dynamic-angle-36940729814-36946879622` / GitHub digest `sha256:b75646a957bd588fea4a918f544439958e07f47fdb50d0ec8dd1b01ea291777a` |
 | runtime opt-in | `--disable-angle-features=requireGpuFamily2,requireMsl21` / applied `true` |
 | manifest / ANGLE | `3bb097dd9edbb4d3732898b5dbe0f224a70c9214a9299b56285e00859ea667dc` / `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
 
@@ -290,6 +290,8 @@ This does not identify the behavior of Intel HD Graphics 5000.  The VM
 reported an Apple Paravirtualized Graphics Device, and the artifact remains
 `RUNTIME_DEVICE_READY=false`; real-device evidence is still required to
 confirm whether the same max-version boundary and error mapping occur there.
+The CI-generated `context-trace-analysis.txt` records the same conclusion as
+`CONCLUSION=egl-bad-attribute-from-context-version-rejection`.
 
 ## Explicit limits
 
