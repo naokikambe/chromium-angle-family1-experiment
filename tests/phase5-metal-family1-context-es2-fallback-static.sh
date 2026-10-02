@@ -25,6 +25,8 @@ grep -F 'git apply --unidiff-zero --check -- "$GITHUB_WORKSPACE/$CONTEXT_ES2_FAL
 grep -F 'CONTEXT_ES2_FALLBACK_COMPILE_TIME_DEFINE=ANGLE_PHASE5_METAL_FAMILY1_ES2_FALLBACK_EXPERIMENT' \
   "$workflow" >/dev/null
 grep -F 'context-es2-fallback-patch.diff' "$workflow" >/dev/null
+grep -F 'cp "$artifact_real/context-es2-fallback-patch.diff" "$evidence_dir/context-es2-fallback-patch.diff"' \
+  scripts/prepare-chrome-angle-test-copy.sh >/dev/null
 grep -F 'family1_es3_to_es2_fallback' "$patch" >/dev/null
 grep -F '#define ANGLE_PHASE5_METAL_FAMILY1_ES2_FALLBACK_EXPERIMENT 1' "$patch" >/dev/null
 grep -F '!GetWebGLContext(attribs)' "$patch" >/dev/null
