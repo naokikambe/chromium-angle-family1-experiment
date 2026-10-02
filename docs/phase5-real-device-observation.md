@@ -70,7 +70,7 @@ context traceを取得する必要がある。実機でGPU/EGL初期化が成功
 
 | 対象 | 証跡・結果 |
 | --- | --- |
-| Phase 3B synthetic CI | [`36632187071`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36632187071) / success |
+| Phase 3B synthetic CI | [`36963092889`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36963092889) / success; diagnostics digest `sha256:0ce6b2e4e05e374fc5298dad50e5bdd6c765b701f09f2b370ea1ca401a905e3c`; fixture/release-artifact exit `0`; no skipped or unexpected diagnostics |
 | Chrome `.59` runtime artifact CI | [`36632206740`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36632206740) / success |
 | runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.59-angle-1ff8799c-36632206740` / `sha256:3b20ea9d3dd1d0bba98afdbb4785cf8ed9e775db0c8fe6bd4956a49b4981c95b` |
 | manifest | Chrome `154.0.8037.59`; Chromium `b5a24985a2f5ed35909845221b7203c5d8995c8f`; ANGLE `1ff8799c596d4fc9acea28343610b1f33650a6fa`; release manifest SHA-256 `f07f5c27a0e0c8d79917a277dae393d8546697e75bc068d55f6476192b95fc47`; `RUNTIME_DEVICE_READY=false` |
