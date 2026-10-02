@@ -17,7 +17,7 @@ Development署名とdeep strict verificationを通過させた。`requireGpuFami
 `EGL_CONTEXT_CLIENT_VERSION`の値3と特定済みである。fallback適用後はこの非WebGL
 GPU情報context境界を越えてWebGL smokeへ進めた。
 
-### 現在の判定: WebGL1とKOOV URL到達は検証可能、WebGL2とKOOV実動作は未完了
+### 現在の判定: WebGL1は検証可能、KOOV document到達とWebGL2は未完了
 
 | 境界 | 判定 | 根拠 |
 | --- | --- | --- |
@@ -27,7 +27,7 @@ GPU情報context境界を越えてWebGL smokeへ進めた。
 | WebGL1 | PASS | page loaded、WebGL1 context、最小clear描画がすべて`true`。rendererはIntel HD Graphics 5000 |
 | WebGL2 | PENDING（能力境界） | contextは`null`。ES3要求の`0x3098=3`拒否を独立に記録し、ES2へ暗黙降格していない |
 | KOOV App ID方式 | BLOCKED（起動境界） | `Local State.app_shims`を含む隔離コピーでも`--app-id`はpage targetを作らず、service workerのみ。GPU/EGL失敗ではない |
-| KOOV URL app-mode | PARTIAL | 新規空profileの`--app=https://www.koov.io/app/welcome`でpage target到達を確認。KOOV画面の描画・操作は未確認 |
+| KOOV URL app-mode | BLOCKED（document到達） | page targetのURL metadataは現れたが、CDP上のdocumentは`about:blank`のまま。`Page.navigate`もtimeoutし、canvasは0 |
 | ES3→ES2 fallback実験 | PASS（実機WebGL1まで） | `.97` exact artifactでGPU/EGL継続、WebGL1 context/draw成功。WebGL2は対象外のまま |
 
 今回のソース確認では、macOSのChromium側でGLES3非対応時の自動fallbackが既定で
@@ -47,8 +47,8 @@ ES2へ降格せず、WebGL1を含む後続の挙動はCI/実機で別途確認�
 
 正確なChrome `.97` / ANGLE `e12217f3...` fallback artifactのCI build・manifest検証と、
 承認済みの実機test copy署名・配置・Chrome起動・WebGL1 smokeは完了した。KOOVはURL
-app-modeでpage targetへの到達まで確認したが、画面描画・基本操作・認証・保存・USB/Bluetooth
-連携は未実施である。
+app-modeでpage targetのURL metadataまで確認したが、documentは`about:blank`のままであり、
+画面描画・基本操作・認証・保存・USB/Bluetooth連携は未実施である。
 
 ### 現行`.97` CI入力とVM availability boundary
 
@@ -82,7 +82,7 @@ retry/evidence、前回artifactは変更していない。CI artifactの`RUNTIME
 | WebGL context analyzer | 5 calls、ES3要求4回、ES2要求1回。`EGL_BAD_ATTRIBUTE_COUNT=2`、`CONTEXT_ERROR_ATTRIBUTE_KEYS=0x3098`、`CONTEXT_ERROR_ATTRIBUTE_VALUES=3`、`CONTEXT_INITIALIZE_SUCCESS_COUNT=4` |
 | renderer / version | `ANGLE (Intel, ANGLE Metal Renderer: Intel HD Graphics 5000, Unspecified Version)` / `WebGL 1.0 (OpenGL ES 2.0 Chromium)` |
 | ANGLEロード | WebGL実行中の同一GPU helper processのraw `lsof`/`vmmap`が、test copy内の`libEGL.dylib`/`libGLESv2.dylib`を両方指示 |
-| KOOV | App ID方式はpage target未到達。URL app-modeはpage target到達まで確認し、画面描画・基本操作は未実施 |
+| KOOV | App ID方式はpage target未到達。URL app-modeはtarget metadataのみで、document到達・画面描画・基本操作は未実施 |
 
 この再確認により、`EGL_BAD_ATTRIBUTE`はWebGL2のES3要求に限って再現し、拒否された
 属性は`EGL_CONTEXT_CLIENT_VERSION (0x3098)`の値3であることを、CI run 370のartifact
@@ -102,15 +102,16 @@ Chromeと保存済みretry/evidenceを変更せず、新規の隔離profileを2�
 | 入力artifact | CI run `37009376538`の`angle-macos-x86_64-chrome-154.0.8037.97-angle-e12217f3-family1-experiment-37009376538`; artifact digest `sha256:247f0ee4be552c8e4f8790db04c39753631abc62312b78318dcdd5a80808652d` |
 | ANGLE revision / manifest | `e12217f3e133cb1029b050d893b1806d141483be`; manifest SHA-256 `97b03d254b67b604173436bdf64a9c09c93f61d468b66880b36508c5e8d3bab2` |
 | App ID方式 | `--app-id=kpmcfooelenggiklfmbljpognolignpg`。`Local State.app_shims`の登録を含めてもpage targetは生成されず、service workerのみ。ブラウザ終了は正常 |
-| URL app-mode | 新規空profileで`--app=https://www.koov.io/app/welcome`を指定し、同URLのpage targetを取得。KOOV画面の描画・基本操作は未確認 |
+| URL app-mode | 新規空profileで同URLのpage target metadataを取得したが、CDPのdocumentは`about:blank`、canvasは0。`Page.navigate`はtimeoutし、KOOV画面の描画・基本操作には到達しなかった |
+| 通常タブ / 独立probe | `--new-window`とCDP `Page.navigate`の両方で実documentへのnavigation eventなし。空document上の独立WebGL1 probeはIntel HD 5000/ANGLEで成功、WebGL2は失敗したが、KOOVの結果とは扱わない |
 | ANGLE / GPU / EGL | URL app-modeの同一GPU helper processでreplacement `libEGL.dylib`/`libGLESv2.dylib`を`lsof`/`vmmap`確認。Metal初期化、`eglInitialize_return_success`、ES3要求からES2へのfallbackとcontext初期化成功を確認 |
 | 後処理 | テストChromeの対象PIDと隔離profileを検証してTERM終了。終了後の対象profileプロセスは0件 |
 | 境界 | `RUNTIME_DEVICE_READY=false`は変更しない。source Chrome、既存profile、既存artifact、保存済みretry/evidenceは変更していない |
 
-この観測により、ANGLE/GPU/EGLからKOOV URL page targetまでの到達は確認できた。一方、旧KOOV
-App Shimを`--app-id`で起動する経路はChrome 154の隔離profileでは未成立であり、URL app-mode
-到達をApp ID方式の成功とは扱わない。KOOVのcanvas/WebGL描画、画面操作、認証後の機能、保存、
-USB/Bluetooth連携は次の承認境界として残る。
+この観測により、ANGLE/GPU/EGLはKOOV起動試行中も継続して動作した。一方、旧KOOV App Shimを
+`--app-id`で起動する経路はChrome 154の隔離profileでpage targetを作らず、URL app-modeも
+target metadataの後にdocumentへ遷移しなかった。従って、KOOVのcanvas/WebGL描画、画面操作、
+認証後の機能、保存、USB/Bluetooth連携は未判定であり、次の承認境界として残る。
 
 ### `.92` compatibility VM観測（実機入力ではない）
 
