@@ -103,7 +103,7 @@ Chromeと保存済みretry/evidenceを変更せず、新規の隔離profileを2�
 | ANGLE revision / manifest | `e12217f3e133cb1029b050d893b1806d141483be`; manifest SHA-256 `97b03d254b67b604173436bdf64a9c09c93f61d468b66880b36508c5e8d3bab2` |
 | App ID方式 | `--app-id=kpmcfooelenggiklfmbljpognolignpg`。`Local State.app_shims`の登録を含めてもpage targetは生成されず、service workerのみ。ブラウザ終了は正常 |
 | URL app-mode | 新規空profileで同URLのpage target metadataを取得したが、CDPのdocumentは`about:blank`、canvasは0。`Page.navigate`はtimeoutし、KOOV画面の描画・基本操作には到達しなかった |
-| 通常タブ / 独立probe | `--new-window`とCDP `Page.navigate`の両方で実documentへのnavigation eventなし。空document上の独立WebGL1 probeはIntel HD 5000/ANGLEで成功、WebGL2は失敗したが、KOOVの結果とは扱わない |
+| 通常タブ / 最終URL / 独立probe | `/app/welcome`とHTTPリダイレクト先の`https://www.koov.io/`を`--new-window`で直接指定しても、実documentへのnavigation eventなし。CDP `Page.navigate`もtimeoutした。空document上の独立WebGL1 probeはIntel HD 5000/ANGLEで成功、WebGL2は失敗したが、KOOVの結果とは扱わない |
 | ANGLE / GPU / EGL | URL app-modeの同一GPU helper processでreplacement `libEGL.dylib`/`libGLESv2.dylib`を`lsof`/`vmmap`確認。Metal初期化、`eglInitialize_return_success`、ES3要求からES2へのfallbackとcontext初期化成功を確認 |
 | 後処理 | テストChromeの対象PIDと隔離profileを検証してTERM終了。終了後の対象profileプロセスは0件 |
 | 境界 | `RUNTIME_DEVICE_READY=false`は変更しない。source Chrome、既存profile、既存artifact、保存済みretry/evidenceは変更していない |
@@ -112,6 +112,8 @@ Chromeと保存済みretry/evidenceを変更せず、新規の隔離profileを2�
 `--app-id`で起動する経路はChrome 154の隔離profileでpage targetを作らず、URL app-modeも
 target metadataの後にdocumentへ遷移しなかった。従って、KOOVのcanvas/WebGL描画、画面操作、
 認証後の機能、保存、USB/Bluetooth連携は未判定であり、次の承認境界として残る。
+なお、同URLへの読み取り専用HTTP確認は`https://www.koov.io/`へ到達したため、今回の未到達は
+サーバーURLの不存在ではなく、実機test copy内のdocument navigation境界として扱う。
 
 ### `.92` compatibility VM観測（実機入力ではない）
 
