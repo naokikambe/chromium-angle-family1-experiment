@@ -170,7 +170,7 @@ did not publish a port; run `36514367145` reached Chrome and DevTools but the
 `/json` endpoint HTML-escaped the title JSON. The final implementation removed
 the auxiliary server and decodes the DevTools title before JSON validation.
 
-## Family 1 ES3-to-ES2 fallback experiment (次回CI入力)
+## Family 1 ES3-to-ES2 fallback experiment (CI/VM結果)
 
 The Intel HD Graphics 5000 Case C trace showed that `eglInitialize` succeeds but
 the non-WebGL GPU-information context requests ES3 while ANGLE reports
@@ -181,13 +181,13 @@ the GPU process to the WebGL smoke boundary.
 The checked-in opt-in patch
 `patches/phase5-metal-family1-context-es2-fallback.patch` (SHA-256
 `7bd8a40eaa6311c4ca37ebd68c19ab3d9822b936000e38dbadea70b92667a014`) is the
-next CI input. It is limited to the Family 1 experiment artifact and records a
+CI input. It is limited to the Family 1 experiment artifact and records a
 `family1_es3_to_es2_fallback` marker only when a non-WebGL ES3 request is
 reduced to the reported ES2 maximum. WebGL contexts are excluded, so the
 experiment must report WebGL1 and WebGL2 independently rather than treating an
 ES2 GPU-information context as WebGL success.
 
-The next VM observation must retain the fallback marker count together with
+The VM observation must retain the fallback marker count together with
 GPU/EGL initialization, GPU-disabled fallback, WebGL1/WebGL2 context creation,
 and draw completion. A successful VM result remains diagnostic only:
 `RUNTIME_DEVICE_READY=false`, no signing or device launch is implied, and
@@ -213,8 +213,23 @@ reported ES2 maximum. The remaining ES3 request was not downgraded because
 WebGL contexts are explicitly excluded from the experiment. This demonstrates
 the intended VM WebGL1 path, not WebGL2 support and not Intel HD Graphics 5000
 device readiness. The `.92` compatibility artifact is not a valid real-device
-input; the exact `.97` artifact must be rebuilt with the same opt-in before any
-device review.
+input. The exact `.97` artifact has since been rebuilt with the same opt-in, but
+it remains `RUNTIME_DEVICE_READY=false` and has not been signed, placed, or
+launched on a device.
+
+### Exact Chrome `.97` fallback artifact CI result (2026-10-02)
+
+| item | record |
+| --- | --- |
+| runtime build run | [`36988193107`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36988193107) / success |
+| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.97-angle-e12217f3-family1-experiment-36988193107` / GitHub digest `sha256:984225daa95e44dd621dee93e604cce9fea414015287ba1b3fa7eb2cb7ff7bc7` |
+| manifest | SHA-256 `73e94ae3b306086201401bfc31540296362aac5505d4af478537abed6391e961`; Chrome `154.0.8037.97`; Chromium `b510e9d7cd3a2fbd78d0ddc42234103206c5f78d`; ANGLE `e12217f3e133cb1029b050d893b1806d141483be`; `CONTEXT_ES2_FALLBACK_EXPERIMENT=true`; `CFT_COMPATIBILITY=false` |
+| artifact boundary | `RUNTIME_DEVICE_READY=false`; local read-only verifier passed; signing, test-copy placement, Chrome launch, WebGL, and KOOV were not performed |
+
+Because the Chrome for Testing `.97` archive is unavailable (HTTP 404), this
+exact `.97` artifact has no corresponding VM browser observation. It is the
+input for a separately approved real-device staged test, not evidence that the
+device WebGL path already works.
 
 ## Purpose
 
