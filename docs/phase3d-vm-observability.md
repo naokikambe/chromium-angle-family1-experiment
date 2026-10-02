@@ -367,6 +367,45 @@ test-copy preparation path.  It must not be substituted for the exact `.97`
 artifact or used to authorize signing, artifact placement, Chrome launch, or
 KOOV.
 
+## Chrome `.92` compatibility artifact VM observation
+
+The explicit compatibility path was then exercised end to end.  It uses a
+Chrome for Testing version present in the known-good index and is retained
+only to validate the instrumented runtime and VM observation path; it does
+not change the `.97` device input or the real-device boundary.
+
+| item | record |
+| --- | --- |
+| runtime build run | [`36968691106`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36968691106) / success |
+| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.92-angle-802a8704-family1-experiment-36968691106` / GitHub digest `sha256:7e94b75d860be33c7451c731f42c6b438a3385b90e97d4122e5edb8c73715250` |
+| manifest | SHA-256 `747ea00759790040bdbef84c947610cf63c2078880249aadf36dd83ae74aef2c`; Chrome `.92`; Chromium `eec1adb17a0b4b2b93724811e1fa1eb2d5f97ab9`; ANGLE `802a8704ca940b633b731493ee192e0661eb8cdd`; `CFT_COMPATIBILITY=true`; `RUNTIME_DEVICE_READY=false` |
+| dylibs | `libEGL.dylib=44116767b6d4d02362b2dd117cf16af2e719ef143b573f9a52b4837c1415b470`; `libGLESv2.dylib=a0b16d4124ba7eee4266a1fb8e592f705ee79896bdfad09b2904d5e71c207f58` |
+| VM observation | [`36970918937`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36970918937) / success |
+| diagnostics artifact | `phase3d-dynamic-angle-36968691106-36970918937` / GitHub digest `sha256:4275c91c7384791bea90db704765e8283dcfda005bbc24330303f91119a987cc` |
+
+The dynamic probe validated the release manifest, started Chrome, observed the
+GPU process, and observed GPU-correlated dyld loading for both replacement
+libraries.  Metal device selection, command queue, format table, shader
+library, render utilities, and EGL display initialization all succeeded.
+Dynamic and stock both reached the GPU-disabled fallback boundary without an
+EGL initialization failure.  The WebGL smoke page loaded in both cases, but
+WebGL1 and WebGL2 contexts were not created and no draw completed.
+
+The direct context trace contained six `eglCreateContext` calls, all with
+`config=no_config`: four ES 3.0 requests with `0x3098=3` and two ES 2.0
+requests with `0x3098=2`.  The non-version attributes were identical.  The
+ES 3.0 requests recorded
+`context_error code=EGL_BAD_ATTRIBUTE attribute=0x3098 value=3` and
+`context_initialize_error code=0x3004`; the ES 2.0 requests recorded
+`context_initialize_success`.  The analyzer result was
+`CONCLUSION=egl-bad-attribute-from-context-error-attribute`, identifying
+`EGL_CONTEXT_CLIENT_VERSION (0x3098)` as the rejected attribute in this VM.
+
+This remains an Apple Paravirtualized Graphics Device result, not an Intel HD
+Graphics 5000 result.  The artifact explicitly retains
+`RUNTIME_DEVICE_READY=false`, and the compatibility mode is rejected by the
+real-device test-copy preparation path.
+
 ## Explicit limits
 
 Phase 3D cannot establish correct real-device rendering, graphics performance,
