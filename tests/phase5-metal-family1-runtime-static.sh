@@ -7,7 +7,7 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 patch_sha256=$(shasum -a 256 "$patch" | awk '{print $1}')
-test "$patch_sha256" = fc05d21c84ad9b99090d97381fe1f02e1dd8728f7e82d508361b7605f4609076
+test "$patch_sha256" = f5fbfed241a9f465cd7c44351dce494f204ba88a6b6c60cd5e083c6a00550fb3
 patch_paths=$(git apply --numstat "$patch" | awk '{print $3}' | LC_ALL=C sort)
 expected_patch_paths=$(printf '%s\n' \
   src/common/apple_platform_utils.mm \
@@ -15,7 +15,8 @@ expected_patch_paths=$(printf '%s\n' \
   src/libANGLE/Display.cpp \
   src/libANGLE/renderer/metal/DisplayMtl.mm \
   src/libANGLE/validationEGL.cpp \
-  src/libEGL/libEGL_autogen.cpp)
+  src/libEGL/libEGL_autogen.cpp \
+  src/libGLESv2/entry_points_egl_autogen.cpp)
 test "$patch_paths" = "$expected_patch_paths"
 grep -F 'phase5-metal-family1-runtime.patch' "$workflow" >/dev/null
 grep -F "$patch_sha256" "$workflow" >/dev/null
@@ -54,6 +55,7 @@ test "$(grep -Fc 'src/libANGLE/Context.cpp' "$workflow")" -eq 1
 test "$(grep -Fc 'src/libANGLE/Display.cpp' "$workflow")" -eq 1
 test "$(grep -Fc 'src/libANGLE/validationEGL.cpp' "$workflow")" -eq 1
 test "$(grep -Fc 'src/libEGL/libEGL_autogen.cpp' "$workflow")" -eq 1
+test "$(grep -Fc 'src/libGLESv2/entry_points_egl_autogen.cpp' "$workflow")" -eq 1
 test "$(grep -Fc 'src/libANGLE/renderer/metal/DisplayMtl.mm' "$workflow")" -eq 1
 grep -F 'expected_source_paths=$(printf' "$workflow" >/dev/null
 grep -F "'src/common/apple_platform_utils.mm'" "$workflow" >/dev/null
@@ -77,6 +79,8 @@ grep -F 'eglCreateContext_config=no_config' "$patch" >/dev/null
 grep -F 'eglCreateContext_attribute key=0x%04x value=%d' "$patch" >/dev/null
 grep -F 'context_version_check requested=%u.%u max_supported=%u.%u' "$patch" >/dev/null
 grep -F 'context_version_rejected reason=max_supported_version' "$patch" >/dev/null
+grep -F 'context_error code=EGL_BAD_ATTRIBUTE attribute=0x3098 value=%u' "$patch" >/dev/null
+grep -F 'eglCreateContext_validation_enabled=%s' "$patch" >/dev/null
 grep -F 'context_attribute_validation key=0x%04x result=%s' "$patch" >/dev/null
 grep -F 'context_attribute_value_validation key=0x%04x value=%d result=%s' "$patch" >/dev/null
 grep -F 'max_es_version_gpu_family4_or1=' "$patch" >/dev/null

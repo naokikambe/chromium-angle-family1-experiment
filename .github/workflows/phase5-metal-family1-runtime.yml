@@ -40,7 +40,7 @@ on:
       runtime_patch_sha256:
         description: SHA-256 of the checked-in Phase 5 runtime patch
         required: true
-        default: fc05d21c84ad9b99090d97381fe1f02e1dd8728f7e82d508361b7605f4609076
+        default: f5fbfed241a9f465cd7c44351dce494f204ba88a6b6c60cd5e083c6a00550fb3
         type: string
       family1_experiment:
         description: Build the explicitly unsupported Family 1 experiment artifact
@@ -259,7 +259,8 @@ jobs:
               'src/libANGLE/Display.cpp' \
               'src/libANGLE/validationEGL.cpp' \
               'src/libANGLE/renderer/metal/DisplayMtl.mm' \
-              'src/libEGL/libEGL_autogen.cpp' | LC_ALL=C sort)
+              'src/libEGL/libEGL_autogen.cpp' \
+              'src/libGLESv2/entry_points_egl_autogen.cpp' | LC_ALL=C sort)
           test "$(git status --short | sed 's/^.. //' | LC_ALL=C sort)" = "$expected_source_paths"
           {
             printf 'SOURCE_REVISION=%s\n' "$(git rev-parse HEAD)"

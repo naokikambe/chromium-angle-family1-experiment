@@ -50,17 +50,22 @@ VM観測の成功もIntel HD Graphics 5000での実機成功を意味しない�
 
 固定ANGLE revisionへ適用するruntime patchに、`validationEGL.cpp`のcontext
 属性検証と属性値検証の結果をstderrへ記録する計装を追加した。各記録は属性キー、
-属性値（値検証時）、`result=true/false`を含む。既存の`Context.cpp`のES version
-checkおよび`libEGL` wrapperの生属性列・config選択・`eglGetError`記録とは別の
-validation境界であり、`EGL_BAD_ATTRIBUTE`の発生がversion拒否か属性検証拒否かを
-CI/VM上で分類できる。
+属性値（値検証時）、`result=true/false`を含む。さらに`entry_points_egl_autogen.cpp`で
+release runtimeの`IsEGLValidationEnabled()`状態を記録し、`Context::initialize()`の
+version拒否時には`EGL_BAD_ATTRIBUTE`と属性`0x3098`（`EGL_CONTEXT_CLIENT_VERSION`）の
+対応を直接記録する。既存の`Context.cpp`のES version checkおよび`libEGL` wrapperの
+生属性列・config選択・`eglGetError`記録とは別のvalidation境界であり、
+`EGL_BAD_ATTRIBUTE`の発生がversion拒否か属性検証拒否かをCI/VM上で分類できる。
 
 解析器は`CONTEXT_ATTRIBUTE_VALIDATION_FAILURE_KEYS`と
 `CONTEXT_ATTRIBUTE_VALUE_VALIDATION_FAILURE_KEYS`を出力し、失敗キーがある場合は
 `egl-bad-attribute-from-context-attribute-validation`と分類する。次回の実機結果収集も
 同じ解析器を自動実行し、`context-trace-analysis.txt`を新しい結果ディレクトリへ保存する。
+`CONTEXT_VALIDATION_ENABLED_VALUES`、`CONTEXT_ERROR_ATTRIBUTE_KEYS`、
+`CONTEXT_ERROR_ATTRIBUTE_VALUES`も出力し、直接のcontext error markerがある場合は
+`egl-bad-attribute-from-context-error-attribute`と分類する。
 この変更のruntime patch SHA-256は
-`fc05d21c84ad9b99090d97381fe1f02e1dd8728f7e82d508361b7605f4609076`であり、固定revision
+`f5fbfed241a9f465cd7c44351dce494f204ba88a6b6c60cd5e083c6a00550fb3`であり、固定revision
 上のpatch適用・build・VM観測CIが成功するまでは、実機属性原因の判定結果を更新しない。
 
 ## Chrome 154.0.8037.58 rebuild observation record
