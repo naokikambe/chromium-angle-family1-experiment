@@ -60,6 +60,35 @@ ES2へ降格せず、WebGL1を含む後続の挙動はCI/実機で別途確認�
 
 CfT known-good indexに`.97`がないため、`.97` artifactをそのままVMへ渡すことはできなかった。workflowには、CfTに存在する同系列`.92`とANGLE `802a8704ca940b633b731493ee192e0661eb8cdd`を`cft_compatibility=true`で明示的にbuildするVM専用経路を追加した。このcompatibility artifactは実機用ではなく、test-copy準備でも拒否する。
 
+### CI run 37009376538 の再構築artifactによる実機再確認（2026-10-02）
+
+前回と同じChrome `.97` / ANGLE revisionのfallback artifactを、CI run
+`37009376538`で再構築し、新しいtest copyだけへ適用した。既存source Chrome、保存済み
+retry/evidence、前回artifactは変更していない。CI artifactの`RUNTIME_DEVICE_READY=false`
+は維持し、実機では署名済みtest copyを使用した。
+
+| 対象 | 証跡・結果 |
+| --- | --- |
+| runtime CI / artifact | [`37009376538`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37009376538) / success; `angle-macos-x86_64-chrome-154.0.8037.97-angle-e12217f3-family1-experiment-37009376538` |
+| artifact digest | `sha256:247f0ee4be552c8e4f8790db04c39753631abc62312b78318dcdd5a80808652d` |
+| manifest / ANGLE | manifest SHA-256 `97b03d254b67b604173436bdf64a9c09c93f61d468b66880b36508c5e8d3bab2`; ANGLE `e12217f3e133cb1029b050d893b1806d141483be` |
+| runtime libraries | `libEGL.dylib=44116767b6d4d02362b2dd117cf16af2e719ef143b573f9a52b4837c1415b470`; `libGLESv2.dylib=750d1a917cb88235d6e7cc0b2483b44800ee3cb39261dc21535d70ef60be0913` |
+| runtime profile | `phase5-metal-family1-family1-experiment-v1`; context fallback patch applied; `RUNTIME_DEVICE_READY=false` |
+| Case C GPU/EGL | `metal_device_selection`、command queue、format table、shader library、render utils、display initialize、`eglInitialize`が成功。`max_es_version=2.0`、ES3要求3回をES2へfallbackし、`context_initialize_success`を3回記録 |
+| Case C context analyzer | `EGL_BAD_ATTRIBUTE_COUNT=0`; `FAMILY1_ES3_TO_ES2_FALLBACK_COUNT=3`; `CONCLUSION=no-egl-bad-attribute-observed` |
+| WebGL smoke | page loaded、WebGL1 context、最小clear描画は成功。WebGL2は`context-null` |
+| WebGL context analyzer | 5 calls、ES3要求4回、ES2要求1回。`EGL_BAD_ATTRIBUTE_COUNT=2`、`CONTEXT_ERROR_ATTRIBUTE_KEYS=0x3098`、`CONTEXT_ERROR_ATTRIBUTE_VALUES=3`、`CONTEXT_INITIALIZE_SUCCESS_COUNT=4` |
+| renderer / version | `ANGLE (Intel, ANGLE Metal Renderer: Intel HD Graphics 5000, Unspecified Version)` / `WebGL 1.0 (OpenGL ES 2.0 Chromium)` |
+| ANGLEロード | WebGL実行中の同一GPU helper processのraw `lsof`/`vmmap`が、test copy内の`libEGL.dylib`/`libGLESv2.dylib`を両方指示 |
+| KOOV | 未実施。WebGL結果のレビューと別途承認が必要 |
+
+この再確認により、`EGL_BAD_ATTRIBUTE`はWebGL2のES3要求に限って再現し、拒否された
+属性は`EGL_CONTEXT_CLIENT_VERSION (0x3098)`の値3であることを、CI run 370のartifact
+でも確認した。非WebGLのGPU情報contextはfallbackでES2へ継続でき、WebGL1はES2として
+描画できるが、WebGL2をES2へ暗黙降格していない。標準CfT probeは`.97`公開archiveの
+HTTP 404で起動前に停止したため、WebGL結果は署名済みtest copyを直接起動した実機
+証跡として扱う。
+
 ### `.92` compatibility VM観測（実機入力ではない）
 
 `.97`のCfT配布境界を切り分けるため、VM専用compatibility modeでChrome
