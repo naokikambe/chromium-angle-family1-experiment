@@ -36,6 +36,8 @@ grep -F 'CONTEXT_ATTRIBUTE_VALIDATION_FAILURE_KEYS' "$context_analyzer" >/dev/nu
 grep -F 'context_attribute_value_validation' "$context_analyzer" >/dev/null
 grep -F 'CONTEXT_ERROR_ATTRIBUTE_KEYS' "$context_analyzer" >/dev/null
 grep -F 'egl-bad-attribute-from-context-error-attribute' "$context_analyzer" >/dev/null
+grep -F 'CONTEXT_INITIALIZE_ERROR_CODES' "$context_analyzer" >/dev/null
+grep -F 'egl-bad-attribute-from-context-initialize-error-needs-key' "$context_analyzer" >/dev/null
 grep -F 'CONTEXT_VALIDATION_ENABLED_VALUES' "$context_analyzer" >/dev/null
 grep -F 'PHASE3_APPROVED_RUNTIME_OPT_IN' "$repo_root/scripts/phase3-test-copy-common.sh" >/dev/null
 grep -F 'PHASE3_RELEASE_RUNTIME_OPT_IN' "$repo_root/scripts/phase3-test-copy-common.sh" >/dev/null

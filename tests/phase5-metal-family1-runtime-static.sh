@@ -7,7 +7,7 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 patch_sha256=$(shasum -a 256 "$patch" | awk '{print $1}')
-test "$patch_sha256" = f5fbfed241a9f465cd7c44351dce494f204ba88a6b6c60cd5e083c6a00550fb3
+test "$patch_sha256" = 6abc915e79513ceae887ef4e2a91ae65d40878edc87b0bf77c053adfd5a13e5f
 patch_paths=$(git apply --numstat "$patch" | awk '{print $3}' | LC_ALL=C sort)
 expected_patch_paths=$(printf '%s\n' \
   src/common/apple_platform_utils.mm \
@@ -80,6 +80,8 @@ grep -F 'eglCreateContext_attribute key=0x%04x value=%d' "$patch" >/dev/null
 grep -F 'context_version_check requested=%u.%u max_supported=%u.%u' "$patch" >/dev/null
 grep -F 'context_version_rejected reason=max_supported_version' "$patch" >/dev/null
 grep -F 'context_error code=EGL_BAD_ATTRIBUTE attribute=0x3098 value=%u' "$patch" >/dev/null
+grep -F 'context_initialize_error code=0x%04x id=%d message=%s' "$patch" >/dev/null
+grep -F 'context_initialize_success' "$patch" >/dev/null
 grep -F 'eglCreateContext_validation_enabled=%s' "$patch" >/dev/null
 grep -F 'context_attribute_validation key=0x%04x result=%s' "$patch" >/dev/null
 grep -F 'context_attribute_value_validation key=0x%04x value=%d result=%s' "$patch" >/dev/null
