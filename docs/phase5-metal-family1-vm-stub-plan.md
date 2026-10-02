@@ -1,9 +1,9 @@
 # Phase 5: Metal Family 1 capability stub (VM-first)
 
 作成日: 2026-09-26
-更新日: 2026-09-29
+更新日: 2026-10-02
 
-状態: 設計確認済み・admission record確認済み・実装済み・Chrome 154.0.8037.58 runtime artifact CI/Phase 3D VM/WebGL smoke検証済み・実機試行はGPU初期化で停止（2026-09-29）
+状態: 設計確認済み・admission record確認済み・実装済み・Chrome 154.0.8037.59 runtime artifact CI/Phase 3D VM/context trace検証済み・Intel HD 5000固有の属性原因は実機確認待ち
 
 ## Chrome 154.0.8037.58 rebuild status（2026-09-29）
 
@@ -19,6 +19,28 @@ Chrome `154.0.8037.58`に合わせてruntime artifactとPhase 3D VM観測を
 | manifest / dylib | manifest `c929c2fc2dcae41007599bbb2b86dd8daf7b923a868b85c1e7a2d5d2df12b64e`; `libEGL=f4a8a7575183a41373404f7c25b4f56e1a1540c5b1578d11437c180b1f698db8`; `libGLESv2=d0dedeeddb3b727e645648ee2b90462be43300c07914c3cc8ca7fc3de3b95e5c` |
 | VM observation | [`36549980089`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36549980089) / success; dynamic両dylib GPU-correlated load、EGL failure、GPU fallback; WebGL context/drawは未達 |
 | device boundary | `RUNTIME_DEVICE_READY=false`; CI artifactの境界値。実機では新規test copyの署名・strict verify・Chrome起動まで実施し、GPU初期化で停止 |
+
+## Chrome 154.0.8037.59 direct context trace（2026-10-02）
+
+`.59`向けruntime artifactを固定ANGLE revisionへ再生成し、同じartifactを
+Phase 3D macOS Intel VM観測へ渡した。これは実機操作や実機artifact置換を含まない。
+
+| 項目 | 記録 |
+| --- | --- |
+| runtime CI | [`36953609001`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36953609001) / success |
+| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.59-angle-1ff8799c-family1-experiment-36953609001` / GitHub digest `sha256:82911fd9fb66deca39460694b95833f761e918a056acb82636e7bea1ff8c822b` |
+| VM observation | [`36956483884`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36956483884) / success / diagnostics digest `sha256:e036737c68d4080fa83852c5b74feaf8c0462547aceb515a6238f5f1ec7a1eec` |
+| ANGLE revision | `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
+| manifest / dylib | manifest `6b62e9e0fbd212280ea98c2d04ba48dceba3efba830208f04f89e465990d9ef3`; `libEGL=44116767b6d4d02362b2dd117cf16af2e719ef143b573f9a52b4837c1415b470`; `libGLESv2=8829fec2a560b14bc244cddf4b52f2f711e3841acec162301835e664c9af5aad` |
+| runtime boundary | `RUNTIME_DEVICE_READY=false`; x86_64 Mach-O、未署名 |
+
+VMの6回の`eglCreateContext`はすべて`config=no_config`だった。ES 3.0の
+`0x3098=3`は`max_supported=2.0`により拒否され、直接
+`EGL_BAD_ATTRIBUTE attribute=0x3098 value=3`を記録した。ES 2.0の
+`0x3098=2`は残りの属性列が同一のままcontext作成に成功した。したがって、
+このVMで判明した失敗属性は`EGL_CONTEXT_CLIENT_VERSION (0x3098)`である。
+ただしVM GPUはApple Paravirtualized Graphics Deviceであり、Intel HD 5000で
+同じ属性になること、または別の属性/backendエラーになることは実機確認が必要である。
 
 ## 結論
 

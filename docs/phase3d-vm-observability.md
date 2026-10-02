@@ -46,7 +46,7 @@ planに定めた3B/3C/3D run、manifest SHA-256、artifact名、ANGLE revision�
 Phase 3D run `36507728136`も成功したが、署名・実機起動・KOOV操作は行っていない。
 VM観測の成功もIntel HD Graphics 5000での実機成功を意味しない。
 
-## Phase 5 context属性検証trace（次回CI検証対象）
+## Phase 5 context属性検証trace（CI検証済み、実機確認待ち）
 
 固定ANGLE revisionへ適用するruntime patchに、`validationEGL.cpp`のcontext
 属性検証と属性値検証の結果をstderrへ記録する計装を追加した。各記録は属性キー、
@@ -65,8 +65,9 @@ version拒否時には`EGL_BAD_ATTRIBUTE`と属性`0x3098`（`EGL_CONTEXT_CLIENT
 `CONTEXT_ERROR_ATTRIBUTE_VALUES`も出力し、直接のcontext error markerがある場合は
 `egl-bad-attribute-from-context-error-attribute`と分類する。
 この変更のruntime patch SHA-256は
-`f5fbfed241a9f465cd7c44351dce494f204ba88a6b6c60cd5e083c6a00550fb3`であり、固定revision
-上のpatch適用・build・VM観測CIが成功するまでは、実機属性原因の判定結果を更新しない。
+`f5fbfed241a9f465cd7c44351dce494f204ba88a6b6c60cd5e083c6a00550fb3`である。固定revision
+上のpatch適用・build・VM観測CIは成功したが、VMはIntel HD Graphics 5000ではないため、
+実機属性原因の判定はまだ更新しない。
 
 ## Chrome 154.0.8037.58 rebuild observation record
 
@@ -287,33 +288,49 @@ the real-device Case C command remains unchanged until separately approved.
 
 | item | record |
 | --- | --- |
-| VM run | `36946879622` / success |
-| observation commit | `a3d1954772057ae9ce8dff663d326a1238e19570` |
-| input runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.59-angle-1ff8799c-family1-experiment-36940729814` |
-| diagnostics artifact | `phase3d-dynamic-angle-36940729814-36946879622` / GitHub digest `sha256:b75646a957bd588fea4a918f544439958e07f47fdb50d0ec8dd1b01ea291777a` |
+| runtime build run | [`36953609001`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36953609001) / success |
+| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.59-angle-1ff8799c-family1-experiment-36953609001` / GitHub digest `sha256:82911fd9fb66deca39460694b95833f761e918a056acb82636e7bea1ff8c822b` |
+| VM run | [`36956483884`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36956483884) / success |
+| observation commit | `611ca1bf15a5a7e760e498d1554f75266cde926a` |
+| input runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.59-angle-1ff8799c-family1-experiment-36953609001` |
+| diagnostics artifact | `phase3d-dynamic-angle-36953609001-36956483884` / GitHub digest `sha256:e036737c68d4080fa83852c5b74feaf8c0462547aceb515a6238f5f1ec7a1eec` |
 | runtime opt-in | `--disable-angle-features=requireGpuFamily2,requireMsl21` / applied `true` |
-| manifest / ANGLE | `3bb097dd9edbb4d3732898b5dbe0f224a70c9214a9299b56285e00859ea667dc` / `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
+| Chrome / Chromium / ANGLE | `154.0.8037.59` / `b5a24985a2f5ed35909845221b7203c5d8995c8f` / `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
+| manifest SHA-256 | `6b62e9e0fbd212280ea98c2d04ba48dceba3efba830208f04f89e465990d9ef3` |
+| runtime patch SHA-256 | `f5fbfed241a9f465cd7c44351dce494f204ba88a6b6c60cd5e083c6a00550fb3` |
+| dylib SHA-256 | `libEGL.dylib=44116767b6d4d02362b2dd117cf16af2e719ef143b573f9a52b4837c1415b470`; `libGLESv2.dylib=8829fec2a560b14bc244cddf4b52f2f711e3841acec162301835e664c9af5aad` |
+| device boundary | `RUNTIME_DEVICE_READY=false`; x86_64 Mach-O、未署名 |
 
 With the opt-in, the VM reached Metal device selection, command queue,
 format table, shader library, render utilities, and successful EGL display
-initialization.  The runtime trace then showed the same no-config attribute
-list on each context attempt.  The ES 3.0 attempt used `0x3098=3` and was
-rejected by `context_version_check requested=3.0 max_supported=2.0`; the
-otherwise identical ES 2.0 attempt used `0x3098=2` and returned a context.
-The trace reported `eglGetError_return=0x3004`, and Chrome labelled the
-failure `EGL_BAD_ATTRIBUTE`.  Therefore, in this VM run the observed
-`EGL_BAD_ATTRIBUTE` is the ANGLE unsupported-context-version path, with
-`0x3098` changing from 2 to 3, not an independently rejected attribute from
-the remaining list.  The VM still created no WebGL context because Chrome's
-ES 3.0 initialization path failed and fallback remained disabled for that
-attempt.
+initialization.  All six context calls used `config=no_config`; four ES 3.0
+attempts used `0x3098=3` and two ES 2.0 attempts used `0x3098=2`.  The
+release runtime reported `CONTEXT_VALIDATION_ENABLED_VALUES=false`.  The ES
+3.0 attempts were rejected by `context_version_check requested=3.0
+max_supported=2.0`, followed by the direct marker
+`context_error code=EGL_BAD_ATTRIBUTE attribute=0x3098 value=3`; the otherwise
+identical ES 2.0 attempts returned a context.  The trace reported
+`eglGetError_return=0x3004`, and Chrome labelled the failure
+`EGL_BAD_ATTRIBUTE`.  The analyzer therefore classified this run as
+`CONCLUSION=egl-bad-attribute-from-context-error-attribute`: the failing
+attribute observed in this VM run is `EGL_CONTEXT_CLIENT_VERSION (0x3098)`
+with value `3`, not an independently rejected remaining attribute.
+
+The dynamic probe observed both replacement dylibs loading in the GPU process,
+successful EGL display initialization, and GPU-disabled fallback.  The stock
+control also reached the fallback boundary.  Dynamic and stock WebGL smoke
+both reached the page, but WebGL1/WebGL2 contexts were null and no draw
+completed.  These are CI/VM observations, not Intel HD Graphics 5000 or
+KOOV results.
 
 This does not identify the behavior of Intel HD Graphics 5000.  The VM
 reported an Apple Paravirtualized Graphics Device, and the artifact remains
 `RUNTIME_DEVICE_READY=false`; real-device evidence is still required to
-confirm whether the same max-version boundary and error mapping occur there.
-The CI-generated `context-trace-analysis.txt` records the same conclusion as
-`CONCLUSION=egl-bad-attribute-from-context-version-rejection`.
+confirm whether the same max-version boundary and error mapping occur there,
+or whether the real device produces a different EGL error before context
+creation.  The next device-only question is therefore whether Intel HD 5000
+also reports `EGL_CONTEXT_CLIENT_VERSION (0x3098)` or identifies another
+attribute/backend boundary.
 
 ## Explicit limits
 
