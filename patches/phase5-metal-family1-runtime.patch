@@ -373,7 +373,7 @@ diff --git a/src/libANGLE/Display.cpp b/src/libANGLE/Display.cpp
 diff --git a/src/libANGLE/Context.cpp b/src/libANGLE/Context.cpp
 --- a/src/libANGLE/Context.cpp
 +++ b/src/libANGLE/Context.cpp
-@@ -789,4 +789,14 @@
+@@ -789,4 +789,18 @@
 -    if (getClientVersion() > getDisplay()->getMaxSupportedESVersion())
 +    const Version requestedVersion    = getClientVersion();
 +    const Version maxSupportedVersion = getDisplay()->getMaxSupportedESVersion();
@@ -386,6 +386,10 @@ diff --git a/src/libANGLE/Context.cpp b/src/libANGLE/Context.cpp
      {
 +        ::fprintf(stderr,
 +                  "[ANGLE_PHASE5_EGL] context_version_rejected reason=max_supported_version\n");
++        ::fflush(stderr);
++        ::fprintf(stderr,
++                  "[ANGLE_PHASE5_EGL] context_error code=EGL_BAD_ATTRIBUTE attribute=0x3098 value=%u\n",
++                  requestedVersion.getMajor());
 +        ::fflush(stderr);
          return egl::Error(EGL_BAD_ATTRIBUTE, "Requested version is not supported");
      }
@@ -432,3 +436,17 @@ diff --git a/src/libANGLE/validationEGL.cpp b/src/libANGLE/validationEGL.cpp
 +}
 +
 +bool ValidateCreateContext(const ValidationContext *val,
+diff --git a/src/libGLESv2/entry_points_egl_autogen.cpp b/src/libGLESv2/entry_points_egl_autogen.cpp
+--- a/src/libGLESv2/entry_points_egl_autogen.cpp
++++ b/src/libGLESv2/entry_points_egl_autogen.cpp
+@@ -10,1 +10,2 @@
+ #include "libGLESv2/entry_points_egl_autogen.h"
++#include <cstdio>
+@@ -138,1 +138,6 @@
+-            if (IsEGLValidationEnabled())
++            const bool validationEnabled = IsEGLValidationEnabled();
++            ::fprintf(stderr,
++                      "[ANGLE_PHASE5_EGL] eglCreateContext_validation_enabled=%s\n",
++                      validationEnabled ? "true" : "false");
++            ::fflush(stderr);
++            if (validationEnabled)
