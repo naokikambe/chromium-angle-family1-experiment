@@ -32,6 +32,8 @@ grep -F 'scripts/analyze-phase5-context-trace.sh' "$workflow" >/dev/null
 grep -F 'phase5-context-trace-analysis-v1' "$context_analyzer" >/dev/null
 grep -F 'NON_VERSION_ATTRIBUTES_IDENTICAL' "$context_analyzer" >/dev/null
 grep -F 'egl-bad-attribute-from-context-version-rejection' "$context_analyzer" >/dev/null
+grep -F 'CONTEXT_ATTRIBUTE_VALIDATION_FAILURE_KEYS' "$context_analyzer" >/dev/null
+grep -F 'context_attribute_value_validation' "$context_analyzer" >/dev/null
 grep -F 'PHASE3_APPROVED_RUNTIME_OPT_IN' "$repo_root/scripts/phase3-test-copy-common.sh" >/dev/null
 grep -F 'PHASE3_RELEASE_RUNTIME_OPT_IN' "$repo_root/scripts/phase3-test-copy-common.sh" >/dev/null
 grep -F 'runtime_opt_in_applied' "$probe" >/dev/null

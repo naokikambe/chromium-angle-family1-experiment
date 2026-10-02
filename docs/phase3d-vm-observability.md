@@ -1,6 +1,6 @@
 # Phase 3D: macOS VM observability boundary
 
-更新日: 2026-09-29
+更新日: 2026-10-02
 
 Phase 3D is a GitHub-hosted macOS Intel observation stage.  It is deliberately
 separate from the user-owned-device Phase 3C and Case B/C procedures.  It does
@@ -45,6 +45,23 @@ planに定めた3B/3C/3D run、manifest SHA-256、artifact名、ANGLE revision�
 別の記録である。後続のHuman承認によりruntime artifact `36501314503`を入力にした
 Phase 3D run `36507728136`も成功したが、署名・実機起動・KOOV操作は行っていない。
 VM観測の成功もIntel HD Graphics 5000での実機成功を意味しない。
+
+## Phase 5 context属性検証trace（次回CI検証対象）
+
+固定ANGLE revisionへ適用するruntime patchに、`validationEGL.cpp`のcontext
+属性検証と属性値検証の結果をstderrへ記録する計装を追加した。各記録は属性キー、
+属性値（値検証時）、`result=true/false`を含む。既存の`Context.cpp`のES version
+checkおよび`libEGL` wrapperの生属性列・config選択・`eglGetError`記録とは別の
+validation境界であり、`EGL_BAD_ATTRIBUTE`の発生がversion拒否か属性検証拒否かを
+CI/VM上で分類できる。
+
+解析器は`CONTEXT_ATTRIBUTE_VALIDATION_FAILURE_KEYS`と
+`CONTEXT_ATTRIBUTE_VALUE_VALIDATION_FAILURE_KEYS`を出力し、失敗キーがある場合は
+`egl-bad-attribute-from-context-attribute-validation`と分類する。次回の実機結果収集も
+同じ解析器を自動実行し、`context-trace-analysis.txt`を新しい結果ディレクトリへ保存する。
+この変更のruntime patch SHA-256は
+`e088590d033ee428056fcf4c3cf609ff424b5263208ed2cb714c8e2c5d3f5bd2`であり、固定revision
+上のpatch適用・build・VM観測CIが成功するまでは、実機属性原因の判定結果を更新しない。
 
 ## Chrome 154.0.8037.58 rebuild observation record
 

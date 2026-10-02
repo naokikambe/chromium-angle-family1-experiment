@@ -24,6 +24,14 @@ function reset_call() {
     context_result = ""
 }
 
+function append_unique_key(list, key) {
+    if (list == "")
+        return key
+    if (index(";" list ";", ";" key ";"))
+        return list
+    return list ";" key
+}
+
 function finish_call() {
     if (!in_call)
         return
@@ -79,6 +87,8 @@ BEGIN {
     context_created_count = 0
     bad_attribute_count = 0
     error_3004_count = 0
+    context_attribute_validation_failure_keys = ""
+    context_attribute_value_validation_failure_keys = ""
     first_max_supported_version = ""
     max_supported_version_consistent = 1
     reset_call()
@@ -130,6 +140,21 @@ BEGIN {
         context_rejected = 1
         next
     }
+    if ($0 ~ /^\[ANGLE_PHASE5_EGL\] context_attribute_validation /) {
+        split($3, key_field, "=")
+        split($4, result_field, "=")
+        if (result_field[2] == "false")
+            context_attribute_validation_failure_keys = append_unique_key(context_attribute_validation_failure_keys, key_field[2])
+        next
+    }
+    if ($0 ~ /^\[ANGLE_PHASE5_EGL\] context_attribute_value_validation /) {
+        split($3, key_field, "=")
+        split($4, value_field, "=")
+        split($5, result_field, "=")
+        if (result_field[2] == "false")
+            context_attribute_value_validation_failure_keys = append_unique_key(context_attribute_value_validation_failure_keys, key_field[2])
+        next
+    }
     if ($0 ~ /^\[ANGLE_PHASE5_EGL\] eglCreateContext_return_/) {
         context_result = $2
         next
@@ -141,7 +166,11 @@ END {
     non_version_attributes_identical = (es3_call_count > 0 && es2_call_count > 0 &&
                                         es3_attributes_consistent && es2_attributes_consistent &&
                                         es3_non_version_attributes == es2_non_version_attributes)
-    if (bad_attribute_count > 0 && context_version_rejection_count > 0 &&
+    if (bad_attribute_count > 0 &&
+        (context_attribute_validation_failure_keys != "" ||
+         context_attribute_value_validation_failure_keys != "")) {
+        conclusion = "egl-bad-attribute-from-context-attribute-validation"
+    } else if (bad_attribute_count > 0 && context_version_rejection_count > 0 &&
         non_version_attributes_identical) {
         conclusion = "egl-bad-attribute-from-context-version-rejection"
     } else if (bad_attribute_count > 0 && context_version_rejection_count > 0) {
@@ -162,6 +191,10 @@ END {
     printf "CONTEXT_VERSION_REJECTION_COUNT=%d\n", context_version_rejection_count
     printf "EGL_BAD_ATTRIBUTE_COUNT=%d\n", bad_attribute_count
     printf "EGL_ERROR_3004_COUNT=%d\n", error_3004_count
+    printf "CONTEXT_ATTRIBUTE_VALIDATION_FAILURE_KEYS=%s\n",
+           context_attribute_validation_failure_keys
+    printf "CONTEXT_ATTRIBUTE_VALUE_VALIDATION_FAILURE_KEYS=%s\n",
+           context_attribute_value_validation_failure_keys
     printf "CONTEXT_VERSION_ATTRIBUTE_KEY=%s\n", (version_key == "" ? "unknown" : version_key)
     printf "ES3_CONTEXT_VERSION_VALUE=%s\n", (es3_call_count > 0 ? "3" : "unknown")
     printf "ES2_CONTEXT_VERSION_VALUE=%s\n", (es2_call_count > 0 ? "2" : "unknown")

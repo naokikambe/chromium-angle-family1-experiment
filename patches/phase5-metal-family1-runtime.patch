@@ -388,4 +388,48 @@ diff --git a/src/libANGLE/Context.cpp b/src/libANGLE/Context.cpp
 +                  "[ANGLE_PHASE5_EGL] context_version_rejected reason=max_supported_version\n");
 +        ::fflush(stderr);
          return egl::Error(EGL_BAD_ATTRIBUTE, "Requested version is not supported");
-     }
+         }
+
+diff --git a/src/libANGLE/validationEGL.cpp b/src/libANGLE/validationEGL.cpp
+--- a/src/libANGLE/validationEGL.cpp
++++ b/src/libANGLE/validationEGL.cpp
+@@ -13,1 +13,2 @@
+ #include <array>
++#include <cstdio>
+@@ -1823,1 +1823,1 @@
+-bool ValidateCreateContextAttribute(const ValidationContext *val,
++bool ValidateCreateContextAttributeImpl(const ValidationContext *val,
+@@ -2071,1 +2071,1 @@
+-bool ValidateCreateContextAttributeValue(const ValidationContext *val,
++bool ValidateCreateContextAttributeValueImpl(const ValidationContext *val,
+@@ -2285,1 +2285,29 @@
+-bool ValidateCreateContext(const ValidationContext *val,
++bool ValidateCreateContextAttribute(const ValidationContext *val,
++                                    const Display *display,
++                                    EGLAttrib attribute)
++{
++    const bool valid = ValidateCreateContextAttributeImpl(val, display, attribute);
++    ::fprintf(stderr,
++              "[ANGLE_PHASE5_EGL] context_attribute_validation key=0x%04x result=%s\n",
++              static_cast<unsigned int>(attribute), valid ? "true" : "false");
++    ::fflush(stderr);
++    return valid;
++}
++
++bool ValidateCreateContextAttributeValue(const ValidationContext *val,
++                                         const Display *display,
++                                         const gl::Context *shareContext,
++                                         EGLAttrib attribute,
++                                         EGLAttrib value)
++{
++    const bool valid =
++        ValidateCreateContextAttributeValueImpl(val, display, shareContext, attribute, value);
++    ::fprintf(stderr,
++              "[ANGLE_PHASE5_EGL] context_attribute_value_validation key=0x%04x value=%d result=%s\n",
++              static_cast<unsigned int>(attribute), static_cast<int>(value),
++              valid ? "true" : "false");
++    ::fflush(stderr);
++    return valid;
++}
++
++bool ValidateCreateContext(const ValidationContext *val,

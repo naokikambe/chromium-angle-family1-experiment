@@ -32,6 +32,12 @@ trace analyzerで再解析した。通常のCase B診断・live maps診断では
 `eglGetPlatformDisplay_return_display`、`eglInitialize_return_success`、続く
 `context-trace-analysis.txt`であり、これらが得られるまでWebGL/KOOVへ進めない。
 
+次回のCI検証後に使用する収集スクリプトは、保存された`stderr.log`に対して同じ
+context trace analyzerを自動実行する。新しい結果ディレクトリに保存される解析結果は、
+属性検証拒否のキー、属性値検証拒否のキー、または`Context::initialize()`のES version
+拒否を分離する。既存のattempt/evidenceは再収集・上書きせず、CI成功後に別の承認済み
+attemptでのみこの出力を取得する。
+
 | 対象 | 証跡・結果 |
 | --- | --- |
 | Phase 3B synthetic CI | [`36632187071`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36632187071) / success |
