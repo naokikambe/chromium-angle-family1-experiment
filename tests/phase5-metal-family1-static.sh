@@ -36,6 +36,12 @@ grep -F 'run_family1_experiment:' "$workflow" >/dev/null
 grep -F 'family1_experiment_patch_sha256:' "$workflow" >/dev/null
 grep -F 'family1_experiment: ${{ inputs.run_family1_experiment }}' "$workflow" >/dev/null
 grep -F 'family1_experiment_patch_sha256: ${{ inputs.family1_experiment_patch_sha256 }}' "$workflow" >/dev/null
+grep -F 'run_context_es2_fallback_experiment:' "$workflow" >/dev/null
+grep -F 'context_es2_fallback_patch_sha256:' "$workflow" >/dev/null
+grep -F 'runtime_cft_compatibility:' "$workflow" >/dev/null
+grep -F 'context_es2_fallback_experiment: ${{ inputs.run_context_es2_fallback_experiment }}' "$workflow" >/dev/null
+grep -F 'context_es2_fallback_patch_sha256: ${{ inputs.context_es2_fallback_patch_sha256 }}' "$workflow" >/dev/null
+grep -F 'cft_compatibility: ${{ inputs.runtime_cft_compatibility }}' "$workflow" >/dev/null
 grep -F 'name: GN configuration preflight' "$workflow" >/dev/null
 test "$(grep -c 'gn gen out/Phase5' "$workflow")" -eq 1
 grep -F 'gn desc out/Phase5 //:libGLESv2 configs' "$workflow" >/dev/null

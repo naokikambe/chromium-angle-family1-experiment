@@ -2,11 +2,45 @@
 
 更新日: 2026-10-02
 
-## 最新の実機結論: Chrome 154.0.8037.97（Case C、2026-10-02）
+## 最新の実機結論と次のCIゲート: Chrome 154.0.8037.97（Case C、2026-10-02）
 
 `.97`の正確なruntime artifactを新しい隔離test copyへ投入し、Apple Development署名とdeep strict verificationを通過させたうえで、Case CのGPU startup traceを取得した。Intel HD Graphics 5000では、`requireGpuFamily2`を無効化すると`eglInitialize`は成功し、ES 3.0 context要求の`0x3098=3`（`EGL_CONTEXT_CLIENT_VERSION`）が`EGL_BAD_ATTRIBUTE`になった。ES 2.0の同じ属性`0x3098=2`は成功した。したがって、今回の目標である「Intel HD 5000上でどの属性が`EGL_BAD_ATTRIBUTE`になるか」は特定済みである。
 
 WebGLとKOOVはまだ実施していない。ES 3.0要求失敗後にGPU processが終了するため、WebGLへ進む条件は未成立である。replacement dylibの同一GPU PIDによる直接ロード証拠は、終了後collectorのプロセス情報取得が完了しなかったため未確定として扱う。
+
+### 現在の判定: WebGL検証可能状態ではない
+
+実機Case Cで`eglInitialize`成功と失敗属性の特定までは完了したが、ChromeのGPU
+初期化をES2へ継続させるCI検証はまだ完了していない。したがって、現時点で
+WebGL検証可能とは判定しない。
+
+| 境界 | 判定 | 根拠 |
+| --- | --- | --- |
+| ANGLEロード | PENDING | dynamic起動とANGLE計装は確認したが、同一GPU PIDのreplacement dylib直接ロード証拠は未確定 |
+| GPU/EGL display初期化 | PASS（Case C限定） | `requireGpuFamily2` override後に`eglInitialize_return_success`を確認。通常Case BはFamily 2 gateで失敗 |
+| Chrome GPU context初期化 | BLOCKED | Intel HD Graphics 5000の`max_es_version=2.0`に対し、ES3要求の`0x3098=3`が`EGL_BAD_ATTRIBUTE` |
+| WebGL | PENDING | GPU context失敗後に停止し、実機WebGL1/2 contextとdrawは未実施 |
+| KOOV | PENDING | WebGL受入れ前のため未実施 |
+| ES3→ES2 fallback実験 | PENDING | CI-only opt-in patchを実装したが、static・runtime build・VM観測が未完了 |
+
+今回のソース確認では、macOSのChromium側でGLES3非対応時の自動fallbackが既定で
+無効になり、`--disable-angle-features`だけではChromeのES3要求をES2へ変更しない
+ことが分かった。そこで、Family 1実験に限定した
+`patches/phase5-metal-family1-context-es2-fallback.patch`を追加した。このpatchは
+最大対応versionがES2で、要求がES3、かつWebGL contextではない場合だけGPU情報用
+contextをES2 frontendへ切り替える。WebGL contextを対象外とするためWebGL2を暗黙に
+ES2へ降格せず、WebGL1を含む後続の挙動はCI/実機で別途確認する。
+
+| fallback実験の証跡 | 値 |
+| --- | --- |
+| patch SHA-256 | `7bd8a40eaa6311c4ca37ebd68c19ab3d9822b936000e38dbadea70b92667a014` |
+| compile-time define | `ANGLE_PHASE5_METAL_FAMILY1_ES2_FALLBACK_EXPERIMENT` |
+| 適用範囲 | Family 1 experiment artifactの明示opt-inのみ。通常artifact・実機準備済み判定には反映しない |
+| 現在のmanifest境界 | `RUNTIME_DEVICE_READY=false`を維持。新patchを含むartifactはCI/VM検証前で、実機には使用しない |
+
+次のCIでは、static audit、runtime artifact build、`.92` compatibility VMでの
+fallback marker数、GPU/EGL、WebGL1/2 context、drawを順に確認する。CI成功後も、
+実機への署名・配置・Chrome起動・WebGL操作には別の人間承認が必要である。
 
 ### 現行`.97` CI入力とVM availability boundary
 
@@ -282,7 +316,7 @@ Paravirtualized Graphics Deviceであり、Intel HD Graphics 5000実機の代替
 
 - 実機でreplacement dylibがロードされたかを、同一GPU PIDの`lsof`/`vmmap`で直接証明できていない。今回のcollector後処理はプロセス情報取得で停止したため、引数や計装だけをload証拠にはしない。
 - `.97` Case BではFamily 2 availability gateが`eglInitialize`前の停止原因として確認できた。Case Cでそのgateを無効化するとdisplay初期化は成功したため、初期化失敗の最初の原因境界は分離できた。
-- `.97` Case CではMetal capabilityが`max_es_version=2.0`であることを実機で確認した。ES 3.0要求時の`EGL_BAD_ATTRIBUTE`は`EGL_CONTEXT_CLIENT_VERSION (0x3098)`の値3と特定済みだが、ES3を必要とするChrome初期化をどのように扱うかは未決定である。
+- `.97` Case CではMetal capabilityが`max_es_version=2.0`であることを実機で確認した。ES 3.0要求時の`EGL_BAD_ATTRIBUTE`は`EGL_CONTEXT_CLIENT_VERSION (0x3098)`の値3と特定済みであり、非WebGL GPU情報contextだけをES2へ切り替えるCI-only fallback experimentを実装した。ただしCI/VM未検証で、Chrome初期化の最終的な扱いは未確定である。
 - runtime patchは`newCommandQueue`直後のnil guardを追加するだけで、Family 1
   availability gateを迂回しない。
 - manifestの`RUNTIME_OPT_IN`は`--disable-angle-features=requireGpuFamily2,requireMsl21`
@@ -317,16 +351,16 @@ post-run fallbackを改善し、次回の人間承認済み実機retryでload証
 ### 3. ソース診断とCI/VM確認
 
 固定ANGLE revisionのFamily 1 gate、`max_es_version`計算、context version拒否の到達順序は
-ソースと`.97`実機traceで対応づけ済みである。修正を行う場合は、まずtargeted test、static
-audit、artifact validation、VM観測で確認する。`requireMsl21`は実装と効果を確認するまで
-追加しない。
+ソースと`.97`実機traceで対応づけ済みである。追加したfallback experimentは、まずtargeted
+test、static audit、artifact validation、VM観測で確認する。`requireMsl21`は実装と効果を
+確認するまで追加しない。
 
 ### 4. WebGL以降の実機試行
 
-次の実機操作は、`EGL_CONTEXT_CLIENT_VERSION=3`の失敗を踏まえたES2 fallbackまたは
-ES3要求の扱いを設計し、必要なコード変更をCIで検証した後、別途承認を得て行う。
-GPU/EGLの受入れ条件が成立した後にだけWebGLへ進み、WebGLのcontext生成と描画成功後に
-だけKOOVへ進む。各段階の失敗では結果を保全して停止する。
+次の実機操作は、`EGL_CONTEXT_CLIENT_VERSION=3`の失敗に対するCI-only fallback
+experimentがCI/VMで受入れられた後、別途承認を得て行う。GPU/EGLの受入れ条件が成立した
+後にだけWebGLへ進み、WebGLのcontext生成と描画成功後にだけKOOVへ進む。各段階の失敗では
+結果を保全して停止する。
 
 ## 状態の境界
 

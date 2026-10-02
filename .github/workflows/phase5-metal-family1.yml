@@ -37,6 +37,21 @@ on:
         required: false
         default: 7bb9d8a09276f60d0d62a5d4cefd2d553ca12a59635a8240d146d5262dbf212e
         type: string
+      run_context_es2_fallback_experiment:
+        description: Run the explicit Family 1 ES3-to-ES2 context fallback artifact
+        required: false
+        default: false
+        type: boolean
+      context_es2_fallback_patch_sha256:
+        description: SHA-256 of the ES3-to-ES2 context fallback patch
+        required: false
+        default: 7bd8a40eaa6311c4ca37ebd68c19ab3d9822b936000e38dbadea70b92667a014
+        type: string
+      runtime_cft_compatibility:
+        description: Use the pinned same-series Chrome for Testing compatibility input for VM-only observation
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: phase5-metal-family1-${{ github.ref }}
@@ -284,5 +299,8 @@ jobs:
       runtime_patch_sha256: ${{ inputs.runtime_patch_sha256 }}
       family1_experiment: ${{ inputs.run_family1_experiment }}
       family1_experiment_patch_sha256: ${{ inputs.family1_experiment_patch_sha256 }}
+      context_es2_fallback_experiment: ${{ inputs.run_context_es2_fallback_experiment }}
+      context_es2_fallback_patch_sha256: ${{ inputs.context_es2_fallback_patch_sha256 }}
+      cft_compatibility: ${{ inputs.runtime_cft_compatibility }}
     permissions:
       contents: read

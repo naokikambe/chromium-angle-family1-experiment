@@ -43,6 +43,8 @@ runtime_schema=$(manifest_value RUNTIME_ARTIFACT_SCHEMA)
 runtime_profile=$(manifest_value RUNTIME_PROFILE)
 family1_experiment=$(manifest_value_optional FAMILY1_EXPERIMENT)
 family1_experiment=${family1_experiment:-false}
+context_es2_fallback_experiment=$(manifest_value_optional CONTEXT_ES2_FALLBACK_EXPERIMENT)
+context_es2_fallback_experiment=${context_es2_fallback_experiment:-false}
 if [[ "$family1_experiment" == true ]]; then
   [[ "$runtime_schema" == phase5-metal-family1-family1-experiment-v1 ]] ||
     fail "unexpected Family 1 experiment artifact schema: $runtime_schema"
@@ -94,6 +96,36 @@ if [[ "$family1_experiment" == true ]]; then
 else
   [[ "$(manifest_value_optional UNSUPPORTED_HARDWARE_OVERRIDE)" != true ]] ||
     fail 'base runtime artifact unexpectedly enables unsupported hardware override'
+fi
+
+[[ "$context_es2_fallback_experiment" == false || "$context_es2_fallback_experiment" == true ]] ||
+  fail 'invalid CONTEXT_ES2_FALLBACK_EXPERIMENT value'
+if [[ "$context_es2_fallback_experiment" == true ]]; then
+  [[ "$family1_experiment" == true ]] ||
+    fail 'context fallback experiment requires the Family 1 experiment'
+  context_patch_path=$(manifest_value CONTEXT_ES2_FALLBACK_PATCH_PATH)
+  [[ "$context_patch_path" == patches/phase5-metal-family1-context-es2-fallback.patch ]] ||
+    fail "unexpected context fallback patch path: $context_patch_path"
+  [[ "$context_patch_path" != /* && "$context_patch_path" != *..* ]] ||
+    fail 'context fallback patch path is not repository-relative'
+  context_patch_sha=$(manifest_value CONTEXT_ES2_FALLBACK_PATCH_SHA256)
+  [[ "$context_patch_sha" =~ ^[0-9a-f]{64}$ ]] ||
+    fail 'invalid context fallback patch SHA-256'
+  [[ -f "$artifact_dir/context-es2-fallback-patch.diff" &&
+     ! -L "$artifact_dir/context-es2-fallback-patch.diff" ]] ||
+    fail 'context fallback patch provenance file is missing or symlinked'
+  [[ "$(shasum -a 256 "$artifact_dir/context-es2-fallback-patch.diff" | awk '{print $1}')" == "$context_patch_sha" ]] ||
+    fail 'context fallback patch provenance hash mismatch'
+  grep -F '#define ANGLE_PHASE5_METAL_FAMILY1_ES2_FALLBACK_EXPERIMENT 1' \
+    "$artifact_dir/context-es2-fallback-patch.diff" >/dev/null ||
+    fail 'context fallback compile-time define is missing'
+  [[ "$(manifest_value CONTEXT_ES2_FALLBACK_COMPILE_TIME_DEFINE)" ==
+     ANGLE_PHASE5_METAL_FAMILY1_ES2_FALLBACK_EXPERIMENT ]] ||
+    fail 'context fallback compile-time define provenance is missing'
+else
+  [[ "$(manifest_value_optional CONTEXT_ES2_FALLBACK_COMPILE_TIME_DEFINE)" !=
+     ANGLE_PHASE5_METAL_FAMILY1_ES2_FALLBACK_EXPERIMENT ]] ||
+    fail 'base runtime artifact unexpectedly enables context fallback'
 fi
 
 runtime_opt_in=$(manifest_value RUNTIME_OPT_IN)

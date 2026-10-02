@@ -25,6 +25,16 @@ on:
         required: false
         default: 7bb9d8a09276f60d0d62a5d4cefd2d553ca12a59635a8240d146d5262dbf212e
         type: string
+      context_es2_fallback_experiment:
+        description: Build the explicit Family 1 ES3-to-ES2 context fallback experiment artifact
+        required: false
+        default: false
+        type: boolean
+      context_es2_fallback_patch_sha256:
+        description: SHA-256 of the checked-in ES3-to-ES2 context fallback patch
+        required: false
+        default: 7bd8a40eaa6311c4ca37ebd68c19ab3d9822b936000e38dbadea70b92667a014
+        type: string
       cft_compatibility:
         description: Build the pinned same-series Chrome for Testing compatibility artifact for VM-only observation
         required: false
@@ -57,6 +67,16 @@ on:
         required: false
         default: 7bb9d8a09276f60d0d62a5d4cefd2d553ca12a59635a8240d146d5262dbf212e
         type: string
+      context_es2_fallback_experiment:
+        description: Build the explicit Family 1 ES3-to-ES2 context fallback experiment artifact
+        required: false
+        default: false
+        type: boolean
+      context_es2_fallback_patch_sha256:
+        description: SHA-256 of the checked-in ES3-to-ES2 context fallback patch
+        required: false
+        default: 7bd8a40eaa6311c4ca37ebd68c19ab3d9822b936000e38dbadea70b92667a014
+        type: string
       cft_compatibility:
         description: Build the pinned same-series Chrome for Testing compatibility artifact for VM-only observation
         required: false
@@ -88,6 +108,9 @@ jobs:
       FAMILY1_EXPERIMENT: ${{ inputs.family1_experiment }}
       FAMILY1_EXPERIMENT_PATCH_PATH: patches/phase5-metal-family1-family1-experiment.patch
       FAMILY1_EXPERIMENT_PATCH_SHA256: ${{ inputs.family1_experiment_patch_sha256 }}
+      CONTEXT_ES2_FALLBACK_EXPERIMENT: ${{ inputs.context_es2_fallback_experiment }}
+      CONTEXT_ES2_FALLBACK_PATCH_PATH: patches/phase5-metal-family1-context-es2-fallback.patch
+      CONTEXT_ES2_FALLBACK_PATCH_SHA256: ${{ inputs.context_es2_fallback_patch_sha256 }}
       CFT_COMPATIBILITY: ${{ inputs.cft_compatibility }}
 
     steps:
@@ -123,6 +146,9 @@ jobs:
             .github/workflows/phase5-metal-family1-runtime.yml \
             "$RUNTIME_PATCH_PATH" \
             "$FAMILY1_EXPERIMENT_PATCH_PATH"
+          bash tests/phase5-metal-family1-context-es2-fallback-static.sh \
+            .github/workflows/phase5-metal-family1-runtime.yml \
+            "$CONTEXT_ES2_FALLBACK_PATCH_PATH"
           bash -n scripts/verify-phase5-runtime-artifact.sh
           ruby -e 'require "yaml"; YAML.parse_file(".github/workflows/phase5-metal-family1-runtime.yml")'
 
@@ -154,6 +180,16 @@ jobs:
           else
             ! grep -F '#define ANGLE_PHASE5_METAL_FAMILY1_EXPERIMENT 1' "$RUNTIME_PATCH_PATH" >/dev/null
           fi
+          [[ "$CONTEXT_ES2_FALLBACK_EXPERIMENT" == true || "$CONTEXT_ES2_FALLBACK_EXPERIMENT" == false ]]
+          [[ "$CONTEXT_ES2_FALLBACK_PATCH_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test -f "$CONTEXT_ES2_FALLBACK_PATCH_PATH"
+          test "$(shasum -a 256 "$CONTEXT_ES2_FALLBACK_PATCH_PATH" | awk '{print $1}')" = "$CONTEXT_ES2_FALLBACK_PATCH_SHA256"
+          if [[ "$CONTEXT_ES2_FALLBACK_EXPERIMENT" == true ]]; then
+            [[ "$FAMILY1_EXPERIMENT" == true ]] ||
+              { echo 'ES2 fallback experiment requires the Family 1 experiment' >&2; exit 1; }
+            grep -F '#define ANGLE_PHASE5_METAL_FAMILY1_ES2_FALLBACK_EXPERIMENT 1' \
+              "$CONTEXT_ES2_FALLBACK_PATCH_PATH" >/dev/null
+          fi
           {
             printf 'ANGLE_REVISION=%s\n' "$ANGLE_REVISION"
             printf 'CHROME_VERSION=%s\n' "$CHROME_VERSION"
@@ -162,6 +198,9 @@ jobs:
             printf 'FAMILY1_EXPERIMENT=%s\n' "$FAMILY1_EXPERIMENT"
             printf 'FAMILY1_EXPERIMENT_PATCH_PATH=%s\n' "$FAMILY1_EXPERIMENT_PATCH_PATH"
             printf 'FAMILY1_EXPERIMENT_PATCH_SHA256=%s\n' "$FAMILY1_EXPERIMENT_PATCH_SHA256"
+            printf 'CONTEXT_ES2_FALLBACK_EXPERIMENT=%s\n' "$CONTEXT_ES2_FALLBACK_EXPERIMENT"
+            printf 'CONTEXT_ES2_FALLBACK_PATCH_PATH=%s\n' "$CONTEXT_ES2_FALLBACK_PATCH_PATH"
+            printf 'CONTEXT_ES2_FALLBACK_PATCH_SHA256=%s\n' "$CONTEXT_ES2_FALLBACK_PATCH_SHA256"
             printf 'CFT_COMPATIBILITY=%s\n' "$CFT_COMPATIBILITY"
           } | tee "$DIAG_DIR/source-input.txt"
 
@@ -282,6 +321,10 @@ jobs:
             git apply --unidiff-zero --check -- "$GITHUB_WORKSPACE/$FAMILY1_EXPERIMENT_PATCH_PATH"
             git apply --unidiff-zero -- "$GITHUB_WORKSPACE/$FAMILY1_EXPERIMENT_PATCH_PATH"
           fi
+          if [[ "$CONTEXT_ES2_FALLBACK_EXPERIMENT" == true ]]; then
+            git apply --unidiff-zero --check -- "$GITHUB_WORKSPACE/$CONTEXT_ES2_FALLBACK_PATCH_PATH"
+            git apply --unidiff-zero -- "$GITHUB_WORKSPACE/$CONTEXT_ES2_FALLBACK_PATCH_PATH"
+          fi
           expected_source_paths=$(printf '%s\n' \
               'src/libANGLE/Context.cpp' \
               'src/common/apple_platform_utils.mm' \
@@ -298,6 +341,9 @@ jobs:
             printf 'FAMILY1_EXPERIMENT=%s\n' "$FAMILY1_EXPERIMENT"
             printf 'FAMILY1_EXPERIMENT_PATCH_PATH=%s\n' "$FAMILY1_EXPERIMENT_PATCH_PATH"
             printf 'FAMILY1_EXPERIMENT_PATCH_SHA256=%s\n' "$FAMILY1_EXPERIMENT_PATCH_SHA256"
+            printf 'CONTEXT_ES2_FALLBACK_EXPERIMENT=%s\n' "$CONTEXT_ES2_FALLBACK_EXPERIMENT"
+            printf 'CONTEXT_ES2_FALLBACK_PATCH_PATH=%s\n' "$CONTEXT_ES2_FALLBACK_PATCH_PATH"
+            printf 'CONTEXT_ES2_FALLBACK_PATCH_SHA256=%s\n' "$CONTEXT_ES2_FALLBACK_PATCH_SHA256"
             git status --short
           } > "$DIAG_DIR/source-state.txt"
 
@@ -393,6 +439,10 @@ jobs:
             install -m 0644 "$GITHUB_WORKSPACE/$FAMILY1_EXPERIMENT_PATCH_PATH" \
               "$ARTIFACT_DIR/family1-experiment-patch.diff"
           fi
+          if [[ "$CONTEXT_ES2_FALLBACK_EXPERIMENT" == true ]]; then
+            install -m 0644 "$GITHUB_WORKSPACE/$CONTEXT_ES2_FALLBACK_PATCH_PATH" \
+              "$ARTIFACT_DIR/context-es2-fallback-patch.diff"
+          fi
           install -m 0644 LICENSE "$ARTIFACT_DIR/LICENSE"
           while IFS= read -r -d '' license_file; do
             relative_path=${license_file#"$ANGLE_ROOT"/}
@@ -413,6 +463,9 @@ jobs:
             printf 'FAMILY1_EXPERIMENT=%s\n' "$FAMILY1_EXPERIMENT"
             printf 'FAMILY1_EXPERIMENT_PATCH_PATH=%s\n' "$FAMILY1_EXPERIMENT_PATCH_PATH"
             printf 'FAMILY1_EXPERIMENT_PATCH_SHA256=%s\n' "$FAMILY1_EXPERIMENT_PATCH_SHA256"
+            printf 'CONTEXT_ES2_FALLBACK_EXPERIMENT=%s\n' "$CONTEXT_ES2_FALLBACK_EXPERIMENT"
+            printf 'CONTEXT_ES2_FALLBACK_PATCH_PATH=%s\n' "$CONTEXT_ES2_FALLBACK_PATCH_PATH"
+            printf 'CONTEXT_ES2_FALLBACK_PATCH_SHA256=%s\n' "$CONTEXT_ES2_FALLBACK_PATCH_SHA256"
             printf 'RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21\n'
             printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
             printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
@@ -453,6 +506,14 @@ jobs:
             else
               printf 'FAMILY1_EXPERIMENT=false\n'
               printf 'UNSUPPORTED_HARDWARE_OVERRIDE=false\n'
+            fi
+            if [[ "$CONTEXT_ES2_FALLBACK_EXPERIMENT" == true ]]; then
+              printf 'CONTEXT_ES2_FALLBACK_EXPERIMENT=true\n'
+              printf 'CONTEXT_ES2_FALLBACK_PATCH_PATH=%s\n' "$CONTEXT_ES2_FALLBACK_PATCH_PATH"
+              printf 'CONTEXT_ES2_FALLBACK_PATCH_SHA256=%s\n' "$CONTEXT_ES2_FALLBACK_PATCH_SHA256"
+              printf 'CONTEXT_ES2_FALLBACK_COMPILE_TIME_DEFINE=ANGLE_PHASE5_METAL_FAMILY1_ES2_FALLBACK_EXPERIMENT\n'
+            else
+              printf 'CONTEXT_ES2_FALLBACK_EXPERIMENT=false\n'
             fi
             printf 'CFT_COMPATIBILITY=%s\n' "$CFT_COMPATIBILITY"
             printf 'RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21\n'
@@ -509,6 +570,9 @@ jobs:
             printf 'FAMILY1_EXPERIMENT=%s\n' "$FAMILY1_EXPERIMENT"
             printf 'FAMILY1_EXPERIMENT_PATCH_PATH=%s\n' "$FAMILY1_EXPERIMENT_PATCH_PATH"
             printf 'FAMILY1_EXPERIMENT_PATCH_SHA256=%s\n' "$FAMILY1_EXPERIMENT_PATCH_SHA256"
+            printf 'CONTEXT_ES2_FALLBACK_EXPERIMENT=%s\n' "$CONTEXT_ES2_FALLBACK_EXPERIMENT"
+            printf 'CONTEXT_ES2_FALLBACK_PATCH_PATH=%s\n' "$CONTEXT_ES2_FALLBACK_PATCH_PATH"
+            printf 'CONTEXT_ES2_FALLBACK_PATCH_SHA256=%s\n' "$CONTEXT_ES2_FALLBACK_PATCH_SHA256"
             printf 'CFT_COMPATIBILITY=%s\n' "$CFT_COMPATIBILITY"
             printf 'RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21\n'
             printf 'LIBEGL_RESULT=%s\n' "$(cat "$DIAG_DIR/libegl-result.txt" 2>/dev/null || printf '%s' unavailable)"

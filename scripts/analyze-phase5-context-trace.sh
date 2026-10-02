@@ -99,6 +99,7 @@ BEGIN {
     context_initialize_error_codes = ""
     context_initialize_error_ids = ""
     context_initialize_success_count = 0
+    family1_es3_to_es2_fallback_count = 0
     context_attribute_validation_failure_keys = ""
     context_attribute_value_validation_failure_keys = ""
     first_max_supported_version = ""
@@ -189,6 +190,10 @@ BEGIN {
         context_initialize_success_count++
         next
     }
+    if (index($0, "[ANGLE_PHASE5_EGL] family1_es3_to_es2_fallback ")) {
+        family1_es3_to_es2_fallback_count++
+        next
+    }
     if ($0 ~ /^\[ANGLE_PHASE5_EGL\] context_attribute_validation /) {
         split($3, key_field, "=")
         split($4, result_field, "=")
@@ -250,6 +255,7 @@ END {
     printf "CONTEXT_INITIALIZE_ERROR_CODES=%s\n", context_initialize_error_codes
     printf "CONTEXT_INITIALIZE_ERROR_IDS=%s\n", context_initialize_error_ids
     printf "CONTEXT_INITIALIZE_SUCCESS_COUNT=%d\n", context_initialize_success_count
+    printf "FAMILY1_ES3_TO_ES2_FALLBACK_COUNT=%d\n", family1_es3_to_es2_fallback_count
     printf "CONTEXT_ATTRIBUTE_VALIDATION_FAILURE_KEYS=%s\n",
            context_attribute_validation_failure_keys
     printf "CONTEXT_ATTRIBUTE_VALUE_VALIDATION_FAILURE_KEYS=%s\n",

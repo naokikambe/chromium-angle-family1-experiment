@@ -3,7 +3,28 @@
 作成日: 2026-09-26
 更新日: 2026-10-02
 
-状態: 設計確認済み・admission record確認済み・実装済み・Chrome 154.0.8037.97 runtime artifact CI成功・.92 compatibility VM観測成功・Intel HD 5000実機の`EGL_CONTEXT_CLIENT_VERSION (0x3098)=3`拒否を特定・WebGL/KOOV待ち
+状態: 設計確認済み・admission record確認済み・Family 1実験実装済み・Chrome 154.0.8037.97 runtime artifact CI成功・.92 compatibility VM観測成功・Intel HD 5000実機の`EGL_CONTEXT_CLIENT_VERSION (0x3098)=3`拒否を特定・ES3→ES2 fallback experimentのCI検証待ち・WebGL/KOOV未達
+
+## 現在の移行判断（2026-10-02）
+
+Intel HD Graphics 5000のCase Cでは`eglInitialize`自体は成功したが、Metalの
+`max_es_version=2.0`に対するChromeのES3 context要求が
+`EGL_CONTEXT_CLIENT_VERSION (0x3098)=3`で拒否された。macOSのChromium側では
+GLES3非対応時の自動fallbackが既定で無効なため、ANGLEのFamily 1 gateを無効化する
+だけではChrome GPU初期化はWebGL判定まで進まない。
+
+この境界をCIで検証するため、
+`patches/phase5-metal-family1-context-es2-fallback.patch`をFamily 1 experimentの
+明示opt-inとして追加した。最大対応versionがES2で、要求がES3、かつWebGL context
+ではない場合だけES2 frontendへ切り替える。WebGL2をES2へ降格する処理ではなく、
+GPU情報用の非WebGL contextを初期化可能にする実験である。
+
+| 項目 | 現在値 |
+| --- | --- |
+| fallback patch SHA-256 | `7bd8a40eaa6311c4ca37ebd68c19ab3d9822b936000e38dbadea70b92667a014` |
+| CI適用 | 未実行。static audit、runtime build、`.92` compatibility VM観測が次のゲート |
+| 実機適用 | 未承認・未実施。新artifactも`RUNTIME_DEVICE_READY=false`を維持 |
+| WebGL/KOOV | 未達。fallback CIが成功しても、実機で段階的に再判定する |
 
 ## Chrome 154.0.8037.58 rebuild status（2026-09-29）
 
@@ -375,11 +396,11 @@ Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での
 
 ## 実機試行後の判断
 
-実機試行の詳細は[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)に記録する。`.58`/`.59`のCase B/CではIntel HD Graphics 5000 / Metalのadapter選択後にEGL初期化が失敗した。`.97` Case BではFamily 2 gate、Case Cではそのoverride後の`max_es_version=2.0`とES3 context拒否を分離して観測した。runtime patchは`newCommandQueue`のnil guardを追加するだけであり、実機で観測した`EGL_CONTEXT_CLIENT_VERSION`拒否を自動的に回避するものではない。
+実機試行の詳細は[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)に記録する。`.58`/`.59`のCase B/CではIntel HD Graphics 5000 / Metalのadapter選択後にEGL初期化が失敗した。`.97` Case BではFamily 2 gate、Case Cではそのoverride後の`max_es_version=2.0`とES3 context拒否を分離して観測した。既存runtime patchは`newCommandQueue`のnil guardを追加するだけであり、実機で観測した`EGL_CONTEXT_CLIENT_VERSION`拒否を自動的に回避するものではない。今回追加したcontext fallback patchは別のCI-only opt-inであり、CI/VMで受入れられるまで実機artifactへ含めない。
 
 runtime manifestは`RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21`を記録する一方、既存のCase Cスクリプトは`requireGpuFamily2`だけを指定する。固定revisionで`requireMsl21`の存在と効果は確認できていないため、次の実機試行へ暗黙に追加しない。なお、Phase 3DのCI VM probeでは、manifestの値が承認済みの固定値と一致する場合に限り、このruntime opt-inをCI用Chrome起動へ適用し、適用結果を起動記録へ残す。これはCI VM内の切り分け専用であり、実機Case Cのコマンドや承認境界を変更しない。
 
-次の判断順序は、今回特定した`EGL_CONTEXT_CLIENT_VERSION=3`拒否を前提に、ES2 fallbackまたはES3要求の扱いを設計し、targeted test・static audit・artifact validation・VM観測をCIで先に確認することである。その後、別途承認された実機操作でGPU/EGL受入れ条件を再確認し、成功した場合だけWebGL、続いてKOOVへ進む。ANGLE同一GPU PID load証拠の不足は独立した観測課題として残る。
+次の判断順序は、今回特定した`EGL_CONTEXT_CLIENT_VERSION=3`拒否に対して追加したES3→ES2 fallback experimentを、targeted/static audit・artifact validation・VM観測の順にCIで確認することである。VM観測ではfallback marker数、GPU/EGL状態、WebGL1/2 context、draw結果を記録する。CI成功後、別途承認された実機操作でGPU/EGL受入れ条件を再確認し、成功した場合だけWebGL、続いてKOOVへ進む。ANGLE同一GPU PID load証拠の不足は独立した観測課題として残る。fallback experiment artifactも`RUNTIME_DEVICE_READY=false`のまま実機準備完了とは扱わない。
 
 ## できないこと・残る不確実性
 

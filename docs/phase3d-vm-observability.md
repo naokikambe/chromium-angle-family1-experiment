@@ -170,6 +170,29 @@ did not publish a port; run `36514367145` reached Chrome and DevTools but the
 `/json` endpoint HTML-escaped the title JSON. The final implementation removed
 the auxiliary server and decodes the DevTools title before JSON validation.
 
+## Family 1 ES3-to-ES2 fallback experiment (次回CI入力)
+
+The Intel HD Graphics 5000 Case C trace showed that `eglInitialize` succeeds but
+the non-WebGL GPU-information context requests ES3 while ANGLE reports
+`max_es_version=2.0`. On macOS, the stock Chromium path does not enable its
+GLES3-to-GLES2 fallback, so disabling the Family 2 feature alone does not move
+the GPU process to the WebGL smoke boundary.
+
+The checked-in opt-in patch
+`patches/phase5-metal-family1-context-es2-fallback.patch` (SHA-256
+`7bd8a40eaa6311c4ca37ebd68c19ab3d9822b936000e38dbadea70b92667a014`) is the
+next CI input. It is limited to the Family 1 experiment artifact and records a
+`family1_es3_to_es2_fallback` marker only when a non-WebGL ES3 request is
+reduced to the reported ES2 maximum. WebGL contexts are excluded, so the
+experiment must report WebGL1 and WebGL2 independently rather than treating an
+ES2 GPU-information context as WebGL success.
+
+The next VM observation must retain the fallback marker count together with
+GPU/EGL initialization, GPU-disabled fallback, WebGL1/WebGL2 context creation,
+and draw completion. A successful VM result remains diagnostic only:
+`RUNTIME_DEVICE_READY=false`, no signing or device launch is implied, and
+KOOV remains outside the VM stage.
+
 ## Purpose
 
 The stage answers software-boundary questions that can be collected on a
@@ -337,9 +360,9 @@ reported an Apple Paravirtualized Graphics Device, and the artifact remains
 `RUNTIME_DEVICE_READY=false`.  The later `.97` Intel HD Graphics 5000 Case C
 trace independently confirmed the same `EGL_CONTEXT_CLIENT_VERSION (0x3098)`
 value-3 rejection after `eglInitialize` succeeded; that real-device result is
-recorded in `docs/phase5-real-device-observation.md`.  The remaining device-only
-questions are WebGL/KOOV acceptance, the handling of the ES3 request, and
-direct same-GPU-PID proof of replacement-dylib loading.
+recorded in `docs/phase5-real-device-observation.md`.  The remaining questions
+are CI/VM acceptance of the explicit fallback experiment, device WebGL/KOOV
+acceptance, and direct same-GPU-PID proof of replacement-dylib loading.
 
 ## Chrome `.97` artifact and Chrome for Testing availability boundary
 
