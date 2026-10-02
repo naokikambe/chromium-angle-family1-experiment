@@ -296,6 +296,9 @@ evidence_dir="${manifest}.evidence"
 mkdir "$evidence_dir"
 cp "$(phase3_release_manifest_path "$artifact_real")" "$evidence_dir/ANGLE_RELEASE_MANIFEST"
 cp "$(phase3_release_manifest_hash_path "$artifact_real")" "$evidence_dir/ANGLE_RELEASE_MANIFEST.sha256"
+if [[ "$PHASE3_RELEASE_CONTEXT_ES2_FALLBACK" == true ]]; then
+  cp "$artifact_real/context-es2-fallback-patch.diff" "$evidence_dir/context-es2-fallback-patch.diff"
+fi
 
 # Stage 1: source-only safety checks and evidence. No write targets source_app.
 verify_source_components "$source_real" "$evidence_dir" source-before

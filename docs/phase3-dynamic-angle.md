@@ -1,14 +1,18 @@
 # Phase 3 — Dynamic ANGLE experiment
 
-Status: Chrome `154.0.8037.58` runtime artifact CI and Phase 3D VM observation
-are complete. The separately approved `.58` real-device attempt reached GPU
-initialization and stopped there; its evidence and remaining boundaries are in
+Status: the historical Chrome `154.0.8037.58` runtime artifact CI and Phase 3D
+VM observation are complete. The later separately approved Chrome `.97`
+fallback test copy reached Intel HD Graphics 5000 WebGL1 context creation and a
+minimal draw; WebGL2 and KOOV remain outside the completed boundary. Its
+evidence and current boundaries are in
 [`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md).
-Any new device preflight still requires separate approval. The release-manifest
-migration history and procedure below remain part of this record.
+Any new device preflight or KOOV operation still requires separate approval.
+The release-manifest migration history and procedure below remain part of this
+record.
 The CI workflows described here do not modify the installed Chrome app, sign
 code, launch Chrome or KOOV, or access existing browser profiles. The separately
-approved device procedure and its current `.58` observation are recorded below.
+approved device procedure and its `.58` historical and `.97` current
+observations are recorded in the linked Phase 5 document.
 
 ## Release selection and provenance
 

@@ -42,7 +42,7 @@ for new real-device work. Any separately approved historical device-test record 
 | Phase 3A | legacy artifact記録 | Chrome `154.0.8037.45`向けartifact `35515036255`は過去の固定SHA・形式・依存・署名検証結果として記録する。新形式のrelease manifestを持たず、新しい実機試験には使用しない。 |
 | Phase 3B | synthetic fixture CI成功（記録時点） | `angle-release-v1`はChrome/Chromium/ANGLE/depot_tools識別子、dylib SHA、artifact/run metadataを束縛する。test-copy manifestはrelease manifest SHAを記録し、Libraries baselineを保持したままANGLE 2本だけ追加する。正式なsynthetic fixture判定は下記のrunの記録時点で成功した。ローカルfull fixtureは実行しない。retry0–12は保存済み履歴として不変保持し、新規attempt rootは別名で作成する。この行はCI記録の要約であり、後日の実機試行状態を表さない。 |
 | Phase 3B 以降 | synthetic 3B/3C成功、Phase 3D VM観測成功（各記録時点） | Phase 3D文書に記録された、別途承認済みの過去のユーザー所有機器テスト・署名・Chrome起動記録は履歴として保持する。3B/3C/3D run metadataはCI/VMの記録であり、新規の実機作業を承認しない。Phase 5の詳細な入場記録と専用stub CIは完了しているが、この行自体は現在の実機試行結果を表さない。 |
-| Phase 5 | fallback CI/VMでWebGL1経路成功、正確な`.97` fallback artifact CI成功、実機WebGL1待ち。WebGL2/KOOV未達 | `.97` fallback runtime CI [`36988193107`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36988193107) はsuccess。artifactは`angle-macos-x86_64-chrome-154.0.8037.97-angle-e12217f3-family1-experiment-36988193107`、ANGLE `e12217f3e133cb1029b050d893b1806d141483be`、GitHub digest `sha256:984225daa95e44dd621dee93e604cce9fea414015287ba1b3fa7eb2cb7ff7bc7`、manifest SHA-256 `73e94ae3b306086201401bfc31540296362aac5505d4af478537abed6391e961`、`RUNTIME_DEVICE_READY=false`。`.97`実機Case CではIntel HD Graphics 5000を選択し、`require_gpu_family2 enabled=false has_override=true`、`eglInitialize_return_success`、`max_es_version=2.0`を確認した。ES 3.0要求の`0x3098=3`だけが`EGL_BAD_ATTRIBUTE`、ES2要求の`0x3098=2`はcontext作成成功で、非version属性列は同一だった。fallback patch SHA-256は`7bd8a40eaa6311c4ca37ebd68c19ab3d9822b936000e38dbadea70b92667a014`。`.92` compatibility VM [`36987425607`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36987425607)でfallback marker 4件、dynamic WebGL1 context/draw成功、WebGL2 context未作成を確認した。WebGL/KOOVは実機未実施、同一GPU PIDによるreplacement dylib直接ロードは`.97`実機で未確定。詳細は[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)。 |
+| Phase 5 | fallback CI/VM成功、正確な`.97` fallback artifactで実機WebGL1 context/draw成功。WebGL2/KOOV未達 | `.97` fallback runtime CI [`36988193107`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36988193107) はsuccess。artifactは`angle-macos-x86_64-chrome-154.0.8037.97-angle-e12217f3-family1-experiment-36988193107`、ANGLE `e12217f3e133cb1029b050d893b1806d141483be`、GitHub digest `sha256:984225daa95e44dd621dee93e604cce9fea414015287ba1b3fa7eb2cb7ff7bc7`、manifest SHA-256 `73e94ae3b306086201401bfc31540296362aac5505d4af478537abed6391e961`、`RUNTIME_DEVICE_READY=false`。`.97` fallback実機ではIntel HD Graphics 5000を選択し、`require_gpu_family2 enabled=false has_override=true`、`eglInitialize_return_success`、`max_es_version=2.0`、非WebGLES3→ES2 fallbackを確認した。WebGL1 page/context/drawは成功し、rendererはIntel HD Graphics 5000。WebGL2は`context-null`、KOOVは未実施。WebGL実行中の同一GPU helper processでreplacement `libEGL.dylib`/`libGLESv2.dylib`を`lsof`/`vmmap`確認済み。fallback patch SHA-256は`7bd8a40eaa6311c4ca37ebd68c19ab3d9822b936000e38dbadea70b92667a014`。詳細は[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)。 |
 
 ## Phase 3の一次記録（2026-09-26確認）
 
@@ -125,6 +125,19 @@ live repeatのCase BとCase Cでは、いずれも`Initialization of all (1) EGL
 runtime manifestの`RUNTIME_DEVICE_READY=false`は、CI artifactが未署名・実機起動前の境界で作られていることを示す。実機で署名・起動した事実やGPU初期化成功を表す値ではなく、変更しない。
 
 次の作業は、既存trace、stderr抽出、GPU process引数、失敗順序の読み取り専用分析、必要に応じた一時的な診断手段での直接ロード・feature override証明、固定revisionのFamily 1 gateとruntime patchのソース診断の順に進める。CI/VMで修正結果を確認し、別途承認を得た後にのみ新しい実機試行を行う。GPU初期化が成功するまでWebGL、その後にKOOVへ進まない。
+
+## Phase 5 fallback実機 WebGL1結果（2026-10-02）
+
+正確な`.97` fallback artifactを新規test copyへ適用した承認済み実機試験では、
+ANGLEロード、GPU/EGL初期化、非WebGL ES3→ES2 fallback、WebGL1 context生成と最小
+clear描画まで成功した。WebGL実行中の同一GPU helper processについて、raw `lsof`/
+`vmmap`がtest copy内の`libEGL.dylib`と`libGLESv2.dylib`を示した。
+
+WebGL2は`context-null`で、ES3要求の`EGL_CONTEXT_CLIENT_VERSION (0x3098)=3`
+拒否を能力境界として記録した。fallbackはWebGL contextをES2へ降格しないため、
+WebGL1成功とは矛盾しない。KOOVは未実施で、WebGL1結果のレビューと別途人間承認が
+成立するまで開始しない。artifact manifestの`RUNTIME_DEVICE_READY=false`はCI生成時の
+不変境界であり、実機test copyの成功によって変更しない。
 
 ## Phase 3D runtime artifact観測記録
 

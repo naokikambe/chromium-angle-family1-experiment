@@ -7,6 +7,13 @@ separate from the user-owned-device Phase 3C and Case B/C procedures.  It does
 not authorize a local Chrome launch, modify `/Applications`, use a signing
 identity, or test Bluetooth, USB, KOOV, or a normal browsing profile.
 
+The latest separately approved real-device result is recorded outside this VM
+boundary in [`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md):
+the exact Chrome `.97` fallback artifact reached Intel HD Graphics 5000
+WebGL1 context creation and a minimal draw.  WebGL2 remained `context-null` and
+KOOV was not run.  This does not change the scope or historical meaning of the
+Phase 3D VM records below.
+
 ## Primary record
 
 The parent-verified public GitHub Actions metadata and read-only diagnostics

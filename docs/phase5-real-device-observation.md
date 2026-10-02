@@ -2,26 +2,32 @@
 
 更新日: 2026-10-02
 
-## 最新の実機結論と次の実機承認ゲート: Chrome 154.0.8037.97（Case C、2026-10-02）
+## 最新の実機結論: Chrome 154.0.8037.97（fallback Case C/WebGL、2026-10-02）
 
-`.97`の正確なruntime artifactを新しい隔離test copyへ投入し、Apple Development署名とdeep strict verificationを通過させたうえで、Case CのGPU startup traceを取得した。Intel HD Graphics 5000では、`requireGpuFamily2`を無効化すると`eglInitialize`は成功し、ES 3.0 context要求の`0x3098=3`（`EGL_CONTEXT_CLIENT_VERSION`）が`EGL_BAD_ATTRIBUTE`になった。ES 2.0の同じ属性`0x3098=2`は成功した。したがって、今回の目標である「Intel HD 5000上でどの属性が`EGL_BAD_ATTRIBUTE`になるか」は特定済みである。
+`.97`の正確なfallback runtime artifactを新しい隔離test copyへ投入し、Apple
+Development署名とdeep strict verificationを通過させた。`requireGpuFamily2`を
+明示的に無効化したIntel HD Graphics 5000では、`eglInitialize`、Metal backendの
+初期化、非WebGLのES3要求からES2へのfallback、WebGL1 context生成と最小clear描画
+まで成功した。WebGL2は`context-null`だったが、fallbackはWebGL contextをES2へ
+降格しない設計であるため、WebGL1成功とは独立したES3能力境界として記録する。
 
-WebGLとKOOVはまだ実施していない。ES 3.0要求失敗後にGPU processが終了するため、WebGLへ進む条件は未成立である。replacement dylibの同一GPU PIDによる直接ロード証拠は、終了後collectorのプロセス情報取得が完了しなかったため未確定として扱う。
+初回のfallbackなしCase Cでは、`max_es_version=2.0`に対するES3 context要求の
+`0x3098=3`（`EGL_CONTEXT_CLIENT_VERSION`）が`EGL_BAD_ATTRIBUTE`になり、ES2の
+同じ属性`0x3098=2`は成功した。したがって、Intel HD 5000上で拒否された属性は
+`EGL_CONTEXT_CLIENT_VERSION`の値3と特定済みである。fallback適用後はこの非WebGL
+GPU情報context境界を越えてWebGL smokeへ進めた。
 
-### 現在の判定: WebGL検証可能状態ではない
-
-実機Case Cで`eglInitialize`成功と失敗属性の特定までは完了したが、ChromeのGPU
-初期化をES2へ継続させるCI検証はまだ完了していない。したがって、現時点で
-WebGL検証可能とは判定しない。
+### 現在の判定: WebGL1は検証可能、WebGL2とKOOVは未完了
 
 | 境界 | 判定 | 根拠 |
 | --- | --- | --- |
-| ANGLEロード | PENDING | dynamic起動とANGLE計装は確認したが、同一GPU PIDのreplacement dylib直接ロード証拠は未確定 |
-| GPU/EGL display初期化 | PASS（Case C限定） | `requireGpuFamily2` override後に`eglInitialize_return_success`を確認。通常Case BはFamily 2 gateで失敗 |
-| Chrome GPU context初期化 | BLOCKED | Intel HD Graphics 5000の`max_es_version=2.0`に対し、ES3要求の`0x3098=3`が`EGL_BAD_ATTRIBUTE` |
-| WebGL | PENDING | GPU context失敗後に停止し、実機WebGL1/2 contextとdrawは未実施 |
-| KOOV | PENDING | WebGL受入れ前のため未実施 |
-| ES3→ES2 fallback実験 | PASS（VM限定） | `.92` compatibility VMでfallback marker 4件、EGL初期化成功、WebGL1 context/draw成功を確認。Intel HD 5000実機への適用は未実施 |
+| ANGLEロード | PASS | WebGL実行中の同一GPU helper processについて`lsof`と`vmmap`の双方がtest copy内の`libEGL.dylib`/`libGLESv2.dylib`を指示 |
+| GPU/EGL display初期化 | PASS（fallback Case C） | `require_gpu_family2 enabled=false has_override=true`、Metal初期化成功、`eglInitialize_return_success`、`max_es_version=2.0` |
+| 非WebGL GPU context初期化 | PASS（fallback実験） | ES3要求をES2 frontendへ切り替え、`context_initialize_success`と`family1_es3_to_es2_fallback`を記録 |
+| WebGL1 | PASS | page loaded、WebGL1 context、最小clear描画がすべて`true`。rendererはIntel HD Graphics 5000 |
+| WebGL2 | PENDING（能力境界） | contextは`null`。ES3要求の`0x3098=3`拒否を独立に記録し、ES2へ暗黙降格していない |
+| KOOV | PENDING（承認待ち） | WebGL1受入れ後のKOOV操作はまだ実施していない |
+| ES3→ES2 fallback実験 | PASS（実機WebGL1まで） | `.97` exact artifactでGPU/EGL継続、WebGL1 context/draw成功。WebGL2は対象外のまま |
 
 今回のソース確認では、macOSのChromium側でGLES3非対応時の自動fallbackが既定で
 無効になり、`--disable-angle-features`だけではChromeのES3要求をES2へ変更しない
@@ -36,10 +42,11 @@ ES2へ降格せず、WebGL1を含む後続の挙動はCI/実機で別途確認�
 | patch SHA-256 | `7bd8a40eaa6311c4ca37ebd68c19ab3d9822b936000e38dbadea70b92667a014` |
 | compile-time define | `ANGLE_PHASE5_METAL_FAMILY1_ES2_FALLBACK_EXPERIMENT` |
 | 適用範囲 | Family 1 experiment artifactの明示opt-inのみ。通常artifact・実機準備済み判定には反映しない |
-| 現在のmanifest境界 | 正確な`.97` fallback artifactはCI build・manifest検証済みだが、`RUNTIME_DEVICE_READY=false`を維持し、署名・配置・実機起動は未実施 |
+| 現在のmanifest境界 | 正確な`.97` fallback artifactはCI build・manifest検証済み。実機test copyは署名・起動済みだが、artifactの`RUNTIME_DEVICE_READY=false`は変更しない |
 
-正確なChrome `.97` / ANGLE `e12217f3...` fallback artifactのCI build・manifest検証は完了した。
-実機への署名・配置・Chrome起動・WebGL操作には、これとは別の人間承認が必要である。
+正確なChrome `.97` / ANGLE `e12217f3...` fallback artifactのCI build・manifest検証と、
+承認済みの実機test copy署名・配置・Chrome起動・WebGL1 smokeは完了した。KOOV操作は
+別の人間承認が必要である。
 
 ### 現行`.97` CI入力とVM availability boundary
 
@@ -49,7 +56,7 @@ ES2へ降格せず、WebGL1を含む後続の挙動はCI/実機で別途確認�
 | artifact | `angle-macos-x86_64-chrome-154.0.8037.97-angle-e12217f3-family1-experiment-36964161986` / GitHub digest `sha256:cf4e9c149e387f94c9f5b9401802f6255c8bc0426d353d73b0d6981c390782ef` |
 | manifest | SHA-256 `99f3b38400814b1c7919008a26b62ba1a6328171e1dcedd5540d1de165628603`; ANGLE `e12217f3e133cb1029b050d893b1806d141483be`; `RUNTIME_DEVICE_READY=false` |
 | `.97` VM observation | [`36966677898`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36966677898) / CfT archive HTTP 404でbrowser起動前に停止 |
-| `.97` device impact | test copy準備・署名・Chrome起動・Case B/CのGPU/EGL診断は実施済み。WebGL、KOOV、xattr操作、artifact置換は未実施 |
+| `.97` device impact | test copy準備・署名・Chrome起動・Case B/CのGPU/EGL診断・WebGL1 smokeを実施。KOOV、xattr操作、artifact置換は未実施 |
 
 CfT known-good indexに`.97`がないため、`.97` artifactをそのままVMへ渡すことはできなかった。workflowには、CfTに存在する同系列`.92`とANGLE `802a8704ca940b633b731493ee192e0661eb8cdd`を`cft_compatibility=true`で明示的にbuildするVM専用経路を追加した。このcompatibility artifactは実機用ではなく、test-copy準備でも拒否する。
 
@@ -109,9 +116,9 @@ CIでbuildし、artifactとmanifestを読み取り専用で検証した。これ
 | device boundary | `RUNTIME_DEVICE_READY=false`; artifactのdownload、manifest/dylib hash検証のみ実施。署名、test copy配置、Chrome起動、WebGL、KOOVは未実施 |
 
 exact `.97`のCfT archiveはHTTP 404のため、同じ`.97` artifactをVMで起動する観測は
-できていない。したがって、`.92` compatibility VMのWebGL1結果を`.97`またはIntel HD
-Graphics 5000の実機結果へ拡張しない。次の実機作業は、fresh approval後にこの`.97`
-artifactを入力としてGPU/EGLから開始する。
+できていない。したがって、`.92` compatibility VMのWebGL1結果を`.97`の実機結果へ
+拡張せず、実機では正確な`.97` fallback artifactを入力としてGPU/EGLからWebGL1まで
+別途確認した。次段階のKOOVはWebGL1結果のレビューと別の人間承認を要する。
 
 ### `.97` Intel HD Graphics 5000実機 Case B/C（2026-10-02）
 
@@ -134,6 +141,62 @@ CIで生成した正確な`.97` artifactを使い、既存source Chrome、保存
 Case BはFamily 2 availability gateによる初期化失敗、Case Cはそのgateを明示的に無効化した後のcontext version境界を示す。Case Cで観測した`EGL_BAD_ATTRIBUTE`は、属性列の他のキーではなく、要求ES versionを表す`EGL_CONTEXT_CLIENT_VERSION (0x3098)`の値3に対応する。ES2で同じ非version属性列が成功したため、少なくともこのtraceでは非version属性やEGL config選択を原因とは判定しない。
 
 `load-evidence.txt`は同一GPU PIDのreplacement dylib直接ロードを確定する記録になっていないため、ANGLEロードの直接証明としては使用しない。stderrのANGLE計装、adapter名、EGL/context traceは有効な一次診断証拠として保持する。
+
+### `.97` fallback実機 WebGL1 smoke（2026-10-02）
+
+上記の初回Case CでES3 context拒否を確認した後、CIで生成した正確な`.97`
+fallback artifactを新規test copyへ適用し、同じ実機でWebGL smokeを実施した。
+source Chrome、保存済みretry/evidence、既存artifactは変更していない。WebGL用の
+一時profileとloopback DevToolsだけを使用し、KOOVや既存profileには触れていない。
+
+| 項目 | 実機結果 |
+| --- | --- |
+| 入力artifact | `angle-macos-x86_64-chrome-154.0.8037.97-angle-e12217f3-family1-experiment-36988193107` |
+| artifact digest | `sha256:984225daa95e44dd621dee93e604cce9fea414015287ba1b3fa7eb2cb7ff7bc7` |
+| manifest / ANGLE | manifest SHA-256 `73e94ae3b306086201401bfc31540296362aac5505d4af478537abed6391e961`; ANGLE `e12217f3e133cb1029b050d893b1806d141483be` |
+| GPU/EGL | `eglInitialize_return_success`; Metal device selection、command queue、format table、shader library、render utilsが成功 |
+| fallback | `max_es_version=2.0`; 非WebGL ES3要求をES2へfallbackし、`context_initialize_success`を記録 |
+| ANGLEロード | WebGL実行中の同一GPU helper processの`lsof`/`vmmap`で、test copy内の`libEGL.dylib`と`libGLESv2.dylib`を両方確認 |
+| WebGL page | `page_loaded=true` |
+| WebGL1 | `context_created=true`; `draw_operation_completed=true` |
+| WebGL2 | `context_created=false`; `webgl2_error=context-null` |
+| renderer / version | `ANGLE (Intel, ANGLE Metal Renderer: Intel HD Graphics 5000, Unspecified Version)` / `WebGL 1.0 (OpenGL ES 2.0 Chromium)` |
+| KOOV | 未実施。WebGL1結果のレビューと別途承認が必要 |
+
+WebGL smokeのstderrを同じanalyzerへ通した結果は、`CONTEXT_CALL_COUNT=5`、
+`ES3_CALL_COUNT=4`、`ES2_CALL_COUNT=1`、`CONTEXT_VERSION_REJECTION_COUNT=1`、
+`CONTEXT_ERROR_ATTRIBUTE_KEYS=0x3098`、`CONTEXT_ERROR_ATTRIBUTE_VALUES=3`、
+`FAMILY1_ES3_TO_ES2_FALLBACK_COUNT=3`、`CONTEXT_INITIALIZE_SUCCESS_COUNT=4`、
+`CONCLUSION=egl-bad-attribute-from-context-error-attribute`だった。これはWebGL2の
+ES3要求をfallback対象外として記録したものであり、WebGL1のES2 context/draw成功と
+矛盾しない。
+
+collectorの総括`load-evidence.txt`はobserver不完了のため保守的な未確定表示だが、
+WebGL実行中に取得した同一GPU helper processのraw `lsof`/`vmmap`がより直接的な
+証拠である。`RUNTIME_DEVICE_READY=false`はCI artifactが未署名・実機起動前に
+生成された境界値であり、今回のtest copy署名・起動・WebGL1成功によってmanifestを
+変更しない。
+
+### `.97` fallback実機 `chrome://gpu`確認（2026-10-02）
+
+WebGL1 smokeとは別の新規一時profileで同じ署名済みtest copyを起動し、loopback
+DevTools経由で`chrome://gpu`のshadow DOM本文を保存した。source Chrome、既存profile、
+既存artifactは変更していない。
+
+| `chrome://gpu`項目 | 結果 |
+| --- | --- |
+| Graphics Feature Status | Canvas、Compositing、Rasterization、Video Decode/Encode、WebGL、WebGPUが`Hardware accelerated`; OpenGLは`Enabled` |
+| Direct Rendering Display Compositor | `Disabled`。今回のWebGL1描画成功とは別の表示合成機能の状態 |
+| GPU / backend | Intel HD Graphics 5000; `GL implementation parts=(gl=egl-angle,angle=metal)`; `Display type=ANGLE_METAL` |
+| GL renderer/version | `ANGLE (Intel, ANGLE Metal Renderer: Intel HD Graphics 5000, Version 15.7.9)` / `OpenGL ES 2.0` |
+| ANGLE feature | `requireGpuFamily2`は`Disabled`（明示overrideと一致） |
+| GPU process crash count | `0` |
+| Problems Detected | Intel/Mac向けMSAA、stencil、float format等の既知workaroundを表示。今回のGPU crashやEGL初期化失敗を示す項目は確認されない |
+| ANGLEロード | 同じGPU helper processの`lsof`/`vmmap`でreplacement `libEGL.dylib`/`libGLESv2.dylib`を確認 |
+
+`chrome://gpu`の表示はWebGL1 smokeのcontext/draw成功を補強するが、WebGL2の利用可能性
+やKOOV動作を証明するものではない。ページ本文・JSON trace・GPU process raw証跡は
+新規`case-e-gpu-page`結果ディレクトリに保存した。
 
 ### `.59`実機の過去記録（最新結論ではない）
 
@@ -355,19 +418,19 @@ Paravirtualized Graphics Deviceであり、Intel HD Graphics 5000実機の代替
 
 ## 未解決リスク
 
-- 実機でreplacement dylibがロードされたかを、同一GPU PIDの`lsof`/`vmmap`で直接証明できていない。今回のcollector後処理はプロセス情報取得で停止したため、引数や計装だけをload証拠にはしない。
+- 初回のfallbackなしCase B/Cではreplacement dylibの同一GPU PID loadが未確定だった。fallback WebGL1試行では、WebGL実行中の同一GPU helper processについてraw `lsof`/`vmmap`が両replacement dylibを示した。過去記録の保守的な`load-evidence.txt`総括はそのまま保持する。
 - `.97` Case BではFamily 2 availability gateが`eglInitialize`前の停止原因として確認できた。Case Cでそのgateを無効化するとdisplay初期化は成功したため、初期化失敗の最初の原因境界は分離できた。
-- `.97` Case CではMetal capabilityが`max_es_version=2.0`であることを実機で確認した。ES 3.0要求時の`EGL_BAD_ATTRIBUTE`は`EGL_CONTEXT_CLIENT_VERSION (0x3098)`の値3と特定済みであり、非WebGL GPU情報contextだけをES2へ切り替えるCI-only fallback experimentを実装した。`.92` compatibility VMではWebGL1 context/drawまで確認し、正確な`.97` fallback artifactのCI build・manifest検証も完了した。ただし、実機適用後のChrome GPU初期化とWebGL1は未確定である。
+- `.97` Case CではMetal capabilityが`max_es_version=2.0`であることを実機で確認した。ES 3.0要求時の`EGL_BAD_ATTRIBUTE`は`EGL_CONTEXT_CLIENT_VERSION (0x3098)`の値3と特定済みであり、非WebGL GPU情報contextだけをES2へ切り替えるfallback experimentを実機へ明示適用した結果、GPU/EGL継続とWebGL1 context/drawまで確認した。WebGL2、長時間安定性、性能、KOOVは未確定である。
 - runtime patchは`newCommandQueue`直後のnil guardを追加するだけで、Family 1
   availability gateを迂回しない。
 - manifestの`RUNTIME_OPT_IN`は`--disable-angle-features=requireGpuFamily2,requireMsl21`
   を記録するが、Case Cスクリプトは`requireGpuFamily2`だけを指定する。
   固定revisionで`requireMsl21`の存在と効果は未確認である。
-- WebGL描画、GPU安定性、性能、KOOV連携は未判定である。
+- WebGL1の最小描画は成功した。WebGL2のES3能力、長時間安定性、性能、KOOV連携は未判定である。
 
-`RUNTIME_DEVICE_READY=false`は、CI artifactを未署名・実機起動前の状態で
-保持する境界値である。今回のtest copyで署名・起動した事実や、実機でGPU初期化が
-成功したことを意味しないため、manifestの値は変更しない。
+`RUNTIME_DEVICE_READY=false`は、CI artifactを未署名・実機起動前の状態で生成した
+ことを示す不変の境界値である。今回のtest copyで署名・起動し、実機GPU初期化と
+WebGL1が成功しても、CI artifactのmanifest値は変更しない。
 
 ## 次の判断ツリー
 
@@ -381,13 +444,13 @@ Paravirtualized Graphics Deviceであり、Intel HD Graphics 5000実機の代替
 - `eglInitialize_return_success`後のES3/ES2 context差分、`0x3098=3`の`EGL_BAD_ATTRIBUTE`
 - 既存traceやstderrがdynamic ANGLEのロードを示すか。引数の伝播、traceの存在、JSON要求だけではロード証拠にしない
 
-### 2. 診断証拠の改善（ANGLEロードのみ継続）
+### 2. 診断証拠の改善（ANGLEロードは実機raw証跡で確認済み）
 
 collectorはcommit `5cb3dbf`でGPU process type基準に修正し、専用/汎用helperを扱う
-focused fixtureがpassした。今回の`.97` Case Cではfeature override認識は確認できたが、
-両replacement dylibの同一GPU PID直接ロードは未確定である。必要ならCIでcollectorの
-post-run fallbackを改善し、次回の人間承認済み実機retryでload証拠だけを確認する。
-コマンドライン引数だけをロード証拠として扱わない。
+focused fixtureがpassした。fallback WebGL1試行ではfeature override認識に加え、
+WebGL実行中の同一GPU helper processの`lsof`/`vmmap`で両replacement dylibを確認済みで
+ある。collectorのpost-run総括が保守的でも、コマンドライン引数だけでなくraw per-PID
+証跡を根拠とする。追加retryはWebGL1のためには不要である。
 
 ### 3. ソース診断とCI/VM確認
 
@@ -398,15 +461,13 @@ test、static audit、artifact validation、VM観測で確認する。`requireMs
 
 ### 4. WebGL以降の実機試行
 
-次の実機操作は、`EGL_CONTEXT_CLIENT_VERSION=3`の失敗に対するCI-only fallback
-experimentがCI/VMで受入れられた後、別途承認を得て行う。GPU/EGLの受入れ条件が成立した
-後にだけWebGLへ進み、WebGLのcontext生成と描画成功後にだけKOOVへ進む。各段階の失敗では
-結果を保全して停止する。
+fallback experimentを明示適用した実機で、GPU/EGL、WebGL1 context、最小drawまで成功した。
+WebGL2は`context-null`を能力境界として記録し、KOOVはWebGL1結果のレビューと別途の
+人間承認が成立するまで開始しない。次段階でも各段階の失敗では結果を保全して停止する。
 
 ## 状態の境界
 
-`.58`/`.59`の過去試行と最新`.97`試行は別のtest copy/evidenceである。`.97` Case Cでは
-test copy準備、署名検証、Chrome起動、Intel HD Graphics 5000のadapter選択、
-`eglInitialize`成功、ES3 context失敗の観測まで完了し、失敗属性を`0x3098=3`と特定した。
-実機WebGLとKOOVの実験結果はまだ存在しない。この記録は新しい実機試行を自動承認せず、
-過去のretry/evidenceを上書きしない。
+`.58`/`.59`の過去試行と最新`.97`試行は別のtest copy/evidenceである。`.97` fallback
+試行ではtest copy準備、署名検証、Chrome起動、Intel HD Graphics 5000のadapter選択、
+`eglInitialize`成功、ES3 context拒否属性の特定、同一GPU PIDのANGLEロード証跡、WebGL1
+context/drawまで完了した。WebGL2とKOOVは未完了であり、過去のretry/evidenceを上書きしない。
