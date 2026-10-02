@@ -16,6 +16,22 @@ CI runの成功は診断workflowが完了した意味であり、GPU初期化・
 source ChromeとそのFrameworkは観測前後とも`154.0.8037.59`であり、既存retry/evidenceは変更していない。
 起動時にGoogleUpdaterの`--wake-all`が開始・正常終了したが、この観測期間内のsource更新は確認されなかった。
 
+### 保存済み実機traceの読み取り専用再確認（2026-10-02）
+
+既存の実機証跡を変更せず、`.59`系の保存済みstderrを今回追加したcontext
+trace analyzerで再解析した。通常のCase B診断・live maps診断では、
+`[ANGLE_PHASE5_LOAD] libEGL_loaded`の後にEGL display初期化失敗と
+`GLDisplayEGL::Initialize failed`が記録され、`eglCreateContext`到達は0件、
+`EGL_BAD_ATTRIBUTE`も0件だった。platform-display診断では
+`eglGetPlatformDisplay_enter`の直後に
+`eglGetPlatformDisplay_return_no_display`となり、`eglInitialize`と
+`eglCreateContext`には到達していない。
+
+従って、保存済み実機証跡からはまだ「どの属性が`EGL_BAD_ATTRIBUTE`になるか」は
+判定できない。次の実機診断で必要な最初の証跡は
+`eglGetPlatformDisplay_return_display`、`eglInitialize_return_success`、続く
+`context-trace-analysis.txt`であり、これらが得られるまでWebGL/KOOVへ進めない。
+
 | 対象 | 証跡・結果 |
 | --- | --- |
 | Phase 3B synthetic CI | [`36632187071`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36632187071) / success |
