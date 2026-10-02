@@ -83,6 +83,9 @@ jobs:
           scripts/run-phase3d-chrome-launch-probe.sh "${probe_args[@]}"
           scripts/analyze-phase5-context-trace.sh \
             "$results_dir/browser-stderr.txt" > "$results_dir/context-trace-analysis.txt"
+          dynamic_context_fallback_count=$(awk -F= '$1 == "FAMILY1_ES3_TO_ES2_FALLBACK_COUNT" { print $2; exit }' \
+            "$results_dir/context-trace-analysis.txt")
+          dynamic_context_fallback_count=${dynamic_context_fallback_count:-0}
           stock_args=(
             "$CHROME_VERSION"
             "$stock_results"
@@ -151,6 +154,7 @@ jobs:
             printf 'DYNAMIC_WEBGL2_CONTEXT_CREATED=%s\n' "$dynamic_webgl2"
             printf 'DYNAMIC_WEBGL1_CONTEXT_CREATED=%s\n' "$dynamic_webgl1"
             printf 'DYNAMIC_WEBGL_DRAW_OPERATION_COMPLETED=%s\n' "$dynamic_webgl_draw"
+            printf 'DYNAMIC_FAMILY1_ES3_TO_ES2_FALLBACK_COUNT=%s\n' "$dynamic_context_fallback_count"
             printf 'STOCK_WEBGL2_CONTEXT_CREATED=%s\n' "$stock_webgl2"
             printf 'STOCK_WEBGL1_CONTEXT_CREATED=%s\n' "$stock_webgl1"
             printf 'STOCK_WEBGL_DRAW_OPERATION_COMPLETED=%s\n' "$stock_webgl_draw"

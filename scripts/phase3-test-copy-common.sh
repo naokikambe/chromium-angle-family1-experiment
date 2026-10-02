@@ -20,6 +20,7 @@ PHASE3_RELEASE_BUILT_AT_UTC=''
 PHASE3_RELEASE_GN_ARGS_SHA256=''
 PHASE3_RELEASE_MANIFEST_SHA256=''
 PHASE3_RELEASE_FAMILY1_EXPERIMENT='false'
+PHASE3_RELEASE_CONTEXT_ES2_FALLBACK='false'
 PHASE3_RELEASE_CFT_COMPATIBILITY='false'
 PHASE3_RELEASE_RUNTIME_OPT_IN=''
 
@@ -157,6 +158,24 @@ phase3_validate_release_manifest() {
   PHASE3_RELEASE_FAMILY1_EXPERIMENT=${PHASE3_RELEASE_FAMILY1_EXPERIMENT:-false}
   [[ "$PHASE3_RELEASE_FAMILY1_EXPERIMENT" == false || "$PHASE3_RELEASE_FAMILY1_EXPERIMENT" == true ]] ||
     phase3_fail 'invalid FAMILY1_EXPERIMENT value'
+  PHASE3_RELEASE_CONTEXT_ES2_FALLBACK=$(phase3_manifest_value_optional "$manifest" CONTEXT_ES2_FALLBACK_EXPERIMENT)
+  PHASE3_RELEASE_CONTEXT_ES2_FALLBACK=${PHASE3_RELEASE_CONTEXT_ES2_FALLBACK:-false}
+  [[ "$PHASE3_RELEASE_CONTEXT_ES2_FALLBACK" == false || "$PHASE3_RELEASE_CONTEXT_ES2_FALLBACK" == true ]] ||
+    phase3_fail 'invalid CONTEXT_ES2_FALLBACK_EXPERIMENT value'
+  if [[ "$PHASE3_RELEASE_CONTEXT_ES2_FALLBACK" == true ]]; then
+    [[ "$PHASE3_RELEASE_FAMILY1_EXPERIMENT" == true ]] ||
+      phase3_fail 'context fallback experiment requires the Family 1 experiment'
+    context_patch_path=$(phase3_manifest_value "$manifest" CONTEXT_ES2_FALLBACK_PATCH_PATH)
+    [[ "$context_patch_path" == patches/phase5-metal-family1-context-es2-fallback.patch ]] ||
+      phase3_fail 'unexpected context fallback patch path'
+    context_patch_sha=$(phase3_manifest_value "$manifest" CONTEXT_ES2_FALLBACK_PATCH_SHA256)
+    [[ "$context_patch_sha" =~ ^[0-9a-f]{64}$ ]] ||
+      phase3_fail 'invalid context fallback patch SHA-256'
+    [[ -f "$artifact_dir/context-es2-fallback-patch.diff" &&
+       ! -L "$artifact_dir/context-es2-fallback-patch.diff" ]] ||
+      phase3_fail 'context fallback patch provenance is missing'
+    phase3_verify_hash "$artifact_dir/context-es2-fallback-patch.diff" "$context_patch_sha"
+  fi
   PHASE3_RELEASE_CFT_COMPATIBILITY=$(phase3_manifest_value_optional "$manifest" CFT_COMPATIBILITY)
   PHASE3_RELEASE_CFT_COMPATIBILITY=${PHASE3_RELEASE_CFT_COMPATIBILITY:-false}
   [[ "$PHASE3_RELEASE_CFT_COMPATIBILITY" == false || "$PHASE3_RELEASE_CFT_COMPATIBILITY" == true ]] ||

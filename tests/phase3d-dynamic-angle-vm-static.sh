@@ -23,6 +23,7 @@ grep -F -- '--angle-artifact "$ANGLE_ARTIFACT_DIR"' "$workflow" >/dev/null
 grep -F 'if: always()' "$workflow" >/dev/null
 grep -F -- '--dynamic-angle-flags' "$workflow" >/dev/null
 grep -F 'stock-control-comparison.txt' "$workflow" >/dev/null
+grep -F 'DYNAMIC_FAMILY1_ES3_TO_ES2_FALLBACK_COUNT' "$workflow" >/dev/null
 grep -F 'path: ${{ runner.temp }}/phase3d-dynamic-angle-results' "$workflow" >/dev/null
 ! grep -E 'pull_request(_target)?|^[[:space:]]+push:|id-token:|contents:[[:space:]]+write|actions:[[:space:]]+write|continue-on-error' "$workflow" >/dev/null
 
@@ -37,6 +38,7 @@ grep -F 'context_attribute_value_validation' "$context_analyzer" >/dev/null
 grep -F 'CONTEXT_ERROR_ATTRIBUTE_KEYS' "$context_analyzer" >/dev/null
 grep -F 'egl-bad-attribute-from-context-error-attribute' "$context_analyzer" >/dev/null
 grep -F 'CONTEXT_INITIALIZE_ERROR_CODES' "$context_analyzer" >/dev/null
+grep -F 'FAMILY1_ES3_TO_ES2_FALLBACK_COUNT' "$context_analyzer" >/dev/null
 grep -F 'egl-bad-attribute-from-context-initialize-error-needs-key' "$context_analyzer" >/dev/null
 grep -F 'CONTEXT_VALIDATION_ENABLED_VALUES' "$context_analyzer" >/dev/null
 grep -F 'PHASE3_APPROVED_RUNTIME_OPT_IN' "$repo_root/scripts/phase3-test-copy-common.sh" >/dev/null

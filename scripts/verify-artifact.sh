@@ -191,11 +191,18 @@ run_id=$(manifest_value BUILD_RUN_ID)
 gn_args_sha=$(manifest_value GN_ARGS_SHA256)
 family1_experiment=$(manifest_value_optional FAMILY1_EXPERIMENT)
 family1_experiment=${family1_experiment:-false}
+context_es2_fallback_experiment=$(manifest_value_optional CONTEXT_ES2_FALLBACK_EXPERIMENT)
+context_es2_fallback_experiment=${context_es2_fallback_experiment:-false}
 [[ "$chrome_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'invalid Chrome version in release manifest'
 for revision in "$chromium_revision" "$angle_revision" "$depot_revision"; do [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || fail 'invalid source revision in release manifest'; done
 for checksum in "$libegl_sha" "$gles_sha" "$gn_args_sha"; do [[ "$checksum" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid SHA-256 in release manifest'; done
 [[ "$run_id" =~ ^[0-9]+$ ]] || fail 'invalid build run ID in release manifest'
 [[ "$family1_experiment" == false || "$family1_experiment" == true ]] || fail 'invalid FAMILY1_EXPERIMENT in release manifest'
+[[ "$context_es2_fallback_experiment" == false || "$context_es2_fallback_experiment" == true ]] ||
+  fail 'invalid CONTEXT_ES2_FALLBACK_EXPERIMENT in release manifest'
+if [[ "$context_es2_fallback_experiment" == true && "$family1_experiment" != true ]]; then
+  fail 'context fallback experiment requires the Family 1 experiment'
+fi
 expected_artifact_name="angle-macos-x86_64-chrome-${chrome_version}-angle-${angle_revision:0:8}-${run_id}"
 if [[ "$family1_experiment" == true ]]; then
   expected_artifact_name="angle-macos-x86_64-chrome-${chrome_version}-angle-${angle_revision:0:8}-family1-experiment-${run_id}"
