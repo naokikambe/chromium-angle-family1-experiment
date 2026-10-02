@@ -30,12 +30,12 @@ on:
       angle_revision:
         description: Exact ANGLE revision used by the Phase 5 runtime artifact
         required: true
-        default: 1ff8799c596d4fc9acea28343610b1f33650a6fa
+        default: e12217f3e133cb1029b050d893b1806d141483be
         type: string
       chrome_version:
         description: Chrome release version whose DEPS ANGLE pin must match
         required: true
-        default: 154.0.8037.59
+        default: 154.0.8037.97
         type: string
       runtime_patch_sha256:
         description: SHA-256 of the checked-in Phase 5 runtime patch
@@ -121,9 +121,9 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$ANGLE_REVISION" =~ ^[0-9a-f]{40}$ ]]
-          test "$ANGLE_REVISION" = 1ff8799c596d4fc9acea28343610b1f33650a6fa
+          test "$ANGLE_REVISION" = e12217f3e133cb1029b050d893b1806d141483be
           [[ "$CHROME_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          test "$CHROME_VERSION" = 154.0.8037.59
+          test "$CHROME_VERSION" = 154.0.8037.97
           [[ "$RUNTIME_PATCH_SHA256" =~ ^[0-9a-f]{64}$ ]]
           test -f "$RUNTIME_PATCH_PATH"
           test "$(shasum -a 256 "$RUNTIME_PATCH_PATH" | awk '{print $1}')" = "$RUNTIME_PATCH_SHA256"
