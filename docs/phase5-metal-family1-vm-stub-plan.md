@@ -3,7 +3,7 @@
 作成日: 2026-09-26
 更新日: 2026-10-02
 
-状態: 設計確認済み・admission record確認済み・Family 1実験実装済み・Chrome 154.0.8037.97 runtime artifact CI成功・.92 compatibility VM観測成功・Intel HD 5000実機の`EGL_CONTEXT_CLIENT_VERSION (0x3098)=3`拒否を特定・ES3→ES2 fallback experimentのCI検証待ち・WebGL/KOOV未達
+状態: 設計確認済み・admission record確認済み・Family 1実験実装済み・ES3→ES2 fallback experimentのruntime CI/VM検証成功（WebGL1 context/draw）・Chrome 154.0.8037.97 runtime artifact CI成功・Intel HD 5000実機の`EGL_CONTEXT_CLIENT_VERSION (0x3098)=3`拒否を特定・正確な`.97` fallback artifact buildと実機WebGL1待ち・WebGL2/KOOV未達
 
 ## 現在の移行判断（2026-10-02）
 
@@ -22,9 +22,10 @@ GPU情報用の非WebGL contextを初期化可能にする実験である。
 | 項目 | 現在値 |
 | --- | --- |
 | fallback patch SHA-256 | `7bd8a40eaa6311c4ca37ebd68c19ab3d9822b936000e38dbadea70b92667a014` |
-| CI適用 | 未実行。static audit、runtime build、`.92` compatibility VM観測が次のゲート |
-| 実機適用 | 未承認・未実施。新artifactも`RUNTIME_DEVICE_READY=false`を維持 |
-| WebGL/KOOV | 未達。fallback CIが成功しても、実機で段階的に再判定する |
+| CI適用 | runtime CI [`36984467242`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36984467242) と`.92` compatibility VM [`36987425607`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36987425607) がsuccess。fallback marker 4件、WebGL1 context/draw成功、WebGL2 context未作成 |
+| 実機適用 | 未実施。`.92` compatibility artifactは実機に使用せず、`RUNTIME_DEVICE_READY=false`を維持 |
+| 次の実機入力 | 正確なChrome `.97` / ANGLE `e12217f3...`へ同じfallback patchを適用したruntime artifactをCI buildし、承認後にGPU/EGL→WebGL1の順で確認 |
+| WebGL/KOOV | VMではWebGL1経路のみ成功。実機WebGL1とKOOVは未達、WebGL2はES3能力境界として別判定 |
 
 ## Chrome 154.0.8037.58 rebuild status（2026-09-29）
 
@@ -400,7 +401,12 @@ Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での
 
 runtime manifestは`RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21`を記録する一方、既存のCase Cスクリプトは`requireGpuFamily2`だけを指定する。固定revisionで`requireMsl21`の存在と効果は確認できていないため、次の実機試行へ暗黙に追加しない。なお、Phase 3DのCI VM probeでは、manifestの値が承認済みの固定値と一致する場合に限り、このruntime opt-inをCI用Chrome起動へ適用し、適用結果を起動記録へ残す。これはCI VM内の切り分け専用であり、実機Case Cのコマンドや承認境界を変更しない。
 
-次の判断順序は、今回特定した`EGL_CONTEXT_CLIENT_VERSION=3`拒否に対して追加したES3→ES2 fallback experimentを、targeted/static audit・artifact validation・VM観測の順にCIで確認することである。VM観測ではfallback marker数、GPU/EGL状態、WebGL1/2 context、draw結果を記録する。CI成功後、別途承認された実機操作でGPU/EGL受入れ条件を再確認し、成功した場合だけWebGL、続いてKOOVへ進む。ANGLE同一GPU PID load証拠の不足は独立した観測課題として残る。fallback experiment artifactも`RUNTIME_DEVICE_READY=false`のまま実機準備完了とは扱わない。
+次の判断順序は、CI/VMで受入れられたES3→ES2 fallback experimentを正確なChrome `.97` /
+ANGLE `e12217f3...`へ適用したruntime artifactとしてbuildすることである。そのartifactを
+別途承認された実機へ投入し、GPU/EGL受入れ条件、WebGL1 context、drawを順に確認する。
+WebGL2はES3能力境界として独立に記録し、WebGL1成功前にKOOVへ進まない。ANGLE同一GPU
+PID load証拠の不足は独立した観測課題として残る。fallback experiment artifactも
+`RUNTIME_DEVICE_READY=false`のまま実機準備完了とは扱わない。
 
 ## できないこと・残る不確実性
 

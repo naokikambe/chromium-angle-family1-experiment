@@ -193,6 +193,29 @@ and draw completion. A successful VM result remains diagnostic only:
 `RUNTIME_DEVICE_READY=false`, no signing or device launch is implied, and
 KOOV remains outside the VM stage.
 
+### `.92` compatibility VM result with fallback (2026-10-02)
+
+The explicit fallback experiment was built and observed in the VM-only
+compatibility path.
+
+| item | record |
+| --- | --- |
+| runtime build run | [`36984467242`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36984467242) / success |
+| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.92-angle-802a8704-family1-experiment-36984467242` / GitHub digest `sha256:7f01d71d8638017cc2a6ec9240c5c3a3a784668c9510d293652566ce4cf7fad6` |
+| manifest | SHA-256 `877027a4b176d7ce8bbc295b77cab145cc315a0c4e3858773b81d90b0f421661`; ANGLE `802a8704ca940b633b731493ee192e0661eb8cdd`; fallback `true`; `CFT_COMPATIBILITY=true`; `RUNTIME_DEVICE_READY=false` |
+| VM run / diagnostics | [`36987425607`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36987425607) / success; `phase3d-dynamic-angle-36984467242-36987425607`; digest `sha256:1ba3b9e69062385d4d7e3623a56f34fd368ae5a26f7a6ab37e540dc5f8b6f37e` |
+| fallback / EGL | `FAMILY1_ES3_TO_ES2_FALLBACK_COUNT=4`; dynamic EGL initialization failure `false`; GPU-disabled fallback `false` |
+| dynamic WebGL | page loaded `true`; WebGL1 context `true`; draw `true`; WebGL2 context `false`; `webgl2_error=context-null` |
+| stock control | WebGL1/WebGL2 context `false`; draw `false`; GPU-disabled fallback `true` |
+
+The four fallback markers correspond to non-WebGL ES3 requests reduced to the
+reported ES2 maximum. The remaining ES3 request was not downgraded because
+WebGL contexts are explicitly excluded from the experiment. This demonstrates
+the intended VM WebGL1 path, not WebGL2 support and not Intel HD Graphics 5000
+device readiness. The `.92` compatibility artifact is not a valid real-device
+input; the exact `.97` artifact must be rebuilt with the same opt-in before any
+device review.
+
 ## Purpose
 
 The stage answers software-boundary questions that can be collected on a
@@ -360,8 +383,9 @@ reported an Apple Paravirtualized Graphics Device, and the artifact remains
 `RUNTIME_DEVICE_READY=false`.  The later `.97` Intel HD Graphics 5000 Case C
 trace independently confirmed the same `EGL_CONTEXT_CLIENT_VERSION (0x3098)`
 value-3 rejection after `eglInitialize` succeeded; that real-device result is
-recorded in `docs/phase5-real-device-observation.md`.  The remaining questions
-are CI/VM acceptance of the explicit fallback experiment, device WebGL/KOOV
+recorded in `docs/phase5-real-device-observation.md`.  The explicit fallback
+experiment is now accepted for the VM-only WebGL1 path; the remaining questions
+are exact `.97` artifact/device WebGL1 acceptance, WebGL2 capability, KOOV
 acceptance, and direct same-GPU-PID proof of replacement-dylib loading.
 
 ## Chrome `.97` artifact and Chrome for Testing availability boundary
