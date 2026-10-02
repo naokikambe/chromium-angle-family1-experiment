@@ -1,6 +1,6 @@
 # Phase 5 実機観測記録
 
-更新日: 2026-09-30
+更新日: 2026-10-02
 
 ## 最新の結論: Chrome 154.0.8037.59
 
@@ -32,11 +32,41 @@ trace analyzerで再解析した。通常のCase B診断・live maps診断では
 `eglGetPlatformDisplay_return_display`、`eglInitialize_return_success`、続く
 `context-trace-analysis.txt`であり、これらが得られるまでWebGL/KOOVへ進めない。
 
-次回のCI検証後に使用する収集スクリプトは、保存された`stderr.log`に対して同じ
-context trace analyzerを自動実行する。新しい結果ディレクトリに保存される解析結果は、
+今回のCI検証では、保存された`stderr.log`に対して同じcontext trace analyzerを自動実行し、
 属性検証拒否のキー、属性値検証拒否のキー、または`Context::initialize()`のES version
-拒否を分離する。既存のattempt/evidenceは再収集・上書きせず、CI成功後に別の承認済み
-attemptでのみこの出力を取得する。
+拒否を分離した。既存のattempt/evidenceは再収集・上書きしていない。実機については、
+CI成功後に別の承認済みattemptでのみこの出力を取得する。
+
+### CIで追加したcontext初期化境界（2026-10-02）
+
+実機操作を増やさずに原因範囲を狭めるため、`eglCreateContext`の属性列、ES version要求、
+EGL config選択、および`Context::initialize()`のエラー返却境界を追加計装した。runtime
+artifactの再構築とPhase 3D VM観測は次の入力で成功した。
+
+| 対象 | 証跡・結果 |
+| --- | --- |
+| runtime build | [`36957895411`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36957895411) / success。依存取得503のfailed attempt後、同runの許可済みrerunで完了 |
+| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.59-angle-1ff8799c-family1-experiment-36957895411` / GitHub digest `sha256:3e737b0ef4c9c0b0ab20549978ef12cc2911c430b8c59b845b105f2f11c02d1b` |
+| VM observation | [`36961446419`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36961446419) / success / diagnostics digest `sha256:1e9d509171105c72c77360f72e7cfbfef2749b2d187407cb351cffe2d33dee65` |
+| ANGLE / runtime patch | `1ff8799c596d4fc9acea28343610b1f33650a6fa` / patch SHA-256 `6abc915e79513ceae887ef4e2a91ae65d40878edc87b0bf77c053adfd5a13e5f` |
+| manifest / libraries | manifest SHA-256 `056d14e79bc5aa33dd791af35f877b462e9319e77544d26a2116db23f243b7ba`; `libEGL.dylib=44116767b6d4d02362b2dd117cf16af2e719ef143b573f9a52b4837c1415b470`; `libGLESv2.dylib=7a3a9317e392cd7651d048df86e21658c0e735f3bdf663e3ff8767b9e1fcb6ea` |
+| device boundary | `RUNTIME_DEVICE_READY=false`; artifactは未署名で、実機操作には使用していない |
+
+VMの6回の`eglCreateContext`は`config=no_config`で、ES 3.0要求の属性列だけが
+`0x3098=3`となった。ES 3.0では`max_supported=2.0`のため
+`EGL_BAD_ATTRIBUTE attribute=0x3098 value=3`、続いて
+`context_initialize_error code=0x3004 message=Requested version is not supported`
+を記録した。同じ残りの属性列を使うES 2.0要求（`0x3098=2`）では
+`context_initialize_success`を記録した。したがって、今回のCI/VMで特定できた範囲は
+`EGL_CONTEXT_CLIENT_VERSION`のES version拒否であり、属性列中の他属性やEGL config選択が
+原因ではない。
+
+この結果はApple Paravirtualized Graphics Device VMの判定であり、Intel HD Graphics 5000
+実機で同じ属性が拒否されることを証明しない。保存済み実機traceは依然として
+`eglCreateContext=0`、`EGL_BAD_ATTRIBUTE=0`で、`eglInitialize`成功にも到達していない。
+Intel実機の確定には、CI成功後に新しい承認済みattemptで
+`eglGetPlatformDisplay_return_display`、`eglInitialize_return_success`、続く
+context traceを取得する必要がある。実機でGPU/EGL初期化が成功するまでWebGL/KOOVへ進めない。
 
 | 対象 | 証跡・結果 |
 | --- | --- |
