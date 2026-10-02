@@ -2,7 +2,21 @@
 
 更新日: 2026-10-02
 
-## 最新の結論: Chrome 154.0.8037.59
+## 最新の実機結論: Chrome 154.0.8037.59
+
+実機で確認済みの最新記録は`.59`のままであり、今回のChrome更新後に新しい実機操作は行っていない。実機用の次回入力候補として`.97` runtime artifactをCIで再生成したが、artifactは未署名で`RUNTIME_DEVICE_READY=false`である。
+
+### 現行`.97` CI入力とVM availability boundary
+
+| 対象 | 証跡・結果 |
+| --- | --- |
+| `.97` runtime build | [`36964161986`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36964161986) / success |
+| artifact | `angle-macos-x86_64-chrome-154.0.8037.97-angle-e12217f3-family1-experiment-36964161986` / GitHub digest `sha256:cf4e9c149e387f94c9f5b9401802f6255c8bc0426d353d73b0d6981c390782ef` |
+| manifest | SHA-256 `99f3b38400814b1c7919008a26b62ba1a6328171e1dcedd5540d1de165628603`; ANGLE `e12217f3e133cb1029b050d893b1806d141483be`; `RUNTIME_DEVICE_READY=false` |
+| `.97` VM observation | [`36966677898`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36966677898) / CfT archive HTTP 404でbrowser起動前に停止 |
+| device impact | 実機test copy、署名、xattr、Chrome起動、WebGL、KOOVは未実施 |
+
+CfT known-good indexに`.97`がないため、`.97` artifactをそのままVMへ渡すことはできなかった。workflowには、CfTに存在する同系列`.92`とANGLE `802a8704ca940b633b731493ee192e0661eb8cdd`を`cft_compatibility=true`で明示的にbuildするVM専用経路を追加した。このcompatibility artifactは実機用ではなく、test-copy準備でも拒否する。
 
 `.59`用runtime artifactのbuild、Phase 3D VM観測、実機Case BのGPU startup trace取得まで完了した。
 CI runの成功は診断workflowが完了した意味であり、GPU初期化・WebGLが成功した意味ではない。

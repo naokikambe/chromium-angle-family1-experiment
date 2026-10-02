@@ -341,6 +341,32 @@ creation.  The next device-only question is therefore whether Intel HD 5000
 also reports `EGL_CONTEXT_CLIENT_VERSION (0x3098)` or identifies another
 attribute/backend boundary.
 
+## Chrome `.97` artifact and Chrome for Testing availability boundary
+
+The current target Mac had advanced to Chrome `154.0.8037.97`.  The exact
+`.97` runtime artifact was therefore rebuilt from the matching Chromium DEPS
+ANGLE revision before any device preparation.
+
+| item | record |
+| --- | --- |
+| runtime build | [`36964161986`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36964161986) / success |
+| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.97-angle-e12217f3-family1-experiment-36964161986` / GitHub digest `sha256:cf4e9c149e387f94c9f5b9401802f6255c8bc0426d353d73b0d6981c390782ef` |
+| manifest | SHA-256 `99f3b38400814b1c7919008a26b62ba1a6328171e1dcedd5540d1de165628603`; Chrome `.97`; ANGLE `e12217f3e133cb1029b050d893b1806d141483be`; `RUNTIME_DEVICE_READY=false` |
+| dylibs | `libEGL.dylib=44116767b6d4d02362b2dd117cf16af2e719ef143b573f9a52b4837c1415b470`; `libGLESv2.dylib=d909e2dfbcda92ccae5842740d87f0108cb55cda99f3d3ebfe538ff9c476e2e0` |
+| first VM observation | [`36966677898`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36966677898) / failure before browser start |
+| VM diagnostics | `phase3d-dynamic-angle-36964161986-36966677898` / GitHub digest `sha256:61f2bd1be93e9d5ea93734380ed4ee8123c61dd9533d4dcb4253cdbc41822a6b` |
+| failure boundary | Chrome for Testing `.97` archive download returned HTTP 404; `BROWSER_STARTED=false`, `ANGLE_ARTIFACT_VALIDATED=false`, and no GPU/EGL/WebGL observation occurred |
+
+The CfT known-good index contains `154.0.8037.92` but not
+`154.0.8037.97`.  The runtime workflow now permits the explicit pair
+`Chrome .92` / ANGLE `802a8704ca940b633b731493ee192e0661eb8cdd` only when the
+`cft_compatibility=true` input is selected.  Both runtime patches apply cleanly
+to that ANGLE revision.  This compatibility artifact is VM-only diagnostic
+material; it is recorded in its manifest and is rejected by the real-device
+test-copy preparation path.  It must not be substituted for the exact `.97`
+artifact or used to authorize signing, artifact placement, Chrome launch, or
+KOOV.
+
 ## Explicit limits
 
 Phase 3D cannot establish correct real-device rendering, graphics performance,

@@ -277,6 +277,8 @@ phase3_reject_applications_path "$output_real"
 
 source_version=$(phase3_plist_value CFBundleShortVersionString "$source_real/Contents/Info.plist") || phase3_fail 'cannot read source Chrome version'
 phase3_validate_release_manifest "$artifact_real"
+[[ "$PHASE3_RELEASE_CFT_COMPATIBILITY" != true ]] ||
+  phase3_fail 'Chrome for Testing compatibility artifact is VM-only and cannot prepare a real-device test copy'
 [[ "$source_version" == "$PHASE3_RELEASE_CHROME_VERSION" ]] || phase3_fail "release expects Chrome $PHASE3_RELEASE_CHROME_VERSION, found $source_version"
 source_executable_name=$(phase3_plist_value CFBundleExecutable "$source_real/Contents/Info.plist") || phase3_fail 'cannot read source executable name'
 source_executable="$source_real/Contents/MacOS/$source_executable_name"
