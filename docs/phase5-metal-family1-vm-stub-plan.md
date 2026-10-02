@@ -27,18 +27,20 @@ Phase 3D macOS Intel VM観測へ渡した。これは実機操作や実機artifa
 
 | 項目 | 記録 |
 | --- | --- |
-| runtime CI | [`36953609001`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36953609001) / success |
-| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.59-angle-1ff8799c-family1-experiment-36953609001` / GitHub digest `sha256:82911fd9fb66deca39460694b95833f761e918a056acb82636e7bea1ff8c822b` |
-| VM observation | [`36956483884`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36956483884) / success / diagnostics digest `sha256:e036737c68d4080fa83852c5b74feaf8c0462547aceb515a6238f5f1ec7a1eec` |
+| runtime CI | [`36957895411`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36957895411) / success |
+| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.59-angle-1ff8799c-family1-experiment-36957895411` / GitHub digest `sha256:3e737b0ef4c9c0b0ab20549978ef12cc2911c430b8c59b845b105f2f11c02d1b` |
+| VM observation | [`36961446419`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36961446419) / success / diagnostics digest `sha256:1e9d509171105c72c77360f72e7cfbfef2749b2d187407cb351cffe2d33dee65` |
 | ANGLE revision | `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
 | runtime patch SHA-256 | `6abc915e79513ceae887ef4e2a91ae65d40878edc87b0bf77c053adfd5a13e5f` |
-| manifest / dylib | manifest `6b62e9e0fbd212280ea98c2d04ba48dceba3efba830208f04f89e465990d9ef3`; `libEGL=44116767b6d4d02362b2dd117cf16af2e719ef143b573f9a52b4837c1415b470`; `libGLESv2=8829fec2a560b14bc244cddf4b52f2f711e3841acec162301835e664c9af5aad` |
+| manifest / dylib | manifest `056d14e79bc5aa33dd791af35f877b462e9319e77544d26a2116db23f243b7ba`; `libEGL=44116767b6d4d02362b2dd117cf16af2e719ef143b573f9a52b4837c1415b470`; `libGLESv2=7a3a9317e392cd7651d048df86e21658c0e735f3bdf663e3ff8767b9e1fcb6ea` |
 | runtime boundary | `RUNTIME_DEVICE_READY=false`; x86_64 Mach-O、未署名 |
 
 VMの6回の`eglCreateContext`はすべて`config=no_config`だった。ES 3.0の
 `0x3098=3`は`max_supported=2.0`により拒否され、直接
 `EGL_BAD_ATTRIBUTE attribute=0x3098 value=3`を記録した。ES 2.0の
-`0x3098=2`は残りの属性列が同一のままcontext作成に成功した。したがって、
+`0x3098=2`は残りの属性列が同一のままcontext作成に成功し、
+`context_initialize_success`を記録した。ES3側は`context_initialize_error
+code=0x3004`も記録した。したがって、
 このVMで判明した失敗属性は`EGL_CONTEXT_CLIENT_VERSION (0x3098)`である。
 context初期化の成功／エラー返却境界も同じartifactで記録するため、別経路の
 `EGL_BAD_ATTRIBUTE`が発生した場合は属性キー未確定として追加調査へ送れる。

@@ -293,17 +293,17 @@ the real-device Case C command remains unchanged until separately approved.
 
 | item | record |
 | --- | --- |
-| runtime build run | [`36953609001`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36953609001) / success |
-| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.59-angle-1ff8799c-family1-experiment-36953609001` / GitHub digest `sha256:82911fd9fb66deca39460694b95833f761e918a056acb82636e7bea1ff8c822b` |
-| VM run | [`36956483884`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36956483884) / success |
-| observation commit | `611ca1bf15a5a7e760e498d1554f75266cde926a` |
-| input runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.59-angle-1ff8799c-family1-experiment-36953609001` |
-| diagnostics artifact | `phase3d-dynamic-angle-36953609001-36956483884` / GitHub digest `sha256:e036737c68d4080fa83852c5b74feaf8c0462547aceb515a6238f5f1ec7a1eec` |
+| runtime build run | [`36957895411`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36957895411) / success (source-fetch 503のfailed attempt後、同runの許可済みrerun) |
+| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.59-angle-1ff8799c-family1-experiment-36957895411` / GitHub digest `sha256:3e737b0ef4c9c0b0ab20549978ef12cc2911c430b8c59b845b105f2f11c02d1b` |
+| VM run | [`36961446419`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36961446419) / success |
+| observation commit | `0978e64f2fefa3acfc4c1418f12bab58623a18f0` |
+| input runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.59-angle-1ff8799c-family1-experiment-36957895411` |
+| diagnostics artifact | `phase3d-dynamic-angle-36957895411-36961446419` / GitHub digest `sha256:1e9d509171105c72c77360f72e7cfbfef2749b2d187407cb351cffe2d33dee65` |
 | runtime opt-in | `--disable-angle-features=requireGpuFamily2,requireMsl21` / applied `true` |
 | Chrome / Chromium / ANGLE | `154.0.8037.59` / `b5a24985a2f5ed35909845221b7203c5d8995c8f` / `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
-| manifest SHA-256 | `6b62e9e0fbd212280ea98c2d04ba48dceba3efba830208f04f89e465990d9ef3` |
+| manifest SHA-256 | `056d14e79bc5aa33dd791af35f877b462e9319e77544d26a2116db23f243b7ba` |
 | runtime patch SHA-256 | `6abc915e79513ceae887ef4e2a91ae65d40878edc87b0bf77c053adfd5a13e5f` |
-| dylib SHA-256 | `libEGL.dylib=44116767b6d4d02362b2dd117cf16af2e719ef143b573f9a52b4837c1415b470`; `libGLESv2.dylib=8829fec2a560b14bc244cddf4b52f2f711e3841acec162301835e664c9af5aad` |
+| dylib SHA-256 | `libEGL.dylib=44116767b6d4d02362b2dd117cf16af2e719ef143b573f9a52b4837c1415b470`; `libGLESv2.dylib=7a3a9317e392cd7651d048df86e21658c0e735f3bdf663e3ff8767b9e1fcb6ea` |
 | device boundary | `RUNTIME_DEVICE_READY=false`; x86_64 Mach-O、未署名 |
 
 With the opt-in, the VM reached Metal device selection, command queue,
