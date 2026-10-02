@@ -60,7 +60,7 @@ CI/VM上で分類できる。
 `egl-bad-attribute-from-context-attribute-validation`と分類する。次回の実機結果収集も
 同じ解析器を自動実行し、`context-trace-analysis.txt`を新しい結果ディレクトリへ保存する。
 この変更のruntime patch SHA-256は
-`e088590d033ee428056fcf4c3cf609ff424b5263208ed2cb714c8e2c5d3f5bd2`であり、固定revision
+`fc05d21c84ad9b99090d97381fe1f02e1dd8728f7e82d508361b7605f4609076`であり、固定revision
 上のpatch適用・build・VM観測CIが成功するまでは、実機属性原因の判定結果を更新しない。
 
 ## Chrome 154.0.8037.58 rebuild observation record
