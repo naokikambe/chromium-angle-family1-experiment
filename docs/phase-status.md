@@ -50,7 +50,7 @@ for new real-device work. Any separately approved historical device-test record 
 
 | 対象 | run | commit | diagnostics / artifact | 一次記録 |
 | --- | --- | --- | --- | --- |
-| Phase 3B synthetic fixture | `36241793357` / success | `3b116228de6c2af80b14cdfb36ff6fec1af6db38` | `phase3b-synthetic-fixture-diagnostics-36241793357` / archive SHA-256 `2299e7085280d7ef80bec61f4f4a0d3de26cef8a1e7680eb3f633b4e4646ccab` / exit `0` | [Actions run](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36241793357) |
+| Phase 3B synthetic fixture | `36963092889` / success | `f2a14f9a2a09aa3559fb792521c68a613d8351ea` | `phase3b-synthetic-fixture-diagnostics-36963092889` / archive SHA-256 `0ce6b2e4e05e374fc5298dad50e5bdd6c765b701f09f2b370ea1ca401a905e3c` / fixture exit `0` / release-artifact exit `0` / no skipped or unexpected diagnostics | [Actions run](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36963092889) |
 | Phase 3C synthetic preflight fixture | `36241795968` / success | `3b116228de6c2af80b14cdfb36ff6fec1af6db38` | `phase3c-preflight-synthetic-diagnostics-36241795968` / archive SHA-256 `d33c4e301f023ce9870e2a8faba139fb9415c5109aca9584d080ad661ac9ec03` / exit `0` | [Actions run](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36241795968) |
 | Phase 3D dynamic ANGLE VM observation | `36071196477` / success | `e9002f5ba7f70ec6b23f6b82453c9580a33a399b` | `phase3d-dynamic-angle-36065655290-36071196477` / archive SHA-256 `8f142e7503555fe3d9a75f0716daf8777509b28089e17b1bb4a8cfef7aabe298` | [Actions run](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36071196477) |
 
