@@ -40,7 +40,7 @@ on:
       runtime_patch_sha256:
         description: SHA-256 of the checked-in Phase 5 runtime patch
         required: true
-        default: e088590d033ee428056fcf4c3cf609ff424b5263208ed2cb714c8e2c5d3f5bd2
+        default: fc05d21c84ad9b99090d97381fe1f02e1dd8728f7e82d508361b7605f4609076
         type: string
       family1_experiment:
         description: Build the explicitly unsupported Family 1 experiment artifact
