@@ -904,7 +904,7 @@ export PHASE3_FIXTURE_PS_SNAPSHOT="$process_snapshot"
 ! grep -F -- '--disable-angle-features=requireGpuFamily2' "$fixture/case-b/run-metadata.txt"
 grep -F -- '--disable-angle-features=requireGpuFamily2' "$fixture/case-c/run-metadata.txt" >/dev/null
 grep -Fx 'diagnostic_gpu_startup=true' "$fixture/case-b/run-metadata.txt" >/dev/null
-grep -F -- 'gl_initializer_mac=2' "$fixture/case-b/run-metadata.txt" >/dev/null
+grep -F -- 'gl_initializer_mac=3' "$fixture/case-b/run-metadata.txt" >/dev/null
 grep -F -- 'disabled-by-default-gpu.angle' "$fixture/case-b/run-metadata.txt" >/dev/null
 grep -F -- '--trace-startup-file=' "$fixture/case-b/run-metadata.txt" >/dev/null
 grep -F -- '--trace-startup-format=json' "$fixture/case-b/run-metadata.txt" >/dev/null
