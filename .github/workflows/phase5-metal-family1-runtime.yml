@@ -174,9 +174,9 @@ jobs:
             gitiles_base="https://chromium.googlesource.com/chromium/src/+/$CHROME_VERSION"
             curl -fsSL "$gitiles_base/DEPS?format=JSON" | sed '1d' > "$DIAG_DIR/chromium-deps-metadata.json"
             chromium_revision=$(jq -r '.id' "$DIAG_DIR/chromium-deps-metadata.json")
-            curl -fsSL "$gitiles_base/chrome/VERSION?format=TEXT" | sed '1d' | base64 -D > "$DIAG_DIR/chrome-VERSION"
+            curl -fsSL "$gitiles_base/chrome/VERSION?format=TEXT" | base64 -D > "$DIAG_DIR/chrome-VERSION"
             chromium_version=$(awk -F= '$1 == "MAJOR" {a=$2} $1 == "MINOR" {b=$2} $1 == "BUILD" {c=$2} $1 == "PATCH" {d=$2} END {printf "%s.%s.%s.%s", a,b,c,d}' "$DIAG_DIR/chrome-VERSION")
-            curl -fsSL "$gitiles_base/DEPS?format=TEXT" | sed '1d' | base64 -D > "$DIAG_DIR/DEPS"
+            curl -fsSL "$gitiles_base/DEPS?format=TEXT" | base64 -D > "$DIAG_DIR/DEPS"
             resolved_angle_revision=$(sed -nE "s/^[[:space:]]*'angle_revision':[[:space:]]*'([0-9a-f]{40})'.*/\\1/p" "$DIAG_DIR/DEPS" | head -n 1)
           else
             tag="refs/tags/$CHROME_VERSION"

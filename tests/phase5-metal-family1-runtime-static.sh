@@ -29,6 +29,8 @@ grep -F 'CFT_COMPATIBILITY:' "$workflow" >/dev/null
 grep -F 'unsupported Chrome/ANGLE input pair' "$workflow" >/dev/null
 grep -F 'gitiles_base=' "$workflow" >/dev/null
 grep -F 'base64 -D' "$workflow" >/dev/null
+! grep -F 'VERSION?format=TEXT" | sed' "$workflow" >/dev/null
+! grep -F 'DEPS?format=TEXT" | sed' "$workflow" >/dev/null
 grep -F 'workflow_dispatch:' "$workflow" >/dev/null
 ! grep -E '^[[:space:]]*(push|pull_request|pull_request_target):' "$workflow" >/dev/null
 grep -F 'runs-on: macos-15-intel' "$workflow" >/dev/null
