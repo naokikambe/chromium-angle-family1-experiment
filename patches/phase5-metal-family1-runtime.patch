@@ -370,6 +370,20 @@ diff --git a/src/libANGLE/Display.cpp b/src/libANGLE/Display.cpp
 +        ::fflush(stderr);
          mImplementation->terminate();
          return egl::Error(EGL_NOT_INITIALIZED, "No configs were generated.");
+@@ -1776,6 +1776,13 @@
+     Error error = context->initialize();
+     if (error.isError())
+     {
++        ::fprintf(stderr,
++                  "[ANGLE_PHASE5_EGL] context_initialize_error code=0x%04x id=%d message=%s\n",
++                  static_cast<unsigned int>(error.getCode()), static_cast<int>(error.getID()),
++                  error.getMessage().c_str());
++        ::fflush(stderr);
+         delete context;
+         return error;
+     }
++    ::fprintf(stderr, "[ANGLE_PHASE5_EGL] context_initialize_success\n");
++    ::fflush(stderr);
 diff --git a/src/libANGLE/Context.cpp b/src/libANGLE/Context.cpp
 --- a/src/libANGLE/Context.cpp
 +++ b/src/libANGLE/Context.cpp

@@ -23,6 +23,9 @@ function reset_call() {
     validation_enabled = ""
     context_error_attribute_key = ""
     context_error_attribute_value = ""
+    context_initialize_error_code = ""
+    context_initialize_error_id = ""
+    context_initialize_succeeded = 0
     context_rejected = 0
     context_result = ""
 }
@@ -93,6 +96,9 @@ BEGIN {
     context_validation_enabled_values = ""
     context_error_attribute_keys = ""
     context_error_attribute_values = ""
+    context_initialize_error_codes = ""
+    context_initialize_error_ids = ""
+    context_initialize_success_count = 0
     context_attribute_validation_failure_keys = ""
     context_attribute_value_validation_failure_keys = ""
     first_max_supported_version = ""
@@ -167,6 +173,22 @@ BEGIN {
         }
         next
     }
+    if ($0 ~ /^\[ANGLE_PHASE5_EGL\] context_initialize_error /) {
+        split($3, code_field, "=")
+        split($4, id_field, "=")
+        context_initialize_error_code = code_field[2]
+        context_initialize_error_id = id_field[2]
+        context_initialize_error_codes = append_unique_key(context_initialize_error_codes,
+                                                           context_initialize_error_code)
+        context_initialize_error_ids = append_unique_key(context_initialize_error_ids,
+                                                         context_initialize_error_id)
+        next
+    }
+    if ($0 ~ /^\[ANGLE_PHASE5_EGL\] context_initialize_success$/) {
+        context_initialize_succeeded = 1
+        context_initialize_success_count++
+        next
+    }
     if ($0 ~ /^\[ANGLE_PHASE5_EGL\] context_attribute_validation /) {
         split($3, key_field, "=")
         split($4, result_field, "=")
@@ -195,6 +217,8 @@ END {
                                         es3_non_version_attributes == es2_non_version_attributes)
     if (bad_attribute_count > 0 && context_error_attribute_keys != "") {
         conclusion = "egl-bad-attribute-from-context-error-attribute"
+    } else if (bad_attribute_count > 0 && context_initialize_error_codes != "") {
+        conclusion = "egl-bad-attribute-from-context-initialize-error-needs-key"
     } else if (bad_attribute_count > 0 &&
         (context_attribute_validation_failure_keys != "" ||
          context_attribute_value_validation_failure_keys != "")) {
@@ -223,6 +247,9 @@ END {
     printf "CONTEXT_VALIDATION_ENABLED_VALUES=%s\n", context_validation_enabled_values
     printf "CONTEXT_ERROR_ATTRIBUTE_KEYS=%s\n", context_error_attribute_keys
     printf "CONTEXT_ERROR_ATTRIBUTE_VALUES=%s\n", context_error_attribute_values
+    printf "CONTEXT_INITIALIZE_ERROR_CODES=%s\n", context_initialize_error_codes
+    printf "CONTEXT_INITIALIZE_ERROR_IDS=%s\n", context_initialize_error_ids
+    printf "CONTEXT_INITIALIZE_SUCCESS_COUNT=%d\n", context_initialize_success_count
     printf "CONTEXT_ATTRIBUTE_VALIDATION_FAILURE_KEYS=%s\n",
            context_attribute_validation_failure_keys
     printf "CONTEXT_ATTRIBUTE_VALUE_VALIDATION_FAILURE_KEYS=%s\n",

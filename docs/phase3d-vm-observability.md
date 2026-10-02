@@ -64,8 +64,13 @@ version拒否時には`EGL_BAD_ATTRIBUTE`と属性`0x3098`（`EGL_CONTEXT_CLIENT
 `CONTEXT_VALIDATION_ENABLED_VALUES`、`CONTEXT_ERROR_ATTRIBUTE_KEYS`、
 `CONTEXT_ERROR_ATTRIBUTE_VALUES`も出力し、直接のcontext error markerがある場合は
 `egl-bad-attribute-from-context-error-attribute`と分類する。
+さらに`Display::createContext()`の`Context::initialize()`返却境界を
+`CONTEXT_INITIALIZE_ERROR_CODES`、`CONTEXT_INITIALIZE_ERROR_IDS`、
+`CONTEXT_INITIALIZE_SUCCESS_COUNT`として記録する。`EGL_BAD_ATTRIBUTE`の直接属性キーが
+得られないままcontext初期化エラーだけが返った場合は、
+`egl-bad-attribute-from-context-initialize-error-needs-key`として実機の追加確認対象にする。
 この変更のruntime patch SHA-256は
-`f5fbfed241a9f465cd7c44351dce494f204ba88a6b6c60cd5e083c6a00550fb3`である。固定revision
+`6abc915e79513ceae887ef4e2a91ae65d40878edc87b0bf77c053adfd5a13e5f`である。固定revision
 上のpatch適用・build・VM観測CIは成功したが、VMはIntel HD Graphics 5000ではないため、
 実機属性原因の判定はまだ更新しない。
 
@@ -297,7 +302,7 @@ the real-device Case C command remains unchanged until separately approved.
 | runtime opt-in | `--disable-angle-features=requireGpuFamily2,requireMsl21` / applied `true` |
 | Chrome / Chromium / ANGLE | `154.0.8037.59` / `b5a24985a2f5ed35909845221b7203c5d8995c8f` / `1ff8799c596d4fc9acea28343610b1f33650a6fa` |
 | manifest SHA-256 | `6b62e9e0fbd212280ea98c2d04ba48dceba3efba830208f04f89e465990d9ef3` |
-| runtime patch SHA-256 | `f5fbfed241a9f465cd7c44351dce494f204ba88a6b6c60cd5e083c6a00550fb3` |
+| runtime patch SHA-256 | `6abc915e79513ceae887ef4e2a91ae65d40878edc87b0bf77c053adfd5a13e5f` |
 | dylib SHA-256 | `libEGL.dylib=44116767b6d4d02362b2dd117cf16af2e719ef143b573f9a52b4837c1415b470`; `libGLESv2.dylib=8829fec2a560b14bc244cddf4b52f2f711e3841acec162301835e664c9af5aad` |
 | device boundary | `RUNTIME_DEVICE_READY=false`; x86_64 Mach-O、未署名 |
 
@@ -315,6 +320,10 @@ identical ES 2.0 attempts returned a context.  The trace reported
 `CONCLUSION=egl-bad-attribute-from-context-error-attribute`: the failing
 attribute observed in this VM run is `EGL_CONTEXT_CLIENT_VERSION (0x3098)`
 with value `3`, not an independently rejected remaining attribute.
+The new `context_initialize_error`/`context_initialize_success` boundary is
+also present in the artifact, so a future `EGL_BAD_ATTRIBUTE` returned by
+context initialization without a direct key will remain explicitly
+unclassified rather than being mistaken for the version path.
 
 The dynamic probe observed both replacement dylibs loading in the GPU process,
 successful EGL display initialization, and GPU-disabled fallback.  The stock

@@ -502,6 +502,7 @@ EOF
 [ANGLE_PHASE5_EGL] context_attribute_validation key=0x3098 result=true
 [ANGLE_PHASE5_EGL] context_attribute_value_validation key=0x3098 value=3 result=false
 [ANGLE_PHASE5_EGL] context_error code=EGL_BAD_ATTRIBUTE attribute=0x3098 value=3
+[ANGLE_PHASE5_EGL] context_initialize_error code=0x3004 id=0 message=Requested version is not supported
 [ANGLE_PHASE5_EGL] eglCreateContext_return_no_context
 [ANGLE_PHASE5_EGL] eglGetError_return=0x3004
 EGL_BAD_ATTRIBUTE
@@ -511,6 +512,8 @@ EOF
   grep -F 'CONTEXT_ATTRIBUTE_VALUE_VALIDATION_FAILURE_KEYS=0x3098' \
     "$fixture/evidence one-library/context-trace-analysis.txt" >/dev/null
   grep -F 'CONTEXT_ERROR_ATTRIBUTE_KEYS=0x3098' \
+    "$fixture/evidence one-library/context-trace-analysis.txt" >/dev/null
+  grep -F 'CONTEXT_INITIALIZE_ERROR_CODES=0x3004' \
     "$fixture/evidence one-library/context-trace-analysis.txt" >/dev/null
   export PHASE3_FIXTURE_LSOF_BOTH=1
   fixture_checkpoint evidence-before-both-libraries
