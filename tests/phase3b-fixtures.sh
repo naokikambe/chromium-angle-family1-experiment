@@ -494,8 +494,20 @@ EOF
   mkdir "$fixture/evidence one-library" "$fixture/evidence both-libraries"
   unset PHASE3_FIXTURE_LSOF_BOTH
   fixture_checkpoint evidence-before-one-library
+  cat > "$fixture/evidence one-library/stderr.log" <<'EOF'
+[ANGLE_PHASE5_EGL] eglCreateContext_enter
+[ANGLE_PHASE5_EGL] eglCreateContext_config=no_config
+[ANGLE_PHASE5_EGL] eglCreateContext_attribute key=0x3098 value=3
+[ANGLE_PHASE5_EGL] context_attribute_validation key=0x3098 result=true
+[ANGLE_PHASE5_EGL] context_attribute_value_validation key=0x3098 value=3 result=false
+[ANGLE_PHASE5_EGL] eglCreateContext_return_no_context
+[ANGLE_PHASE5_EGL] eglGetError_return=0x3004
+EGL_BAD_ATTRIBUTE
+EOF
   "$collect" "$focused_output" "$fixture/evidence one-library"
   ! grep -F 'direct dynamic ANGLE load evidence' "$fixture/evidence one-library/load-evidence.txt"
+  grep -F 'CONTEXT_ATTRIBUTE_VALUE_VALIDATION_FAILURE_KEYS=0x3098' \
+    "$fixture/evidence one-library/context-trace-analysis.txt" >/dev/null
   export PHASE3_FIXTURE_LSOF_BOTH=1
   fixture_checkpoint evidence-before-both-libraries
   "$collect" "$focused_output" "$fixture/evidence both-libraries"

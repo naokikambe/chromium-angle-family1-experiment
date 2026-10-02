@@ -3,7 +3,11 @@ set -euo pipefail
 
 PHASE3_SCRIPT_NAME='collect-phase3-evidence'
 readonly PHASE3_SCRIPT_NAME
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/phase3-test-copy-common.sh"
+phase3_script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+readonly phase3_script_dir
+source "$phase3_script_dir/phase3-test-copy-common.sh"
+phase3_context_trace_analyzer="$phase3_script_dir/analyze-phase5-context-trace.sh"
+readonly phase3_context_trace_analyzer
 
 capture() {
   local destination=$1
@@ -135,6 +139,7 @@ if ! grep -F 'direct dynamic ANGLE load evidence:' "$results_real/load-evidence.
 fi
 if [[ -f "$results_real/stderr.log" ]]; then
   grep -Ei 'EGL|Metal|requireGpuFamily2|GL implementation|Display type|GL_VENDOR|GL_RENDERER|WebGL|Compositing|Rasterization|GPU process|crash' "$results_real/stderr.log" > "$results_real/chrome-log-extract.txt" || true
+  "$phase3_context_trace_analyzer" "$results_real/stderr.log" > "$results_real/context-trace-analysis.txt"
 fi
 cat > "$results_real/chrome-gpu-manual.txt" <<'EOF'
 Save chrome://gpu from the isolated test app after the run. Record GPU process crash count, GL implementation parts, Display type, GL_VENDOR, GL_RENDERER, WebGL, Compositing, Rasterization, and EGL/Metal errors. Command-line switches are not load proof: report external ANGLE as loaded only when lsof, vmmap, or equivalent direct evidence names both test-copy dylib absolute paths.

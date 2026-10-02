@@ -7,13 +7,14 @@ patch=${2:?patch path}
 test -f "$workflow"
 test -f "$patch"
 patch_sha256=$(shasum -a 256 "$patch" | awk '{print $1}')
-test "$patch_sha256" = 8fcfdffb904eb98aff5be72dd12ff53c2eb38b35ba547f8fc22f2d94873ef3ea
+test "$patch_sha256" = e088590d033ee428056fcf4c3cf609ff424b5263208ed2cb714c8e2c5d3f5bd2
 patch_paths=$(git apply --numstat "$patch" | awk '{print $3}' | LC_ALL=C sort)
 expected_patch_paths=$(printf '%s\n' \
   src/common/apple_platform_utils.mm \
   src/libANGLE/Context.cpp \
   src/libANGLE/Display.cpp \
   src/libANGLE/renderer/metal/DisplayMtl.mm \
+  src/libANGLE/validationEGL.cpp \
   src/libEGL/libEGL_autogen.cpp)
 test "$patch_paths" = "$expected_patch_paths"
 grep -F 'phase5-metal-family1-runtime.patch' "$workflow" >/dev/null
@@ -51,6 +52,7 @@ grep -F 'phase5-metal-family1-runtime-diagnostics-' "$workflow" >/dev/null
 test "$(grep -Fc 'src/common/apple_platform_utils.mm' "$workflow")" -eq 1
 test "$(grep -Fc 'src/libANGLE/Context.cpp' "$workflow")" -eq 1
 test "$(grep -Fc 'src/libANGLE/Display.cpp' "$workflow")" -eq 1
+test "$(grep -Fc 'src/libANGLE/validationEGL.cpp' "$workflow")" -eq 1
 test "$(grep -Fc 'src/libEGL/libEGL_autogen.cpp' "$workflow")" -eq 1
 test "$(grep -Fc 'src/libANGLE/renderer/metal/DisplayMtl.mm' "$workflow")" -eq 1
 grep -F 'expected_source_paths=$(printf' "$workflow" >/dev/null
@@ -75,6 +77,8 @@ grep -F 'eglCreateContext_config=no_config' "$patch" >/dev/null
 grep -F 'eglCreateContext_attribute key=0x%04x value=%d' "$patch" >/dev/null
 grep -F 'context_version_check requested=%u.%u max_supported=%u.%u' "$patch" >/dev/null
 grep -F 'context_version_rejected reason=max_supported_version' "$patch" >/dev/null
+grep -F 'context_attribute_validation key=0x%04x result=%s' "$patch" >/dev/null
+grep -F 'context_attribute_value_validation key=0x%04x value=%d result=%s' "$patch" >/dev/null
 grep -F 'max_es_version_gpu_family4_or1=' "$patch" >/dev/null
 grep -F 'max_es_version=2.0' "$patch" >/dev/null
 grep -F '+__attribute__((constructor)) static void Phase5LogMetalLibraryLoaded()' "$patch" >/dev/null
