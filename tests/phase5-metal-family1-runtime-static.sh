@@ -22,6 +22,11 @@ grep -F 'phase5-metal-family1-runtime.patch' "$workflow" >/dev/null
 grep -F "$patch_sha256" "$workflow" >/dev/null
 grep -F 'e12217f3e133cb1029b050d893b1806d141483be' "$workflow" >/dev/null
 grep -F '154.0.8037.97' "$workflow" >/dev/null
+grep -F '802a8704ca940b633b731493ee192e0661eb8cdd' "$workflow" >/dev/null
+grep -F '154.0.8037.92' "$workflow" >/dev/null
+grep -F 'cft_compatibility:' "$workflow" >/dev/null
+grep -F 'CFT_COMPATIBILITY:' "$workflow" >/dev/null
+grep -F 'unsupported Chrome/ANGLE input pair' "$workflow" >/dev/null
 grep -F 'workflow_dispatch:' "$workflow" >/dev/null
 ! grep -E '^[[:space:]]*(push|pull_request|pull_request_target):' "$workflow" >/dev/null
 grep -F 'runs-on: macos-15-intel' "$workflow" >/dev/null

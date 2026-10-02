@@ -25,6 +25,11 @@ on:
         required: false
         default: 7bb9d8a09276f60d0d62a5d4cefd2d553ca12a59635a8240d146d5262dbf212e
         type: string
+      cft_compatibility:
+        description: Build the pinned same-series Chrome for Testing compatibility artifact for VM-only observation
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       angle_revision:
@@ -52,6 +57,11 @@ on:
         required: false
         default: 7bb9d8a09276f60d0d62a5d4cefd2d553ca12a59635a8240d146d5262dbf212e
         type: string
+      cft_compatibility:
+        description: Build the pinned same-series Chrome for Testing compatibility artifact for VM-only observation
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: phase5-metal-family1-runtime-${{ github.ref }}
@@ -78,6 +88,7 @@ jobs:
       FAMILY1_EXPERIMENT: ${{ inputs.family1_experiment }}
       FAMILY1_EXPERIMENT_PATCH_PATH: patches/phase5-metal-family1-family1-experiment.patch
       FAMILY1_EXPERIMENT_PATCH_SHA256: ${{ inputs.family1_experiment_patch_sha256 }}
+      CFT_COMPATIBILITY: ${{ inputs.cft_compatibility }}
 
     steps:
       - name: Check out workflow repository
@@ -121,9 +132,15 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$ANGLE_REVISION" =~ ^[0-9a-f]{40}$ ]]
-          test "$ANGLE_REVISION" = e12217f3e133cb1029b050d893b1806d141483be
           [[ "$CHROME_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          test "$CHROME_VERSION" = 154.0.8037.97
+          case "$CFT_COMPATIBILITY:$ANGLE_REVISION:$CHROME_VERSION" in
+            false:e12217f3e133cb1029b050d893b1806d141483be:154.0.8037.97) ;;
+            true:802a8704ca940b633b731493ee192e0661eb8cdd:154.0.8037.92) ;;
+            *)
+              echo 'unsupported Chrome/ANGLE input pair; use the current .97 artifact or explicit .92 CfT compatibility mode' >&2
+              exit 1
+              ;;
+          esac
           [[ "$RUNTIME_PATCH_SHA256" =~ ^[0-9a-f]{64}$ ]]
           test -f "$RUNTIME_PATCH_PATH"
           test "$(shasum -a 256 "$RUNTIME_PATCH_PATH" | awk '{print $1}')" = "$RUNTIME_PATCH_SHA256"
@@ -145,6 +162,7 @@ jobs:
             printf 'FAMILY1_EXPERIMENT=%s\n' "$FAMILY1_EXPERIMENT"
             printf 'FAMILY1_EXPERIMENT_PATCH_PATH=%s\n' "$FAMILY1_EXPERIMENT_PATCH_PATH"
             printf 'FAMILY1_EXPERIMENT_PATCH_SHA256=%s\n' "$FAMILY1_EXPERIMENT_PATCH_SHA256"
+            printf 'CFT_COMPATIBILITY=%s\n' "$CFT_COMPATIBILITY"
           } | tee "$DIAG_DIR/source-input.txt"
 
       - name: Resolve Chromium tag and ANGLE revision
@@ -425,6 +443,7 @@ jobs:
               printf 'FAMILY1_EXPERIMENT=false\n'
               printf 'UNSUPPORTED_HARDWARE_OVERRIDE=false\n'
             fi
+            printf 'CFT_COMPATIBILITY=%s\n' "$CFT_COMPATIBILITY"
             printf 'RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21\n'
             printf 'TEST_ONLY_STUB=absent\n'
             printf 'RUNTIME_DEVICE_READY=false\n'
@@ -479,6 +498,7 @@ jobs:
             printf 'FAMILY1_EXPERIMENT=%s\n' "$FAMILY1_EXPERIMENT"
             printf 'FAMILY1_EXPERIMENT_PATCH_PATH=%s\n' "$FAMILY1_EXPERIMENT_PATCH_PATH"
             printf 'FAMILY1_EXPERIMENT_PATCH_SHA256=%s\n' "$FAMILY1_EXPERIMENT_PATCH_SHA256"
+            printf 'CFT_COMPATIBILITY=%s\n' "$CFT_COMPATIBILITY"
             printf 'RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21\n'
             printf 'LIBEGL_RESULT=%s\n' "$(cat "$DIAG_DIR/libegl-result.txt" 2>/dev/null || printf '%s' unavailable)"
             printf 'LIBGLESV2_RESULT=%s\n' "$(cat "$DIAG_DIR/libglesv2-result.txt" 2>/dev/null || printf '%s' unavailable)"

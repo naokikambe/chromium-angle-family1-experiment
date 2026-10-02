@@ -3,7 +3,7 @@
 作成日: 2026-09-26
 更新日: 2026-10-02
 
-状態: 設計確認済み・admission record確認済み・実装済み・Chrome 154.0.8037.59 runtime artifact CI/Phase 3D VM/context trace検証済み・Intel HD 5000固有の属性原因は実機確認待ち
+状態: 設計確認済み・admission record確認済み・実装済み・Chrome 154.0.8037.97 runtime artifact CI成功・VM観測はCfT未配布で停止・Intel HD 5000固有の属性原因は実機確認待ち
 
 ## Chrome 154.0.8037.58 rebuild status（2026-09-29）
 
@@ -46,6 +46,20 @@ context初期化の成功／エラー返却境界も同じartifactで記録す�
 `EGL_BAD_ATTRIBUTE`が発生した場合は属性キー未確定として追加調査へ送れる。
 ただしVM GPUはApple Paravirtualized Graphics Deviceであり、Intel HD 5000で
 同じ属性になること、または別の属性/backendエラーになることは実機確認が必要である。
+
+## Chrome 154.0.8037.97 alignment and VM availability boundary
+
+対象MacのChrome更新に合わせ、`.97`用artifactを対応するChromium DEPS/ANGLE
+revisionで再生成した。runtime build [`36964161986`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36964161986) は成功し、artifactは
+`angle-macos-x86_64-chrome-154.0.8037.97-angle-e12217f3-family1-experiment-36964161986`、GitHub digestは
+`sha256:cf4e9c149e387f94c9f5b9401802f6255c8bc0426d353d73b0d6981c390782ef`、manifest SHA-256は
+`99f3b38400814b1c7919008a26b62ba1a6328171e1dcedd5540d1de165628603`である。
+manifestは`RUNTIME_DEVICE_READY=false`を維持し、実機用に準備済みとは扱わない。
+
+同artifactを指定したVM観測 [`36966677898`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36966677898) は、Chrome for Testing `.97` archiveのHTTP 404でbrowser起動前に停止した。CfT known-good indexには同系列の`.92`とANGLE revision
+`802a8704ca940b633b731493ee192e0661eb8cdd`があるため、workflowには
+`cft_compatibility=true`を明示した場合だけこのペアをbuildするVM専用経路を追加した。
+このcompatibility artifactは`.97`実機用artifactの代替ではなく、実機test copy準備時には拒否する。
 
 ## 結論
 
