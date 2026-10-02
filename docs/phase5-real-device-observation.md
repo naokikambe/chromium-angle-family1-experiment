@@ -21,7 +21,7 @@ WebGL検証可能とは判定しない。
 | Chrome GPU context初期化 | BLOCKED | Intel HD Graphics 5000の`max_es_version=2.0`に対し、ES3要求の`0x3098=3`が`EGL_BAD_ATTRIBUTE` |
 | WebGL | PENDING | GPU context失敗後に停止し、実機WebGL1/2 contextとdrawは未実施 |
 | KOOV | PENDING | WebGL受入れ前のため未実施 |
-| ES3→ES2 fallback実験 | PENDING | CI-only opt-in patchを実装したが、static・runtime build・VM観測が未完了 |
+| ES3→ES2 fallback実験 | PASS（VM限定） | `.92` compatibility VMでfallback marker 4件、EGL初期化成功、WebGL1 context/draw成功を確認。Intel HD 5000実機への適用は未実施 |
 
 今回のソース確認では、macOSのChromium側でGLES3非対応時の自動fallbackが既定で
 無効になり、`--disable-angle-features`だけではChromeのES3要求をES2へ変更しない
@@ -36,11 +36,10 @@ ES2へ降格せず、WebGL1を含む後続の挙動はCI/実機で別途確認�
 | patch SHA-256 | `7bd8a40eaa6311c4ca37ebd68c19ab3d9822b936000e38dbadea70b92667a014` |
 | compile-time define | `ANGLE_PHASE5_METAL_FAMILY1_ES2_FALLBACK_EXPERIMENT` |
 | 適用範囲 | Family 1 experiment artifactの明示opt-inのみ。通常artifact・実機準備済み判定には反映しない |
-| 現在のmanifest境界 | `RUNTIME_DEVICE_READY=false`を維持。新patchを含むartifactはCI/VM検証前で、実機には使用しない |
+| 現在のmanifest境界 | `.92` compatibility artifactは`RUNTIME_DEVICE_READY=false`を維持し、実機には使用しない。正確な`.97` fallback artifactは未build |
 
-次のCIでは、static audit、runtime artifact build、`.92` compatibility VMでの
-fallback marker数、GPU/EGL、WebGL1/2 context、drawを順に確認する。CI成功後も、
-実機への署名・配置・Chrome起動・WebGL操作には別の人間承認が必要である。
+次は正確なChrome `.97` / ANGLE `e12217f3...` fallback artifactをCIでbuildする。
+そのCI成功後も、実機への署名・配置・Chrome起動・WebGL操作には別の人間承認が必要である。
 
 ### 現行`.97` CI入力とVM availability boundary
 
@@ -71,6 +70,29 @@ CfT known-good indexに`.97`がないため、`.97` artifactをそのままVMへ
 この結果はApple Paravirtualized Graphics Device VMに限定され、Intel HD Graphics
 5000上の実機結論ではない。実機で使用する入力は引き続き正確な`.97` artifactであり、
 `.92` compatibility artifactの署名・配置・Chrome起動・WebGL・KOOVへの使用は行わない。
+
+### ES3→ES2 fallback experimentの`.92` VM結果（2026-10-02）
+
+Family 1とcontext fallbackを同時に有効化した`.92` compatibility artifactを、
+Phase 3D VMで読み取り専用に観測した。これはfallback実験のCI/VM受入れ記録であり、
+Intel HD Graphics 5000実機の結果ではない。
+
+| 対象 | 証跡・結果 |
+| --- | --- |
+| runtime CI / artifact | [`36984467242`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36984467242) / success; `angle-macos-x86_64-chrome-154.0.8037.92-angle-802a8704-family1-experiment-36984467242` |
+| artifact digest | `sha256:7f01d71d8638017cc2a6ec9240c5c3a3a784668c9510d293652566ce4cf7fad6` |
+| manifest | SHA-256 `877027a4b176d7ce8bbc295b77cab145cc315a0c4e3858773b81d90b0f421661`; ANGLE `802a8704ca940b633b731493ee192e0661eb8cdd`; `CONTEXT_ES2_FALLBACK_EXPERIMENT=true`; `CFT_COMPATIBILITY=true`; `RUNTIME_DEVICE_READY=false` |
+| VM observation / diagnostics | [`36987425607`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36987425607) / success; diagnostics digest `sha256:1ba3b9e69062385d4d7e3623a56f34fd368ae5a26f7a6ab37e540dc5f8b6f37e` |
+| fallback trace | `FAMILY1_ES3_TO_ES2_FALLBACK_COUNT=4`; `eglInitialize` failure `false`; GPU disabled fallback `false` |
+| dynamic WebGL smoke | page loaded `true`; WebGL1 context `true`; draw `true`; WebGL2 context `false`; `webgl2_error=context-null`; rendererはApple Paravirtual device |
+| stock control | WebGL1/WebGL2 context `false`; draw `false`; GPU disabled fallback `true` |
+
+このVMでは、非WebGLのES3要求4件がES2へfallbackし、WebGL1のcontext生成と描画が
+成功した。一方、WebGL2要求はfallback対象外のためcontext未作成である。したがって、
+「VM上のWebGL1経路は検証可能」は確認できたが、「Intel HD Graphics 5000上のWebGLが
+検証可能」または「WebGL2が利用可能」とは結論しない。次は同じfallback patchを正確な
+Chrome `.97` / ANGLE `e12217f3...` artifactへ適用してbuildし、別途承認された実機で
+まずGPU/EGL、次にWebGL1だけを段階的に確認する。
 
 ### `.97` Intel HD Graphics 5000実機 Case B/C（2026-10-02）
 
@@ -316,7 +338,7 @@ Paravirtualized Graphics Deviceであり、Intel HD Graphics 5000実機の代替
 
 - 実機でreplacement dylibがロードされたかを、同一GPU PIDの`lsof`/`vmmap`で直接証明できていない。今回のcollector後処理はプロセス情報取得で停止したため、引数や計装だけをload証拠にはしない。
 - `.97` Case BではFamily 2 availability gateが`eglInitialize`前の停止原因として確認できた。Case Cでそのgateを無効化するとdisplay初期化は成功したため、初期化失敗の最初の原因境界は分離できた。
-- `.97` Case CではMetal capabilityが`max_es_version=2.0`であることを実機で確認した。ES 3.0要求時の`EGL_BAD_ATTRIBUTE`は`EGL_CONTEXT_CLIENT_VERSION (0x3098)`の値3と特定済みであり、非WebGL GPU情報contextだけをES2へ切り替えるCI-only fallback experimentを実装した。ただしCI/VM未検証で、Chrome初期化の最終的な扱いは未確定である。
+- `.97` Case CではMetal capabilityが`max_es_version=2.0`であることを実機で確認した。ES 3.0要求時の`EGL_BAD_ATTRIBUTE`は`EGL_CONTEXT_CLIENT_VERSION (0x3098)`の値3と特定済みであり、非WebGL GPU情報contextだけをES2へ切り替えるCI-only fallback experimentを実装した。`.92` compatibility VMではWebGL1 context/drawまで確認したが、正確な`.97` artifactの実機適用とChrome初期化の最終的な扱いは未確定である。
 - runtime patchは`newCommandQueue`直後のnil guardを追加するだけで、Family 1
   availability gateを迂回しない。
 - manifestの`RUNTIME_OPT_IN`は`--disable-angle-features=requireGpuFamily2,requireMsl21`
