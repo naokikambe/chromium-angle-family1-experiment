@@ -3,7 +3,7 @@
 作成日: 2026-09-26
 更新日: 2026-10-02
 
-状態: 設計確認済み・admission record確認済み・Family 1実験実装済み・ES3→ES2 fallback experimentのruntime CI/VM検証成功（WebGL1 context/draw）・Chrome 154.0.8037.97 runtime artifact CI成功・Intel HD 5000実機の`EGL_CONTEXT_CLIENT_VERSION (0x3098)=3`拒否を特定・正確な`.97` fallback artifact buildと実機WebGL1待ち・WebGL2/KOOV未達
+状態: 設計確認済み・admission record確認済み・Family 1実験実装済み・ES3→ES2 fallback experimentのruntime CI/VM検証成功（WebGL1 context/draw）・Chrome 154.0.8037.97 fallback runtime artifact CI成功・Intel HD 5000実機の`EGL_CONTEXT_CLIENT_VERSION (0x3098)=3`拒否を特定・実機WebGL1待ち・WebGL2/KOOV未達
 
 ## 現在の移行判断（2026-10-02）
 
@@ -24,7 +24,8 @@ GPU情報用の非WebGL contextを初期化可能にする実験である。
 | fallback patch SHA-256 | `7bd8a40eaa6311c4ca37ebd68c19ab3d9822b936000e38dbadea70b92667a014` |
 | CI適用 | runtime CI [`36984467242`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36984467242) と`.92` compatibility VM [`36987425607`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36987425607) がsuccess。fallback marker 4件、WebGL1 context/draw成功、WebGL2 context未作成 |
 | 実機適用 | 未実施。`.92` compatibility artifactは実機に使用せず、`RUNTIME_DEVICE_READY=false`を維持 |
-| 次の実機入力 | 正確なChrome `.97` / ANGLE `e12217f3...`へ同じfallback patchを適用したruntime artifactをCI buildし、承認後にGPU/EGL→WebGL1の順で確認 |
+| 正確な`.97` fallback artifact | runtime CI [`36988193107`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36988193107) / success; GitHub digest `sha256:984225daa95e44dd621dee93e604cce9fea414015287ba1b3fa7eb2cb7ff7bc7`; manifest SHA-256 `73e94ae3b306086201401bfc31540296362aac5505d4af478537abed6391e961`; ANGLE `e12217f3e133cb1029b050d893b1806d141483be`; `RUNTIME_DEVICE_READY=false` |
+| 次の実機入力 | 上記の正確な`.97` fallback artifactを使用し、別途承認後にGPU/EGL→WebGL1の順で確認。署名・配置・Chrome起動・WebGL操作は未実施 |
 | WebGL/KOOV | VMではWebGL1経路のみ成功。実機WebGL1とKOOVは未達、WebGL2はES3能力境界として別判定 |
 
 ## Chrome 154.0.8037.58 rebuild status（2026-09-29）
@@ -82,6 +83,21 @@ manifestは`RUNTIME_DEVICE_READY=false`を維持し、実機用に準備済み�
 `802a8704ca940b633b731493ee192e0661eb8cdd`があるため、workflowには
 `cft_compatibility=true`を明示した場合だけこのペアをbuildするVM専用経路を追加した。
 このcompatibility artifactは`.97`実機用artifactの代替ではなく、実機test copy準備時には拒否する。
+
+### Chrome 154.0.8037.97 fallback artifact CI result (2026-10-02)
+
+`.97` runtime artifactへFamily 1とES3→ES2 fallback experimentを明示opt-inで適用し、
+CI build、manifest、artifact contentsを読み取り専用で検証した。
+
+| 項目 | 記録 |
+| --- | --- |
+| runtime CI / artifact | [`36988193107`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36988193107) / success; `angle-macos-x86_64-chrome-154.0.8037.97-angle-e12217f3-family1-experiment-36988193107` |
+| GitHub artifact digest | `sha256:984225daa95e44dd621dee93e604cce9fea414015287ba1b3fa7eb2cb7ff7bc7` |
+| manifest | SHA-256 `73e94ae3b306086201401bfc31540296362aac5505d4af478537abed6391e961`; Chrome `154.0.8037.97`; Chromium `b510e9d7cd3a2fbd78d0ddc42234103206c5f78d`; ANGLE `e12217f3e133cb1029b050d893b1806d141483be`; `CONTEXT_ES2_FALLBACK_EXPERIMENT=true`; `CFT_COMPATIBILITY=false` |
+| device boundary | `RUNTIME_DEVICE_READY=false`; signing、test copy配置、Chrome起動、WebGL/KOOVは未実施 |
+
+CfT `.97` archiveがHTTP 404のため、この正確な`.97` artifactのVM起動観測はなく、
+`.92` compatibility VM結果を`.97`の実機結果へ読み替えない。
 
 ### Chrome 154.0.8037.92 compatibility VM observation（2026-10-02）
 
