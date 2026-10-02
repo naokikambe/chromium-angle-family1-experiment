@@ -908,7 +908,7 @@ grep -F -- 'gl_initializer_mac=3' "$fixture/case-b/run-metadata.txt" >/dev/null
 grep -F -- 'disabled-by-default-gpu.angle' "$fixture/case-b/run-metadata.txt" >/dev/null
 grep -F -- '--trace-startup-file=' "$fixture/case-b/run-metadata.txt" >/dev/null
 grep -F -- '--trace-startup-format=json' "$fixture/case-b/run-metadata.txt" >/dev/null
-grep -F -- '--trace-startup-duration=15' "$fixture/case-b/run-metadata.txt" >/dev/null
+grep -F -- '--trace-startup-duration=30' "$fixture/case-b/run-metadata.txt" >/dev/null
 grep -Fx 'chrome_gpu_startup_trace_format=json' "$fixture/case-b/run-metadata.txt" >/dev/null
 grep -Fx 'diagnostic_gpu_startup=false' "$fixture/case-c/run-metadata.txt" >/dev/null
 ! grep -F -- '--trace-startup-format=' "$fixture/case-c/run-metadata.txt"
