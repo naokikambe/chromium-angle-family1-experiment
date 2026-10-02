@@ -46,7 +46,7 @@ planに定めた3B/3C/3D run、manifest SHA-256、artifact名、ANGLE revision�
 Phase 3D run `36507728136`も成功したが、署名・実機起動・KOOV操作は行っていない。
 VM観測の成功もIntel HD Graphics 5000での実機成功を意味しない。
 
-## Phase 5 context属性検証trace（CI検証済み、実機確認待ち）
+## Phase 5 context属性検証trace（CI/VM検証、実機結果は別記録）
 
 固定ANGLE revisionへ適用するruntime patchに、`validationEGL.cpp`のcontext
 属性検証と属性値検証の結果をstderrへ記録する計装を追加した。各記録は属性キー、
@@ -334,12 +334,12 @@ KOOV results.
 
 This does not identify the behavior of Intel HD Graphics 5000.  The VM
 reported an Apple Paravirtualized Graphics Device, and the artifact remains
-`RUNTIME_DEVICE_READY=false`; real-device evidence is still required to
-confirm whether the same max-version boundary and error mapping occur there,
-or whether the real device produces a different EGL error before context
-creation.  The next device-only question is therefore whether Intel HD 5000
-also reports `EGL_CONTEXT_CLIENT_VERSION (0x3098)` or identifies another
-attribute/backend boundary.
+`RUNTIME_DEVICE_READY=false`.  The later `.97` Intel HD Graphics 5000 Case C
+trace independently confirmed the same `EGL_CONTEXT_CLIENT_VERSION (0x3098)`
+value-3 rejection after `eglInitialize` succeeded; that real-device result is
+recorded in `docs/phase5-real-device-observation.md`.  The remaining device-only
+questions are WebGL/KOOV acceptance, the handling of the ES3 request, and
+direct same-GPU-PID proof of replacement-dylib loading.
 
 ## Chrome `.97` artifact and Chrome for Testing availability boundary
 

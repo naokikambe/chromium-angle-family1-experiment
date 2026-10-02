@@ -3,7 +3,7 @@
 作成日: 2026-09-26
 更新日: 2026-10-02
 
-状態: 設計確認済み・admission record確認済み・実装済み・Chrome 154.0.8037.97 runtime artifact CI成功・.92 compatibility VM観測成功・Intel HD 5000固有の属性原因は実機確認待ち
+状態: 設計確認済み・admission record確認済み・実装済み・Chrome 154.0.8037.97 runtime artifact CI成功・.92 compatibility VM観測成功・Intel HD 5000実機の`EGL_CONTEXT_CLIENT_VERSION (0x3098)=3`拒否を特定・WebGL/KOOV待ち
 
 ## Chrome 154.0.8037.58 rebuild status（2026-09-29）
 
@@ -75,6 +75,16 @@ VM専用compatibility経路を実行し、`.92`のruntime buildとPhase 3D観測
 dynamicではmanifest検証、Chrome/GPU起動、両replacement dylibのGPU相関ロード、Metal初期化、EGL display初期化まで成功した。dynamic/stockともGPU-disabled fallbackに到達し、EGL初期化失敗は観測されなかった。WebGLページは到達したが、両ケースともWebGL1/WebGL2 context作成と描画は未達だった。直接context traceでは、ES 3.0要求の`0x3098=3`だけが`EGL_BAD_ATTRIBUTE`となり、ES 2.0要求の`0x3098=2`はcontext作成に成功した。非version属性列は同一で、analyzerの結論は`egl-bad-attribute-from-context-error-attribute`である。
 
 これはApple Paravirtualized Graphics Device VMの診断であり、Intel HD Graphics 5000上の属性原因を確定しない。compatibility artifactは実機test copy準備では拒否され、`.97`実機artifactの代替にはならない。
+
+## Chrome `154.0.8037.97` Intel HD Graphics 5000実機trace（2026-10-02）
+
+`.97` runtime artifact CI [`36964161986`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36964161986) のartifactを新規test copyへ投入した。artifact名は`angle-macos-x86_64-chrome-154.0.8037.97-angle-e12217f3-family1-experiment-36964161986`、GitHub digestは`sha256:cf4e9c149e387f94c9f5b9401802f6255c8bc0426d353d73b0d6981c390782ef`、manifest SHA-256は`99f3b38400814b1c7919008a26b62ba1a6328171e1dcedd5540d1de165628603`、ANGLE revisionは`e12217f3e133cb1029b050d893b1806d141483be`である。manifestの`RUNTIME_DEVICE_READY=false`は維持した。
+
+Case Bでは`requireGpuFamily2`が有効でoverrideなしのため、Intel HD Graphics 5000のFamily 2 gateで`eglInitialize`が失敗した。Case Cでは`--disable-angle-features=requireGpuFamily2`を指定し、`require_gpu_family2 enabled=false has_override=true`、`eglInitialize_return_success`、`max_es_version=2.0`まで到達した。
+
+Case Cの直接context traceは6回の呼び出しを記録した。ES 3.0要求4回は、ES2と同一の非version属性列に`0x3098=3`を含み、すべて`EGL_BAD_ATTRIBUTE`となった。ES 2.0要求2回は`0x3098=2`でcontext作成に成功した。analyzerの結論は`egl-bad-attribute-from-context-error-attribute`であり、Intel HD Graphics 5000上で実際に拒否された属性は`EGL_CONTEXT_CLIENT_VERSION (0x3098)`、値は`3`である。これは、Family 2 gateを回避した後のES version能力境界であり、非version属性またはEGL config選択の拒否とは判定しない。
+
+GPU processはES3 context失敗後に終了したため、WebGLとKOOVは未実施である。replacement dylibの同一GPU PID直接load証拠はcollector後処理未完了のため未確定であり、引き続き別の証拠収集課題として扱う。
 
 ## 結論
 
@@ -365,11 +375,11 @@ Phase 3DのVM上でGPUレンダリングが成功しても、Intel HD 5000での
 
 ## 実機試行後の判断
 
-実機試行の詳細は[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)に記録する。`.58`のCase B/Cでは、Intel HD Graphics 5000 / Metalのadapter選択後にEGL初期化が失敗し、GPU processが終了して`--use-gl=disabled`へfallbackした。Case Cの`requireGpuFamily2`指定はGPU processへ渡ったが、初期化成功やfeature overrideの認識を示す証拠ではない。runtime patchは`newCommandQueue`のnil guardを追加するだけで、Family 1 availability gateを迂回しない。
+実機試行の詳細は[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)に記録する。`.58`/`.59`のCase B/CではIntel HD Graphics 5000 / Metalのadapter選択後にEGL初期化が失敗した。`.97` Case BではFamily 2 gate、Case Cではそのoverride後の`max_es_version=2.0`とES3 context拒否を分離して観測した。runtime patchは`newCommandQueue`のnil guardを追加するだけであり、実機で観測した`EGL_CONTEXT_CLIENT_VERSION`拒否を自動的に回避するものではない。
 
 runtime manifestは`RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21`を記録する一方、既存のCase Cスクリプトは`requireGpuFamily2`だけを指定する。固定revisionで`requireMsl21`の存在と効果は確認できていないため、次の実機試行へ暗黙に追加しない。なお、Phase 3DのCI VM probeでは、manifestの値が承認済みの固定値と一致する場合に限り、このruntime opt-inをCI用Chrome起動へ適用し、適用結果を起動記録へ残す。これはCI VM内の切り分け専用であり、実機Case Cのコマンドや承認境界を変更しない。
 
-次の判断順序は、保存済みGPU startup traceとstderrの読み取り専用分析、必要に応じた診断用の直接ロード・feature override証明、固定revisionのFamily 1 gateとruntime patchのソース診断、修正のCI/VM検証、新しい実機試行の承認である。GPU初期化が成功するまでWebGL、続いてKOOVへ進めない。
+次の判断順序は、今回特定した`EGL_CONTEXT_CLIENT_VERSION=3`拒否を前提に、ES2 fallbackまたはES3要求の扱いを設計し、targeted test・static audit・artifact validation・VM観測をCIで先に確認することである。その後、別途承認された実機操作でGPU/EGL受入れ条件を再確認し、成功した場合だけWebGL、続いてKOOVへ進む。ANGLE同一GPU PID load証拠の不足は独立した観測課題として残る。
 
 ## できないこと・残る不確実性
 
