@@ -18,6 +18,24 @@
 
 CfT known-good indexに`.97`がないため、`.97` artifactをそのままVMへ渡すことはできなかった。workflowには、CfTに存在する同系列`.92`とANGLE `802a8704ca940b633b731493ee192e0661eb8cdd`を`cft_compatibility=true`で明示的にbuildするVM専用経路を追加した。このcompatibility artifactは実機用ではなく、test-copy準備でも拒否する。
 
+### `.92` compatibility VM観測（実機入力ではない）
+
+`.97`のCfT配布境界を切り分けるため、VM専用compatibility modeでChrome
+`.92`とANGLE `802a8704ca940b633b731493ee192e0661eb8cdd`をbuildし、Phase 3D
+観測まで完了した。
+
+| 対象 | 証跡・結果 |
+| --- | --- |
+| runtime CI / artifact | [`36968691106`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36968691106) / success; `angle-macos-x86_64-chrome-154.0.8037.92-angle-802a8704-family1-experiment-36968691106` |
+| artifact digest | `sha256:7e94b75d860be33c7451c731f42c6b438a3385b90e97d4122e5edb8c73715250` |
+| manifest | SHA-256 `747ea00759790040bdbef84c947610cf63c2078880249aadf36dd83ae74aef2c`; `CFT_COMPATIBILITY=true`; `RUNTIME_DEVICE_READY=false` |
+| VM observation / diagnostics | [`36970918937`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36970918937) / success; digest `sha256:4275c91c7384791bea90db704765e8283dcfda005bbc24330303f91119a987cc` |
+| VM result | dynamic/stockともEGL display初期化成功、GPU fallback、WebGL1/2 context未作成・draw未達。dynamicの直接context traceは`EGL_BAD_ATTRIBUTE attribute=0x3098 value=3`、ES2要求は成功。 |
+
+この結果はApple Paravirtualized Graphics Device VMに限定され、Intel HD Graphics
+5000上の実機結論ではない。実機で使用する入力は引き続き正確な`.97` artifactであり、
+`.92` compatibility artifactの署名・配置・Chrome起動・WebGL・KOOVへの使用は行わない。
+
 `.59`用runtime artifactのbuild、Phase 3D VM観測、実機Case BのGPU startup trace取得まで完了した。
 CI runの成功は診断workflowが完了した意味であり、GPU初期化・WebGLが成功した意味ではない。
 

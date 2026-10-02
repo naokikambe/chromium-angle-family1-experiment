@@ -3,7 +3,7 @@
 作成日: 2026-09-26
 更新日: 2026-10-02
 
-状態: 設計確認済み・admission record確認済み・実装済み・Chrome 154.0.8037.97 runtime artifact CI成功・VM観測はCfT未配布で停止・Intel HD 5000固有の属性原因は実機確認待ち
+状態: 設計確認済み・admission record確認済み・実装済み・Chrome 154.0.8037.97 runtime artifact CI成功・.92 compatibility VM観測成功・Intel HD 5000固有の属性原因は実機確認待ち
 
 ## Chrome 154.0.8037.58 rebuild status（2026-09-29）
 
@@ -60,6 +60,21 @@ manifestは`RUNTIME_DEVICE_READY=false`を維持し、実機用に準備済み�
 `802a8704ca940b633b731493ee192e0661eb8cdd`があるため、workflowには
 `cft_compatibility=true`を明示した場合だけこのペアをbuildするVM専用経路を追加した。
 このcompatibility artifactは`.97`実機用artifactの代替ではなく、実機test copy準備時には拒否する。
+
+### Chrome 154.0.8037.92 compatibility VM observation（2026-10-02）
+
+VM専用compatibility経路を実行し、`.92`のruntime buildとPhase 3D観測が成功した。
+
+| 項目 | 記録 |
+| --- | --- |
+| runtime CI | [`36968691106`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36968691106) / success |
+| runtime artifact | `angle-macos-x86_64-chrome-154.0.8037.92-angle-802a8704-family1-experiment-36968691106` / GitHub digest `sha256:7e94b75d860be33c7451c731f42c6b438a3385b90e97d4122e5edb8c73715250` |
+| manifest | SHA-256 `747ea00759790040bdbef84c947610cf63c2078880249aadf36dd83ae74aef2c`; `CFT_COMPATIBILITY=true`; Chrome `.92`; ANGLE `802a8704ca940b633b731493ee192e0661eb8cdd`; `RUNTIME_DEVICE_READY=false` |
+| VM observation | [`36970918937`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36970918937) / success; diagnostics digest `sha256:4275c91c7384791bea90db704765e8283dcfda005bbc24330303f91119a987cc` |
+
+dynamicではmanifest検証、Chrome/GPU起動、両replacement dylibのGPU相関ロード、Metal初期化、EGL display初期化まで成功した。dynamic/stockともGPU-disabled fallbackに到達し、EGL初期化失敗は観測されなかった。WebGLページは到達したが、両ケースともWebGL1/WebGL2 context作成と描画は未達だった。直接context traceでは、ES 3.0要求の`0x3098=3`だけが`EGL_BAD_ATTRIBUTE`となり、ES 2.0要求の`0x3098=2`はcontext作成に成功した。非version属性列は同一で、analyzerの結論は`egl-bad-attribute-from-context-error-attribute`である。
+
+これはApple Paravirtualized Graphics Device VMの診断であり、Intel HD Graphics 5000上の属性原因を確定しない。compatibility artifactは実機test copy準備では拒否され、`.97`実機artifactの代替にはならない。
 
 ## 結論
 
