@@ -245,6 +245,11 @@ mutate either replacement.  `dynamic-angle-evidence.txt` and
 `authoritative-result.txt` contain the boundary booleans and summarized
 outcome.
 
+`context-trace-analysis.txt` is generated for dynamic observations and groups
+the raw `eglCreateContext` markers by call. It records config selection,
+ES-version counts, the non-version attribute comparison, and a conclusion only
+when the raw trace supports the context-version rejection path.
+
 The optional `loader_trace` workflow input enables `DYLD_PRINT_LIBRARIES=1` for
 the isolated Chrome for Testing launch.  Its output is preserved in
 `browser-stderr.txt`; the relevant framework and replacement-library lines are

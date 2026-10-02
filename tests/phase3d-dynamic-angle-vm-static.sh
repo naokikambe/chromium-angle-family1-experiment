@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
 workflow="$repo_root/.github/workflows/phase3d-dynamic-angle-vm.yml"
 probe="$repo_root/scripts/run-phase3d-chrome-launch-probe.sh"
+context_analyzer="$repo_root/scripts/analyze-phase5-context-trace.sh"
 evidence_helper="$repo_root/scripts/phase3-gpu-evidence.sh"
 
 grep -F 'workflow_dispatch:' "$workflow" >/dev/null
@@ -26,6 +27,11 @@ grep -F 'path: ${{ runner.temp }}/phase3d-dynamic-angle-results' "$workflow" >/d
 ! grep -E 'pull_request(_target)?|^[[:space:]]+push:|id-token:|contents:[[:space:]]+write|actions:[[:space:]]+write|continue-on-error' "$workflow" >/dev/null
 
 grep -F 'phase3_validate_release_manifest "$angle_artifact_dir"' "$probe" >/dev/null
+grep -F 'bash -n scripts/analyze-phase5-context-trace.sh' "$workflow" >/dev/null
+grep -F 'scripts/analyze-phase5-context-trace.sh' "$workflow" >/dev/null
+grep -F 'phase5-context-trace-analysis-v1' "$context_analyzer" >/dev/null
+grep -F 'NON_VERSION_ATTRIBUTES_IDENTICAL' "$context_analyzer" >/dev/null
+grep -F 'egl-bad-attribute-from-context-version-rejection' "$context_analyzer" >/dev/null
 grep -F 'PHASE3_APPROVED_RUNTIME_OPT_IN' "$repo_root/scripts/phase3-test-copy-common.sh" >/dev/null
 grep -F 'PHASE3_RELEASE_RUNTIME_OPT_IN' "$repo_root/scripts/phase3-test-copy-common.sh" >/dev/null
 grep -F 'runtime_opt_in_applied' "$probe" >/dev/null

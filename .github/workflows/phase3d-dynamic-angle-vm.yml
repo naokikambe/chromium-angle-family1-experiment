@@ -38,6 +38,7 @@ jobs:
           set -euo pipefail
           [[ "$ANGLE_BUILD_RUN_ID" =~ ^[0-9]+$ ]]
           bash -n scripts/run-phase3d-chrome-launch-probe.sh
+          bash -n scripts/analyze-phase5-context-trace.sh
           bash -n tests/phase3d-chrome-launch-probe-static.sh
           bash -n tests/phase3d-dynamic-angle-vm-static.sh
           bash -n tests/phase3d-webgl-smoke-static.sh
@@ -80,6 +81,8 @@ jobs:
             probe_args+=(--loader-trace)
           fi
           scripts/run-phase3d-chrome-launch-probe.sh "${probe_args[@]}"
+          scripts/analyze-phase5-context-trace.sh \
+            "$results_dir/browser-stderr.txt" > "$results_dir/context-trace-analysis.txt"
           stock_args=(
             "$CHROME_VERSION"
             "$stock_results"
