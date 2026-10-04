@@ -101,11 +101,13 @@ printf 'snapshot_archive_sha256=%s\n' "$actual_archive_sha256" >> "$results_dir/
 curl --fail --location --retry 2 --output "$revisions" "$revisions_url"
 cp "$revisions" "$results_dir/REVISIONS"
 
-revision_hashes=$(grep -Eo '[0-9a-f]{40}' "$revisions" | awk '!seen[$0]++')
-revision_count=$(printf '%s\n' "$revision_hashes" | sed '/^$/d' | wc -l | tr -d ' ')
-[[ "$revision_count" -ge 2 ]] || phase3_fail 'official REVISIONS did not contain Chromium and ANGLE revisions'
-snapshot_chromium_revision=$(printf '%s\n' "$revision_hashes" | sed -n '1p')
-snapshot_angle_revision=$(printf '%s\n' "$revision_hashes" | sed -n '2p')
+jq -e --arg snapshot_position "$snapshot_position" \
+  '(.chromium_revision | tostring) == $snapshot_position' "$revisions" >/dev/null ||
+  phase3_fail 'official REVISIONS chromium_revision did not match the snapshot position'
+snapshot_chromium_revision=$(jq -er '.got_revision | strings | select(test("^[0-9a-f]{40}$"))' "$revisions") ||
+  phase3_fail 'official REVISIONS got_revision was not a 40-character lowercase SHA'
+snapshot_angle_revision=$(jq -er '.got_angle_revision | strings | select(test("^[0-9a-f]{40}$"))' "$revisions") ||
+  phase3_fail 'official REVISIONS got_angle_revision was not a 40-character lowercase SHA'
 [[ "$snapshot_chromium_revision" == "$expected_chromium_revision" ]] ||
   phase3_fail "official Chromium revision mismatch: $snapshot_chromium_revision"
 

@@ -29,6 +29,9 @@ grep -F 'if: always()' "$workflow" >/dev/null
 grep -F 'commondatastorage.googleapis.com/chromium-browser-snapshots/Mac' "$runner" >/dev/null
 grep -F 'chrome-mac.zip' "$runner" >/dev/null
 grep -F 'REVISIONS' "$runner" >/dev/null
+grep -F '.got_revision' "$runner" >/dev/null
+grep -F '.got_angle_revision' "$runner" >/dev/null
+! grep -F "grep -Eo '[0-9a-f]{40}'" "$runner" >/dev/null
 grep -F 'codesign -dvvv --strict' "$runner" >/dev/null
 grep -F 'code object is not signed at all' "$runner" >/dev/null
 grep -F 'download-angle-artifact.sh' "$runner" >/dev/null
