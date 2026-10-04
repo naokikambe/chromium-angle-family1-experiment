@@ -98,3 +98,21 @@ diff --git a/build/config/mac/BUILD.gn b/build/config/mac/BUILD.gn
        "$mac_sdk_path/usr/include/mach/exc.defs",
        "$mac_sdk_path/usr/include/mach/mach_exc.defs",
        "$mac_sdk_path/usr/include/mach/notify.defs",
+
+diff --git a/build/modules/BUILD.gn b/build/modules/BUILD.gn
+--- a/build/modules/BUILD.gn
++++ b/build/modules/BUILD.gn
+@@ -56,6 +56,7 @@
+     if (need_mac_sysroot) {
+       action("mac_sysroot") {
+         script = "//build/noop.py"
++        public_deps = [ "//build/config/mac:sdk_inputs" ]
+         outputs = filter_exclude(
+                 expand_directory(mac_sdk_path + "/usr/include", true),
+                 # Avoid overlap with //build/config/mac:sdk_inputs
+@@ -64,4 +65,5 @@
+       }
+     } else {
+       group("mac_sysroot") {
++        public_deps = [ "//build/config/mac:sdk_inputs" ]
+       }

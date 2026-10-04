@@ -38,12 +38,14 @@ grep -F 'diff --git a/content/browser/storage_partition_impl.cc' "$diagnostic_pa
 grep -F 'diff --git a/services/network/url_loader_factory.cc' "$diagnostic_patch" >/dev/null
 grep -F 'diff --git a/services/network/url_loader.cc' "$diagnostic_patch" >/dev/null
 grep -F 'diff --git a/build/config/mac/BUILD.gn' "$diagnostic_patch" >/dev/null
+grep -F 'diff --git a/build/modules/BUILD.gn' "$diagnostic_patch" >/dev/null
+grep -F 'public_deps = [ "//build/config/mac:sdk_inputs" ]' "$diagnostic_patch" >/dev/null
 for marker in browser_factory_create factory_request factory_loader_created schedule_start schedule_decision response_started completed mojo_disconnect; do
   grep -F "[PHASE5_URL_DIAG] $marker" "$diagnostic_patch" >/dev/null
 done
 
 test "$(shasum -a 256 "$diagnostic_patch" | awk '{print $1}')" = \
-  e31ac7f63429b786e9cd29e48e6a5b8fc5cf6c331b10712610e1931ca33f47c6
+  4e7309385365561f677a1cc61fb6c1a77738c8578724b7f605c97da9db4ec5dc
 grep -F 'SIGNING_OPERATION=none' "$runner" >/dev/null
 grep -F 'XATTR_OPERATION=none' "$runner" >/dev/null
 grep -F 'RUNTIME_DEVICE_READY' "$runner" >/dev/null
