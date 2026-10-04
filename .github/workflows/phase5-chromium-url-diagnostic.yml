@@ -178,11 +178,13 @@ jobs:
           is_official_build = false
           target_cpu = "x64"
           use_system_xcode = true
+          clang_use_chrome_plugins = false
+          mac_deployment_target = "13.0"
+          mac_min_system_version = "13.0"
           symbol_level = 0
           blink_symbol_level = 0
           v8_symbol_level = 0
           chrome_pgo_phase = 0
-          enable_nacl = false
           EOF
           gn gen out/Phase5URLDiagnostic > "$DIAG_DIR/gn-stdout.log" 2> "$DIAG_DIR/gn-stderr.log"
           autoninja -C out/Phase5URLDiagnostic chrome > "$DIAG_DIR/chromium-build.log" 2>&1
