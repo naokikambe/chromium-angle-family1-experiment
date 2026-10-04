@@ -2,7 +2,7 @@
 
 更新日: 2026-10-04
 
-状態: 計画確定前の文書化。今回の更新ではChromium取得、ANGLE配置、署名、xattr変更、profile作成、Chromium起動、実機操作、KOOV操作を行っていない。
+状態: 実験完了。U0/U1のCI、Chromium S0/S1の実機比較、Google Chrome C0の再署名controlを実施済み。C0で再署名差が再現したため、C1（ANGLE追加後の別bundle署名）は実施していない。KOOV操作と`RUNTIME_DEVICE_READY=false`の変更は行っていない。
 
 ## 1. 目的と結論
 
@@ -38,6 +38,8 @@
 loopbackではTCP/preconnectまでは進むが、test copyは`HTTP_STREAM_REQUEST`、HTTP送信、応答、document eventへ進まない。background通信は完了しており、全Network Service停止、KOOVサーバー不存在、中間証明書不足、単純なTLS検証失敗とは判定していない。
 
 詳細は[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)のsource比較、NetLog比較、公開一次資料照合を参照する。
+
+ここでの「現在の有力候補」は、Chrome C0とChromium S0/S1の追加比較前に置いた仮説である。2.8の比較により、再署名差がURL失敗の原因カテゴリとして黒であることは確定したが、identity、requirement、entitlement、nested closureのどれが直接原因かはなお未分離である。
 
 ### 2.2 CI run 36514821653の範囲
 
@@ -104,7 +106,7 @@ CI run `36514821653`はsuccessだったが、対象はANGLE artifact検証とChr
 - Chromiumのdevelopment-signed buildは公式Google署名buildとentitlementが異なる。
 - macOSはApplication Firewall等の処理でdetached signatureを記録する場合がある。
 
-従って、既存観測は「公式仕様として再署名がURLを止める」とは言えないが、「署名方式差を除外した入力が必要」という判断を支持する。
+従って、公式資料だけから「再署名がURLを止める」という一般的既知問題を主張することはできない。一方、今回の実測ではChrome C0とChromium S0/S1で同じ署名方式差のURL停止を再現した。この実測結果と公式資料上の影響経路は、2.8の最終判定で分けて記録する。
 
 ### 2.6 Edge・第三者署名Chromiumの扱い
 
@@ -117,6 +119,27 @@ CI run `36514821653`はsuccessだったが、対象はANGLE artifact検証とChr
 KOOVの公式資料では、最新のChrome/Edge、WebGL対応環境、Bluetooth 4.0以上が前提である。現在のダウンロードページはデスクトップmacOS 14以上と最新Chrome/Edgeを案内している。旧PC版のサポート終了日も2026-03-31とされている。
 
 そのため、未署名または独自署名ChromiumでURL/WebGLが成功しても、KOOVの公式サポート環境に入ったことは意味しない。KOOV判定には別途、document到達、画面描画、認証、保存、Bluetooth、USBを確認する必要がある。今回の実験ではKOOV操作を行わない。
+
+### 2.8 2026-10-04 U0/U1・S0/S1・Chrome C0の最終比較
+
+承認後、完全未署名ChromiumのCI比較、既存の承認済み実機用S0/S1比較、公式Google Chromeを複製してApple Developmentで一度だけ署名するC0 controlを実施した。結果は次のとおりである。
+
+| ケース | 入力と署名 | URL / GPU結果 | 判定範囲 |
+| --- | --- | --- | --- |
+| U0 | 完全未署名stock Chromium | loopback URL pass、WebGL smoke pass | CI run `37180857723`。`INPUT_REVISION_MATCH_CHROMIUM=false`のため探索的 |
+| U1 | U0の別copyへANGLE 2 dylibだけを追加、未署名のまま | loopback URL pass、ANGLE load pass、WebGL smoke pass | `INPUT_REVISION_MATCH_ANGLE=false`のため探索的 |
+| S0 | stock Chromiumを凍結後、Apple Developmentで初回署名一回 | strict verify pass。ただしHTTP stream/document前にURL失敗、`/probe`未到達 | stockでも失敗するためANGLE追加は必要条件ではない |
+| S1 | ANGLE追加済みChromiumを凍結後、Apple Developmentで初回署名一回 | S0と同じURL失敗。Intel HD Graphics 5000ではMetal/EGL、WebGL1 context/draw pass、WebGL2は`context-null` | URL失敗とGPU/WebGL1到達は別境界 |
+| Chrome official | Google Developer ID署名のChrome `154.0.8037.98`、未改変source | 同一flags・新規profile・loopbackで`/probe` HTTP 200、DOM/title到達 | URL基準 |
+| Chrome C0 | official sourceの別copy。ANGLE replacementなし、bundle凍結後にApple Developmentで初回署名一回 | 署名後strict verify pass、xattr変更なし。ただし`/probe`未到達、DOM空 | Chromeでも再署名差を再現 |
+
+U0/U1のCI結果は、result schema `phase5-unsigned-chromium-u0u1-result-v1`の全必須ゲート（U0/U1 URL、U0/U1 WebGL smoke、U1 ANGLE load）をpassした。ただし、CIで使ったChromium snapshot/ANGLE revisionとPhase 5 runtime artifactのrevisionが一致せず、正式な同一入力の因果証明ではなく探索的結果として扱う。U0/U1のCI成功は、S0/S1のApple Development署名後のURL成功を保証しない。
+
+Chrome C0では、公式sourceとC0に同じrestricted headless flags、loopback fixture、新規profileを使用した。公式sourceは`/probe`のHTTP 200とDOMを取得した一方、C0は規定観測時間内に`/probe`へ到達せずDOMも空だった。C0終了時のプロセス停止に伴うexit `127`は、すでにURL判定を終えた後の停止処理によるため、URL失敗の根拠には使わない。C0にはreplacement ANGLEを追加していないため、ChromeでANGLE追加がURL失敗の必要条件ではないことも確認できた。公式sourceの作業用コピーでnested helperのhost-side deep verify差が出た点は別の証跡として保存し、URL判定は公式sourceの実測結果とC0の署名後strict verify・request結果で行う。
+
+この結果から、テストした範囲では「再署名」は白ではなく、URL document navigationを止める原因カテゴリとして黒と判定する。ChromeとChromiumで、未署名または公式Google署名sourceはURLに到達し、Apple Developmentへ再署名したbundleはHTTP stream/document前で止まるという同じ層の差を再現した。ただし、identity、designated requirement、entitlement、nested signing closure、またはそれに伴うmacOS実行時ポリシーのどの属性が直接原因かは未特定であり、「同じ原因カテゴリ」であって「同じ単一キー」とまでは断定しない。ANGLE追加自体はS0とChrome C0で必要条件から除外できる。
+
+C0で実際に用いた署名順序は、(1) 現行Framework内のnested Mach-O、(2) 最深部からのnested `.app`／`.bundle` container、(3) Framework root、(4) main executable、(5) outer appである。bundle、Framework、dylib、Resources、Info.plist、entitlementを凍結してからこの順序で初回署名を行い、strict verifyを通過させた。C0は32段階の初回署名操作を一回だけ行い、署名後の再署名、bundle変更、xattr変更、Applications置換は行っていない。verify失敗時に再署名する経路も使用していない。C0で目的の差が確定したため、C1の追加署名・ANGLE追加後再署名・再試行は不要かつ禁止とする。
 
 ## 3. 署名方針
 
@@ -168,6 +191,8 @@ CIで証明できない項目は次のとおりである。
 7. verify失敗時は再署名せず、そのcopyを失敗証跡として停止する。
 8. verify成功時だけ新規一時profileで起動する。
 
+実際のC0で確認したnested signingの順序は、現在のFramework内Mach-O、最深部のnested `.app`／`.bundle`、Framework root、main executable、outer appの順である。各bundleは組み立てと凍結を完了してからこの順序で署名する。`--deep`だけの不透明な再署名はこの実験の順序ではない。
+
 禁止事項は次のとおりである。
 
 - ANGLE追加後に、すでに署名済みのbundleを再署名すること
@@ -189,9 +214,9 @@ CIで証明できない項目は次のとおりである。
 
 S0とS1は、署名後に一切bundleを変更しない。S0とS1は別の新規コピーであり、同じcopyを使い回さない。
 
-## 5. 実行予定コマンド
+## 5. 当初計画のコマンドと実施結果
 
-以下は計画上のコマンドであり、この文書の作成時点では実行していない。実際のFramework名とGPU Helper名は、起動前の読み取り専用inventoryで確定する。
+以下は実験設計時に固定した代表コマンドである。U0/U1、S0/S1、Chrome C0の実施結果は2.8と実機観測記録にまとめた。実際のFramework名とGPU Helper名は、各起動前の読み取り専用inventoryで確定した。
 
 ### 5.1 未署名確認
 
@@ -307,6 +332,8 @@ URL成功後、`tests/fixtures/phase3d-webgl-smoke.html`を開く。WebGL1のcon
 - WebGL1のcontext/draw結果とWebGL2結果を混同する
 - KOOV URL/document未到達のままKOOV WebGL/Bluetooth結果を推測する
 
+実施結果として、U0/U1のURL基準はCIでpassし、S0/S1のURL基準はHTTP stream/document前でfailした。このfailは署名後bundleを修正して回避するための条件ではなく、再署名差の観測結果として停止・保存した。その後のChrome C0は、白黒判定を確定するために別途承認されたcontrolであり、失敗したS0/S1を再署名・再構成したものではない。
+
 rollbackは、stock copy、ANGLE copy、profile、結果ディレクトリを分離することで行う。失敗時は証跡を保存して停止し、source Chrome、既存retry/evidence、既存artifact、既存profileを復元対象にしない。新規copyやprofileの削除は、証跡確認後に別途承認する。
 
 ## 8. 人間承認の境界
@@ -322,8 +349,13 @@ rollbackは、stock copy、ANGLE copy、profile、結果ディレクトリを分
 | profile作成・Chromium起動 | 必要 |
 | Intel HD Graphics 5000実機でのGPU/WebGL | 必要 |
 | KOOV起動、認証、保存、USB/Bluetooth | この計画では実施しない。別承認 |
-| GitHub Actions dispatch、artifact再取得、push | この計画では実施しない。別承認 |
+| GitHub Actions dispatch、artifact再取得、push | U0/U1の専用CIと必要な入力取得は承認済みで実施済み。追加のdispatch・artifact再取得・pushは本実験では行わない |
 
-## 9. 次のチャットでの開始条件
+## 9. 実験完了後の扱い
 
-新しい実験チャットでは、まずこの文書と`AGENTS.md`、`docs/phase-status.md`、`docs/phase3d-vm-observability.md`、`docs/phase5-real-device-observation.md`を読み、未署名inventoryとrevision整合性だけを読み取り確認する。次にCIでU0/U1、manifest/hash、static test、保存可能な診断を優先して実施し、CIゲート未達なら実機へ進まない。初回署名、profile、Chromium起動、実機操作は、CIゲート確認後かつ必要な承認を受けるまで行わない。
+U0/U1の必須CIゲート、S0/S1の一回限り初回署名後の実機確認、Chrome official/C0の同条件controlまで完了した。したがって、本計画の目的である「URLアクセス不可が再署名差と同じ因果カテゴリか」の判定は完了し、再署名は黒と記録する。S0/S1のrevision差を含むU0/U1結果は探索的であり、厳密な同一revisionの完全因果証明ではない。
+
+今後必要になり得るのは、追加の署名や実機再試行ではなく、別途承認されたCI・Chromium source側の診断である。具体的には、URLLoaderFactory生成、`CreateLoaderAndStart`、`ScheduleStart`、`OnResponseStarted`、`OnMojoDisconnect`、browser側factory再生成をrequest ID系列で記録し、identity／requirement／entitlement／nested closureのどの差がIPCまたはHTTP stream境界に現れるかを調べる。C1、再署名、署名後変更、xattr変更、Applications置換、KOOV操作は実施しない。
+
+Chromium再開用に、`.github/workflows/phase5-chromium-url-diagnostic.yml`と
+`patches/phase5-chromium-url-loader-diagnostics.patch`を追加した。このworkflowは、runtime artifactと同じChromium `b510e9d7...`／ANGLE `e12217f3...`を入力として、unbranded `is_component_build=false`のfull ChromiumをCIでbuildし、source patchを適用したU0/U1を未署名のまま比較する。local source bundleを受け取る経路では公式snapshotのrevision mismatchを迂回するが、manifest、Chromium/ANGLE revision、未署名状態、U0/U1の入力差分を検証する。static auditは実行済みであり、CI実行結果が出るまで署名・profile・実機操作へ進まない。

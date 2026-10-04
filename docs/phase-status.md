@@ -1,6 +1,6 @@
 # Phase 状態
 
-更新日: 2026-10-02
+更新日: 2026-10-04
 
 ## Orchestration
 
@@ -43,8 +43,16 @@ for new real-device work. Any separately approved historical device-test record 
 | Phase 3B | synthetic fixture CI成功（記録時点） | `angle-release-v1`はChrome/Chromium/ANGLE/depot_tools識別子、dylib SHA、artifact/run metadataを束縛する。test-copy manifestはrelease manifest SHAを記録し、Libraries baselineを保持したままANGLE 2本だけ追加する。正式なsynthetic fixture判定は下記のrunの記録時点で成功した。ローカルfull fixtureは実行しない。retry0–12は保存済み履歴として不変保持し、新規attempt rootは別名で作成する。この行はCI記録の要約であり、後日の実機試行状態を表さない。 |
 | Phase 3B 以降 | synthetic 3B/3C成功、Phase 3D VM観測成功（各記録時点） | Phase 3D文書に記録された、別途承認済みの過去のユーザー所有機器テスト・署名・Chrome起動記録は履歴として保持する。3B/3C/3D run metadataはCI/VMの記録であり、新規の実機作業を承認しない。Phase 5の詳細な入場記録と専用stub CIは完了しているが、この行自体は現在の実機試行結果を表さない。 |
 | Phase 5 | fallback CI/VM成功、正確な`.97` fallback artifactで実機WebGL1 context/draw成功。KOOVはtarget metadata後のdocument遷移で停止 | `.97` fallback runtime CI [`36988193107`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/36988193107) はsuccess。artifactは`angle-macos-x86_64-chrome-154.0.8037.97-angle-e12217f3-family1-experiment-36988193107`、ANGLE `e12217f3e133cb1029b050d893b1806d141483be`、GitHub digest `sha256:984225daa95e44dd621dee93e604cce9fea414015287ba1b3fa7eb2cb7ff7bc7`、manifest SHA-256 `73e94ae3b306086201401bfc31540296362aac5505d4af478537abed6391e961`、`RUNTIME_DEVICE_READY=false`。`.97` fallback実機ではIntel HD Graphics 5000を選択し、`require_gpu_family2 enabled=false has_override=true`、`eglInitialize_return_success`、`max_es_version=2.0`、非WebGLES3→ES2 fallbackを確認した。WebGL1 page/context/drawは成功し、rendererはIntel HD Graphics 5000。WebGL2は`context-null`。CI run `37009376538` artifactでKOOV App ID方式はpage target未到達、URL app-modeと通常タブはtarget metadataまで進んだがdocumentは`about:blank`、CDP `Page.navigate`はtimeoutした。旧App ID方式、KOOV画面描画、基本操作、認証、保存、USB/Bluetoothは未実施。WebGL実行中の同一GPU helper processでreplacement `libEGL.dylib`/`libGLESv2.dylib`を`lsof`/`vmmap`確認済み。fallback patch SHA-256は`7bd8a40eaa6311c4ca37ebd68c19ab3d9822b936000e38dbadea70b92667a014`。詳細は[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)。 |
+| Phase 5 URL/署名因果（2026-10-04） | 実験完了。再署名差は黒（テスト済みbundleのURL document navigationを止める原因カテゴリ） | 完全未署名Chromium U0/U1は専用CI run `37180857723`でURL、WebGL smoke、ANGLE loadの必須ゲートをpassしたが、入力Chromium/ANGLE revision不一致のため探索的。Chromium S0 stockとS1 ANGLEは各bundleを凍結後Apple Developmentで一回だけ初回署名し、strict verifyはpassしたが、両方ともHTTP stream/document前でURL失敗。S1はIntel HD Graphics 5000でMetal/EGLとWebGL1 context/drawに成功、WebGL2は`context-null`。公式Google Chrome `154.0.8037.98`はloopback `/probe` HTTP 200・DOM到達、ANGLE replacementなしのC0 Apple Development初回署名copyはstrict verify pass後も`/probe`未到達・DOM空。Chrome/Chromiumで同じ署名方式差の層を再現したが、直接原因の単一属性は未特定。C1、再署名、署名後変更、xattr変更、Applications置換、KOOV操作は未実施。`RUNTIME_DEVICE_READY=false`は維持。詳細は[`docs/phase5-unsigned-chromium-one-sign-experiment-plan.md`](phase5-unsigned-chromium-one-sign-experiment-plan.md)と[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)。 |
+
+Chromium実験の再開準備として、exact revision `b510e9d7...`／ANGLE `e12217f3...`のfull Chromium diagnostic workflow、URLLoaderFactory/URLLoader/browser factory再生成のsource diagnostic patch、local source U0/U1入力経路、static auditを追加した。static auditは成功済みで、CI dispatchとfull build結果は未取得である。CIが全ゲートをpassするまで、Chromiumの新規署名・profile・実機操作は行わない。
 
 最新の再構築・再試行はruntime CI [`37009376538`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37009376538)のartifact `angle-macos-x86_64-chrome-154.0.8037.97-angle-e12217f3-family1-experiment-37009376538`（GitHub digest `sha256:247f0ee4be552c8e4f8790db04c39753631abc62312b78318dcdd5a80808652d`、manifest SHA-256 `97b03d254b67b604173436bdf64a9c09c93f61d468b66880b36508c5e8d3bab2`）であり、同じ実機結果を再現した。WebGL2のES3要求だけが`EGL_CONTEXT_CLIENT_VERSION (0x3098)=3`で`EGL_BAD_ATTRIBUTE`となり、WebGL1 context/drawは成功した。追加のKOOV実機観測では、App ID方式はpage target未到達、URL app-modeと通常タブはtarget metadataまで進んだがdocumentは`about:blank`、最終URLの直接指定でも同じ結果となり、CDP `Page.navigate`はtimeoutした。HTTP確認ではサーバーは応答した。`RUNTIME_DEVICE_READY=false`は維持し、KOOVの画面描画・基本操作・認証・保存・USB/Bluetoothは未実施である。
+同日の読み取り専用比較では、同じ`154.0.8037.97`のsource Chromeを新規空profileでCDP遷移すると`https://account.sonyged.com/users/oauth/sign_in`のHTTP 200 documentまで到達した一方、署名済みtest copyはdynamic ANGLE引数の有無にかかわらず初期`about:blank` targetからの`Page.navigate`がtimeoutし、navigation eventを記録しなかった。このため、KOOV未達の切り分け対象はURL不存在やChrome版差ではなく、test copyのbundle起動後navigation/profile/page-process境界に更新した。認証情報・保存・USB/Bluetoothは引き続き未実施である。詳細は[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)。
+同じ表示バージョンでもsource/test copyのlauncherとFramework実体のSHA-256は異なり、test copy側Librariesにはreplacement `libEGL.dylib` / `libGLESv2.dylib`が存在するため、次の読み取り専用診断はbundle実体・署名後Framework整合性・renderer/page-process生成順の比較に限定する。
+追加確認では、test copy本体とFrameworkのdeep strict verifyは成功し、中間証明書不足や署名破損は観測されなかった。source Chromeのstrict verifyは既存`com.apple.FinderInfo` xattrで失敗したが、sourceのdocument navigationは成功している。process sampleではsource/test copy双方にGPU、utility、rendererが生成され、test copy未達はrenderer生成前ではなく、その後のdocument navigation/page初期化境界と更新した。認証情報・保存・USB/Bluetoothは引き続き未実施である。
+追加の読み取り専用NetLog比較では、loopbackへのTCP接続まではtest copyでも完了するが、source Chromeの`HTTP_STREAM_REQUEST`、socket bind、HTTP送信、200応答に対し、test copyはHTTP stream生成前に停止してURL requestをcancelした。data URL上のrenderer `fetch`とscript subresourceもrequest送信段階で失敗し、backgroundのChrome更新通信は完了したため、KOOV固有・中間証明書・全Network Service停止ではなく、signed test copyのrenderer由来URL loaderからHTTP streamへのhandoff/socket pool再bind境界を原因候補へ絞った。外部Sony URLの証明書は`cert_status=0`、trusted anchor、valid pathありで、`ERR_CERT_*`や明示的network/sandbox denialは観測されていない。KOOV document/JS/canvas未到達であり、クラッシュとは判定しない。詳細は[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)。
+追加の未改変source bundle一時コピーは、同じ新規profile・`--disable-gpu`・loopback・CDP条件でHTTP 200/title取得に成功した。失敗するtest copyではGPU helperが`--use-gl=disabled`で、対象profileの全processにreplacement `libEGL/libGLESv2`ロードがなくてもHTTP stream生成前停止を再現したため、`/Applications`場所、CDP、profile、Chrome version、ANGLE dylib実行時処理は主因候補から後退した。残る差分はApple Development再署名/main entitlementsとtest bundle再構成であり、これらを分離する新規診断入力が必要である。
 
 ## Phase 3の一次記録（2026-09-26確認）
 
@@ -166,3 +174,53 @@ WebGL1成功とは矛盾しない。KOOVは未実施で、WebGL1結果のレビ�
 | stock WebGL | page loaded `true`; WebGL2/WebGL1 context `false`; draw `false`; errors `context-null` |
 | comparison | `WEBGL_INTERPRETATION=dynamic-webgl-blocked-by-egl-initialization`; dynamicはEGL初期化失敗`true`、stockは`false` |
 | boundary | WebGL smokeの入力・失敗境界はCIで記録済み。描画成功、Intel HD Graphics 5000互換性、KOOV動作は未証明 |
+
+追加のsandbox logging対照では、source bundleとsigned test copyのNetwork Service/renderer
+sandbox deny集合が一致した。sourceは同条件のloopback documentをHTTP 200まで取得したが、
+test copyは`Network.requestWillBeSent`後にHTTP response前で停止したため、一般的なsandbox
+denyやCrashpadのAMFI core-dump拒否はtest copy固有の原因から後退し、署名/bundle再構成または
+URLLoaderFactory/Network Service IPC境界を継続調査対象とする。詳細は
+[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)。
+読み取り専用のbundle inventoryでは、`.97` current Frameworkの欠落はなく、test copy固有の
+追加は意図したreplacement `libEGL.dylib` / `libGLESv2.dylib`だけで、appの`Info.plist`と
+`Resources`はsourceと同一だった。verbose loggingは対象URLの
+`NetworkDelegate::NotifyBeforeURLRequest`までで、URLLoader内部のIPC切断理由はrelease artifact
+から取得できなかった。既存copyを変更せずApple Development再署名差を隔離する新規test copyの
+比較は実施済みであり、結果は次段落と詳細文書に記録する。
+
+新規source複製から同じ`.97` prepare/re-sign手順で作った隔離copyでも、loopback fixtureの
+requestは0件、CDP target URLのみ生成・title空を再現した。既存test copyの偶発的破損ではなく、
+prepare/re-sign後bundleの再現性あるdocument navigation停止と判定する。その後、ANGLEなし・
+Framework version保持のbare Apple Development controlでも同じ停止を再現し、current-only化・
+replacement ANGLE dylib・GPU/EGLは主因候補から後退した。読み取り専用の署名比較では、source
+だけがGoogle identity-bound entitlementとGoogle Developer ID requirementを持ち、controlは
+Chromium base device entitlementとApple Development requirementを持つことを確認した。
+したがって追加の最小entitlement controlは完了扱いとし、残る有力候補は署名identity／requirement
+またはnested signing closureとpage navigation経路の非互換である。特定キーまたはコード行の
+直接因果は未確定であり、実機WebGL/KOOV判定は保留する。再確認ではbare controlのFramework
+両versionとnested helperが同一の開発署名体系で構成され、機械的な署名主体混在は確認されなかった。
+そのため上位候補は、closure破損よりApple Development identity／requirement／実行時ポリシー差
+へ更新した。純正Google署名sourceはURL到達性の基準には使えるが、bundle内へreplacement ANGLE
+dylibを追加して純正署名を維持することはできない。
+
+2026-10-03の読み取り専用CI再確認では、run `36514821653`とjob
+`dynamic-angle-cft-macos-intel`のsuccessをGitHub Actions APIで確認した。このrunはANGLE artifact
+検証とChrome for Testingのdynamic/stock `file://` WebGL smokeであり、Chromium source build、
+Apple Development署名、loopback HTTP document、URLLoader内部診断は含まない。従って、純正Google
+署名sourceと再署名copyのURL到達性比較は既存実機記録で完了しているが、CI runはidentity差の因果を
+検証していない。次の決定的な診断には、`73c14f6228d7cd537c855007e8f88678969cc0eb`対応のfull
+Chromium diagnostic buildと、`URLLoaderFactory::CreateLoaderAndStart`、`URLLoader::ScheduleStart`、
+`OnResponseStarted`／`OnMojoDisconnect`、browser側factory再生成のログが必要である。詳細は
+[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)に記録する。
+
+2026-10-04の読み取り専用探索では、リポジトリ・作業用tmp・一時領域に再利用可能な`Chromium.app`
+または`out/Release`は見つからなかった。既存CI成果物はfull ChromiumではなくANGLEの2 dylibと
+メタデータだけである。従ってnative Chromium URL controlを実施するには、別保有bundleの場所指定
+またはfull Chromium diagnostic buildが必要であり、既存Chrome test copyを代用しない。
+
+公式Chromium snapshotも読み取り確認した。Chrome `.57`のbranch point `1689415`用Mac archiveは
+404だったが、近傍`Mac/1689422/chrome-mac.zip`はHTTP 200で取得可能で、`Chromium.app`を含む。
+ただし`REVISIONS`のChromium `82303c21...`／ANGLE `8efd15f...`は、今回のruntime入力
+`73c14f6228...`／`1ff8799c...`と一致しない。したがって、これはnative Chromium URL control用の
+候補であり、今回のChrome/ANGLEと完全一致するartifactではない。ダウンロード・展開・署名・起動は
+未実施である。

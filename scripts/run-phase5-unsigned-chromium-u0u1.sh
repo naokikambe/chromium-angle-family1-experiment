@@ -10,7 +10,7 @@ readonly URL_DIAGNOSTIC_VMODULE='browser_url_loader_factory=2,storage_partition_
 source "$SCRIPT_DIR/phase3-test-copy-common.sh"
 
 usage() {
-  printf 'usage: %s --snapshot-position POSITION --snapshot-sha256 SHA256 --expected-chromium-revision REVISION --expected-angle-revision REVISION --angle-build-run-id RUN_ID --results-dir DIRECTORY\n' "$0" >&2
+  printf 'usage: %s --snapshot-position POSITION --snapshot-sha256 SHA256 --expected-chromium-revision REVISION --expected-angle-revision REVISION --angle-build-run-id RUN_ID --results-dir DIRECTORY [--local-source-app APP --local-revisions FILE]\n' "$0" >&2
   exit 64
 }
 
@@ -20,6 +20,8 @@ expected_chromium_revision=''
 expected_angle_revision=''
 angle_build_run_id=''
 results_dir=''
+local_source_app=''
+local_revisions=''
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --snapshot-position)
@@ -52,16 +54,34 @@ while [[ $# -gt 0 ]]; do
       results_dir=$2
       shift 2
       ;;
+    --local-source-app)
+      [[ $# -ge 2 ]] || usage
+      local_source_app=$2
+      shift 2
+      ;;
+    --local-revisions)
+      [[ $# -ge 2 ]] || usage
+      local_revisions=$2
+      shift 2
+      ;;
     *) usage ;;
   esac
 done
 
 phase3_reject_root
-[[ "$snapshot_position" =~ ^[0-9]+$ ]] || usage
-[[ "$snapshot_sha256" =~ ^[0-9a-f]{64}$ ]] || usage
 [[ "$expected_chromium_revision" =~ ^[0-9a-f]{40}$ ]] || usage
 [[ "$expected_angle_revision" =~ ^[0-9a-f]{40}$ ]] || usage
 [[ "$angle_build_run_id" =~ ^[0-9]+$ ]] || usage
+if [[ -n "$local_source_app" || -n "$local_revisions" ]]; then
+  [[ -n "$local_source_app" && -n "$local_revisions" ]] || usage
+  [[ "$local_source_app" == /* && -d "$local_source_app" && ! -L "$local_source_app" ]] ||
+    phase3_fail 'local source Chromium.app must be an existing non-symlink directory'
+  [[ "$local_revisions" == /* && -f "$local_revisions" && ! -L "$local_revisions" ]] ||
+    phase3_fail 'local REVISIONS must be an existing non-symlink file'
+else
+  [[ "$snapshot_position" =~ ^[0-9]+$ ]] || usage
+  [[ "$snapshot_sha256" =~ ^[0-9a-f]{64}$ ]] || usage
+fi
 [[ "$results_dir" == /* ]] || phase3_fail 'results directory must be an absolute path'
 [[ ! -e "$results_dir" && ! -L "$results_dir" ]] || phase3_fail "refusing an existing results directory: $results_dir"
 phase3_reject_symlink_components "$results_dir"
@@ -89,34 +109,52 @@ cleanup() {
 }
 trap cleanup EXIT
 
-archive_url="$SNAPSHOT_BASE_URL/$snapshot_position/chrome-mac.zip"
-revisions_url="$SNAPSHOT_BASE_URL/$snapshot_position/REVISIONS"
 archive="$work_dir/chrome-mac.zip"
 revisions="$work_dir/REVISIONS"
-printf 'snapshot_archive_url=%s\n' "$archive_url" > "$results_dir/input-acquisition.txt"
-printf 'snapshot_revisions_url=%s\n' "$revisions_url" >> "$results_dir/input-acquisition.txt"
-curl --fail --location --retry 2 --output "$archive" "$archive_url"
-actual_archive_sha256=$(shasum -a 256 "$archive" | awk '{print $1}')
-printf 'snapshot_archive_sha256=%s\n' "$actual_archive_sha256" >> "$results_dir/input-acquisition.txt"
-[[ "$actual_archive_sha256" == "$snapshot_sha256" ]] || phase3_fail 'official Chromium archive SHA-256 mismatch'
-curl --fail --location --retry 2 --output "$revisions" "$revisions_url"
-cp "$revisions" "$results_dir/REVISIONS"
+if [[ -n "$local_source_app" ]]; then
+  source_app="$local_source_app"
+  cp "$local_revisions" "$revisions"
+  cp "$local_revisions" "$results_dir/REVISIONS"
+  actual_archive_sha256='local-source-build'
+  {
+    printf 'input_source=local-source-build\n'
+    printf 'source_app=%s\n' "$source_app"
+    printf 'source_revisions=%s\n' "$local_revisions"
+  } > "$results_dir/input-acquisition.txt"
+  snapshot_chromium_revision=$(jq -er '.got_revision | strings | select(test("^[0-9a-f]{40}$"))' "$revisions") ||
+    phase3_fail 'local REVISIONS got_revision was not a 40-character lowercase SHA'
+  snapshot_angle_revision=$(jq -er '.got_angle_revision | strings | select(test("^[0-9a-f]{40}$"))' "$revisions") ||
+    phase3_fail 'local REVISIONS got_angle_revision was not a 40-character lowercase SHA'
+else
+  archive_url="$SNAPSHOT_BASE_URL/$snapshot_position/chrome-mac.zip"
+  revisions_url="$SNAPSHOT_BASE_URL/$snapshot_position/REVISIONS"
+  printf 'snapshot_archive_url=%s\n' "$archive_url" > "$results_dir/input-acquisition.txt"
+  printf 'snapshot_revisions_url=%s\n' "$revisions_url" >> "$results_dir/input-acquisition.txt"
+  curl --fail --location --retry 2 --output "$archive" "$archive_url"
+  actual_archive_sha256=$(shasum -a 256 "$archive" | awk '{print $1}')
+  printf 'snapshot_archive_sha256=%s\n' "$actual_archive_sha256" >> "$results_dir/input-acquisition.txt"
+  [[ "$actual_archive_sha256" == "$snapshot_sha256" ]] || phase3_fail 'official Chromium archive SHA-256 mismatch'
+  curl --fail --location --retry 2 --output "$revisions" "$revisions_url"
+  cp "$revisions" "$results_dir/REVISIONS"
 
-jq -e --arg snapshot_position "$snapshot_position" \
-  '(.chromium_revision | tostring) == $snapshot_position' "$revisions" >/dev/null ||
-  phase3_fail 'official REVISIONS chromium_revision did not match the snapshot position'
-snapshot_chromium_revision=$(jq -er '.got_revision | strings | select(test("^[0-9a-f]{40}$"))' "$revisions") ||
-  phase3_fail 'official REVISIONS got_revision was not a 40-character lowercase SHA'
-snapshot_angle_revision=$(jq -er '.got_angle_revision | strings | select(test("^[0-9a-f]{40}$"))' "$revisions") ||
-  phase3_fail 'official REVISIONS got_angle_revision was not a 40-character lowercase SHA'
+  jq -e --arg snapshot_position "$snapshot_position" \
+    '(.chromium_revision | tostring) == $snapshot_position' "$revisions" >/dev/null ||
+    phase3_fail 'official REVISIONS chromium_revision did not match the snapshot position'
+  snapshot_chromium_revision=$(jq -er '.got_revision | strings | select(test("^[0-9a-f]{40}$"))' "$revisions") ||
+    phase3_fail 'official REVISIONS got_revision was not a 40-character lowercase SHA'
+  snapshot_angle_revision=$(jq -er '.got_angle_revision | strings | select(test("^[0-9a-f]{40}$"))' "$revisions") ||
+    phase3_fail 'official REVISIONS got_angle_revision was not a 40-character lowercase SHA'
+fi
 [[ "$snapshot_chromium_revision" == "$expected_chromium_revision" ]] ||
-  phase3_fail "official Chromium revision mismatch: $snapshot_chromium_revision"
+  phase3_fail "Chromium revision mismatch: $snapshot_chromium_revision"
 
-extract_dir="$work_dir/extract"
-mkdir "$extract_dir"
-unzip -q "$archive" -d "$extract_dir"
-source_app="$extract_dir/chrome-mac/Chromium.app"
-[[ -d "$source_app" && ! -L "$source_app" ]] || phase3_fail 'official archive did not contain Chromium.app at the expected path'
+if [[ -z "$local_source_app" ]]; then
+  extract_dir="$work_dir/extract"
+  mkdir "$extract_dir"
+  unzip -q "$archive" -d "$extract_dir"
+  source_app="$extract_dir/chrome-mac/Chromium.app"
+fi
+[[ -d "$source_app" && ! -L "$source_app" ]] || phase3_fail 'source input did not contain Chromium.app at the expected path'
 source_executable="$source_app/Contents/MacOS/Chromium"
 source_framework="$source_app/Contents/Frameworks/Chromium Framework.framework/Versions/Current"
 source_libraries="$source_framework/Libraries"
@@ -336,7 +374,7 @@ run_case() {
 
   if ! run_cdp_probe "$app" "$profile/url" "$loopback_url" "$case_dir/url" \
     'Phase 5 unsigned Chromium loopback' '' "$case_dir/url/net-log.json" \
-    '--disable-gpu' '--enable-sandbox-logging' "--vmodule=$URL_DIAGNOSTIC_VMODULE"; then
+    '--disable-gpu' '--enable-sandbox-logging' '--v=1' "--vmodule=$URL_DIAGNOSTIC_VMODULE"; then
     report_probe_failure "$case_name" URL "$case_dir/url"
   fi
   if ! validate_url_result "$case_dir/url" "$loopback_url"; then
@@ -355,7 +393,8 @@ run_case() {
   grep -F 'GET /probe ' "$server_log" >/dev/null || phase3_fail "$case_name loopback server did not receive /probe"
 
   if ! run_cdp_probe "$app" "$profile/webgl" "file://$REPO_ROOT/tests/fixtures/phase3d-webgl-smoke.html" \
-    "$case_dir/webgl" '' 'phase3d-webgl-smoke:' '' '--disable-gpu'; then
+    "$case_dir/webgl" '' 'phase3d-webgl-smoke:' '' '--disable-gpu' '--v=1' \
+    "--vmodule=$URL_DIAGNOSTIC_VMODULE"; then
     report_probe_failure "$case_name" WebGL "$case_dir/webgl"
   fi
   if ! validate_webgl_result "$case_dir/webgl"; then
@@ -365,7 +404,7 @@ run_case() {
     if ! run_cdp_probe "$app" "$profile/angle-webgl" "file://$REPO_ROOT/tests/fixtures/phase3d-webgl-smoke.html#webgl1-only" \
       "$case_dir/angle-webgl" '' 'phase3d-webgl-smoke:' '' \
       '--use-gl=angle' '--use-angle=metal' '--use-dynamic-angle' "$angle_runtime_opt_in" \
-      'env:DYLD_PRINT_LIBRARIES=1'; then
+      '--v=1' "--vmodule=$URL_DIAGNOSTIC_VMODULE" 'env:DYLD_PRINT_LIBRARIES=1'; then
       report_probe_failure "$case_name" ANGLE-WebGL "$case_dir/angle-webgl"
     fi
     if ! validate_webgl_result "$case_dir/angle-webgl"; then
