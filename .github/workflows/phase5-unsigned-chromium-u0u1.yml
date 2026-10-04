@@ -28,6 +28,26 @@ on:
         required: true
         default: '37009376538'
         type: string
+      diagnostic_mode:
+        description: Run the exact-revision URL diagnostic through the reusable workflow
+        required: true
+        default: false
+        type: boolean
+      diagnostic_chromium_revision:
+        description: Exact Chromium source revision for diagnostic mode
+        required: true
+        default: b510e9d7cd3a2fbd78d0ddc42234103206c5f78d
+        type: string
+      diagnostic_angle_revision:
+        description: Exact ANGLE revision for diagnostic mode
+        required: true
+        default: e12217f3e133cb1029b050d893b1806d141483be
+        type: string
+      diagnostic_patch_sha256:
+        description: SHA-256 of the checked-in Chromium URL diagnostic patch
+        required: true
+        default: 646c6b5a166b2054f664c97e373dd2760292d447c84cb8266ed36e32d599dc22
+        type: string
 
 permissions:
   actions: read
@@ -36,6 +56,7 @@ permissions:
 jobs:
   unsigned-u0-u1:
     name: unsigned-u0-u1-macos-intel
+    if: ${{ !inputs.diagnostic_mode }}
     runs-on: macos-15-intel
     timeout-minutes: 30
     env:
@@ -92,3 +113,13 @@ jobs:
           path: ${{ runner.temp }}/phase5-unsigned-chromium-u0u1-results
           if-no-files-found: error
           retention-days: 14
+
+  chromium-url-diagnostic:
+    name: chromium-url-diagnostic-macos-intel
+    if: ${{ inputs.diagnostic_mode }}
+    uses: ./.github/workflows/phase5-chromium-url-diagnostic.yml
+    with:
+      chromium_revision: ${{ inputs.diagnostic_chromium_revision }}
+      angle_revision: ${{ inputs.diagnostic_angle_revision }}
+      angle_build_run_id: ${{ inputs.angle_build_run_id }}
+      diagnostic_patch_sha256: ${{ inputs.diagnostic_patch_sha256 }}

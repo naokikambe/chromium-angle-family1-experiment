@@ -13,6 +13,7 @@ bash -n "$runner"
 ruby -e 'require "yaml"; YAML.parse_file(ARGV.fetch(0))' "$workflow"
 
 grep -F 'workflow_dispatch:' "$workflow" >/dev/null
+grep -F 'workflow_call:' "$workflow" >/dev/null
 grep -F 'chromium_revision:' "$workflow" >/dev/null
 grep -F 'angle_revision:' "$workflow" >/dev/null
 grep -F 'angle_build_run_id:' "$workflow" >/dev/null
