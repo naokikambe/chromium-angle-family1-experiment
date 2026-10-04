@@ -248,9 +248,9 @@ run_cdp_probe() {
   [[ -n "$expected_prefix" ]] && args+=(--expected-title-prefix "$expected_prefix")
   while [[ $# -gt 0 ]]; do
     if [[ "$1" == env:* ]]; then
-      args+=(--browser-env "${1#env:}")
+      args+=("--browser-env=${1#env:}")
     else
-      args+=(--browser-arg "$1")
+      args+=("--browser-arg=$1")
     fi
     shift
   done
