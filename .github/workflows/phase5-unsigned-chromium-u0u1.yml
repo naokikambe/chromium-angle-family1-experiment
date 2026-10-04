@@ -1,0 +1,94 @@
+name: Phase 5 unsigned Chromium U0/U1
+
+on:
+  workflow_dispatch:
+    inputs:
+      snapshot_position:
+        description: Official Chromium Mac x64 snapshot position
+        required: true
+        default: '1689422'
+        type: string
+      snapshot_sha256:
+        description: SHA-256 of the official chrome-mac.zip snapshot archive
+        required: true
+        default: cdf57adeb21f946e3cf7b5897bf3656dbfdbec5d95281bfb828202b2d7cf35cf
+        type: string
+      expected_chromium_revision:
+        description: Chromium revision recorded by the official snapshot REVISIONS file
+        required: true
+        default: 82303c21a18acdc256c6264cd2ed0e1588df99d4
+        type: string
+      expected_angle_revision:
+        description: ANGLE revision recorded by the selected runtime artifact manifest
+        required: true
+        default: e12217f3e133cb1029b050d893b1806d141483be
+        type: string
+      angle_build_run_id:
+        description: Successful Phase 5 ANGLE runtime workflow run to use for U1
+        required: true
+        default: '37009376538'
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  unsigned-u0-u1:
+    name: unsigned-u0-u1-macos-intel
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SNAPSHOT_POSITION: ${{ inputs.snapshot_position }}
+      SNAPSHOT_SHA256: ${{ inputs.snapshot_sha256 }}
+      EXPECTED_CHROMIUM_REVISION: ${{ inputs.expected_chromium_revision }}
+      EXPECTED_ANGLE_REVISION: ${{ inputs.expected_angle_revision }}
+      ANGLE_BUILD_RUN_ID: ${{ inputs.angle_build_run_id }}
+      APPROVED_BASE_REVISION: eb21b3b30fe0d062d5bf500d46d74a7a57ad56f5
+
+    steps:
+      - name: Check out the approved experiment revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Audit U0/U1 workflow and probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_SHA" != '' ]]
+          git merge-base --is-ancestor "$APPROVED_BASE_REVISION" "$GITHUB_SHA"
+          [[ "$SNAPSHOT_POSITION" =~ ^[0-9]+$ ]]
+          [[ "$SNAPSHOT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_CHROMIUM_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_ANGLE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$ANGLE_BUILD_RUN_ID" =~ ^[0-9]+$ ]]
+          bash -n scripts/run-phase5-unsigned-chromium-u0u1.sh
+          bash -n tests/phase5-unsigned-chromium-u0u1-static.sh
+          tests/phase5-unsigned-chromium-u0u1-static.sh
+          ruby -e 'require "yaml"; YAML.parse_file(".github/workflows/phase5-unsigned-chromium-u0u1.yml")'
+          git diff --check
+
+      - name: Run unsigned Chromium U0/U1 comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          results_dir="$RUNNER_TEMP/phase5-unsigned-chromium-u0u1-results"
+          mkdir -p "$results_dir"
+          scripts/run-phase5-unsigned-chromium-u0u1.sh \
+            --snapshot-position "$SNAPSHOT_POSITION" \
+            --snapshot-sha256 "$SNAPSHOT_SHA256" \
+            --expected-chromium-revision "$EXPECTED_CHROMIUM_REVISION" \
+            --expected-angle-revision "$EXPECTED_ANGLE_REVISION" \
+            --angle-build-run-id "$ANGLE_BUILD_RUN_ID" \
+            --results-dir "$results_dir"
+
+      - name: Upload U0/U1 diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase5-unsigned-chromium-u0u1-${{ github.run_id }}
+          path: ${{ runner.temp }}/phase5-unsigned-chromium-u0u1-results
+          if-no-files-found: error
+          retention-days: 14
