@@ -87,7 +87,7 @@ diff --git a/services/network/url_loader.cc b/services/network/url_loader.cc
 diff --git a/build/config/mac/BUILD.gn b/build/config/mac/BUILD.gn
 --- a/build/config/mac/BUILD.gn
 +++ b/build/config/mac/BUILD.gn
-@@ -110,6 +110,10 @@
+@@ -110,7 +110,10 @@
  if (use_system_xcode && current_toolchain == host_toolchain) {
    action("sdk_inputs") {
      script = "//build/noop.py"

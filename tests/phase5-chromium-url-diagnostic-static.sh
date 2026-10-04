@@ -42,7 +42,7 @@ for marker in browser_factory_create factory_request factory_loader_created sche
 done
 
 test "$(shasum -a 256 "$diagnostic_patch" | awk '{print $1}')" = \
-  a5515c960bf1b279ba84c64895ee827d7aadc0e25c241b2d780a1e0acfe0bf53
+  e31ac7f63429b786e9cd29e48e6a5b8fc5cf6c331b10712610e1931ca33f47c6
 grep -F 'SIGNING_OPERATION=none' "$runner" >/dev/null
 grep -F 'XATTR_OPERATION=none' "$runner" >/dev/null
 grep -F 'RUNTIME_DEVICE_READY' "$runner" >/dev/null
