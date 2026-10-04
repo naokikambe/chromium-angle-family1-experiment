@@ -483,3 +483,9 @@ locally Apple-signed test copy.  Those remain separately approved device-test
 questions.  It also cannot guarantee a post-mortem `lsof` or `vmmap` capture
 for a process that exits before collection starts; stderr and unified log
 records are retained for that case.
+
+## 2026-10-04 URL／署名比較との関係
+
+上記のVM記録とは別に、承認済みのCI・実機比較で、完全未署名Chromium U0/U1、Apple Development初回署名のChromium S0/S1、公式Google ChromeとApple Development初回署名のChrome C0を比較した。公式または未署名sourceはloopback URLのHTTP/document到達に成功し、Apple Developmentへ再署名したS0/S1/C0はHTTP stream/document前で停止した。S1ではIntel HD Graphics 5000のMetal/EGLとWebGL1 context/drawを確認したが、WebGL2は`context-null`であり、KOOV操作は行っていない。
+
+この比較により、VMだけでは判定できなかった「テスト済みbundleにおける再署名差のURL影響」は黒と記録した。ただし、identity、requirement、entitlement、nested signing closure、または実行時ポリシー差のどれが直接属性かは未特定である。詳細な結果、初回署名順序、C1を作成しない停止判断は[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)と[`docs/phase5-unsigned-chromium-one-sign-experiment-plan.md`](phase5-unsigned-chromium-one-sign-experiment-plan.md)に記録する。この実機比較によってVM artifactの`RUNTIME_DEVICE_READY=false`は変更せず、本書のVM結果をIntel実機結果へ読み替えない。

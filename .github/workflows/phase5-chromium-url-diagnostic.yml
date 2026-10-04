@@ -1,0 +1,210 @@
+name: Phase 5 Chromium URL diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      chromium_revision:
+        description: Exact Chromium source revision for the diagnostic build
+        required: true
+        default: b510e9d7cd3a2fbd78d0ddc42234103206c5f78d
+        type: string
+      angle_revision:
+        description: Exact ANGLE revision bound to the Chromium input
+        required: true
+        default: e12217f3e133cb1029b050d893b1806d141483be
+        type: string
+      angle_build_run_id:
+        description: Successful Phase 5 ANGLE runtime workflow run to use for U1
+        required: true
+        default: '37009376538'
+        type: string
+      diagnostic_patch_sha256:
+        description: SHA-256 of the checked-in Chromium URL diagnostic patch
+        required: true
+        default: 646c6b5a166b2054f664c97e373dd2760292d447c84cb8266ed36e32d599dc22
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  chromium-url-diagnostic:
+    name: chromium-url-diagnostic-macos-intel
+    runs-on: macos-15-intel
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CHROMIUM_REVISION: ${{ inputs.chromium_revision }}
+      ANGLE_REVISION: ${{ inputs.angle_revision }}
+      ANGLE_BUILD_RUN_ID: ${{ inputs.angle_build_run_id }}
+      DIAGNOSTIC_PATCH_SHA256: ${{ inputs.diagnostic_patch_sha256 }}
+      DIAGNOSTIC_PATCH_PATH: patches/phase5-chromium-url-loader-diagnostics.patch
+      DEPOT_TOOLS_REVISION: 0306e4682b4ac35287c726fa35a983157a625902
+      DEPOT_TOOLS_UPDATE: "0"
+      APPROVED_BASE_REVISION: eb21b3b30fe0d062d5bf500d46d74a7a57ad56f5
+
+    steps:
+      - name: Check out the approved experiment revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Static workflow and diagnostic patch audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$APPROVED_BASE_REVISION" "$GITHUB_SHA"
+          [[ "$CHROMIUM_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$ANGLE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$ANGLE_BUILD_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$DIAGNOSTIC_PATCH_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(shasum -a 256 "$DIAGNOSTIC_PATCH_PATH" | awk '{print $1}')" = "$DIAGNOSTIC_PATCH_SHA256"
+          tests/phase5-unsigned-chromium-u0u1-static.sh
+          tests/phase5-chromium-url-diagnostic-static.sh
+
+      - name: Initialize pinned build paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf 'CHROMIUM_ROOT=%s\n' "$RUNNER_TEMP/phase5-chromium-url-diagnostic-source"
+            printf 'DEPOT_TOOLS_ROOT=%s\n' "$RUNNER_TEMP/phase5-chromium-url-diagnostic-depot-tools"
+            printf 'DIAG_DIR=%s\n' "$RUNNER_TEMP/phase5-chromium-url-diagnostic"
+            printf 'ANGLE_ARTIFACT=%s\n' "$RUNNER_TEMP/phase5-chromium-url-diagnostic-angle-artifact"
+            printf 'RESULTS_DIR=%s\n' "$RUNNER_TEMP/phase5-chromium-url-diagnostic-results"
+          } >> "$GITHUB_ENV"
+          mkdir -p "$DIAG_DIR"
+
+      - name: Fetch and bootstrap pinned depot_tools
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init "$DEPOT_TOOLS_ROOT"
+          git -C "$DEPOT_TOOLS_ROOT" remote add origin https://chromium.googlesource.com/chromium/tools/depot_tools.git
+          git -C "$DEPOT_TOOLS_ROOT" fetch --depth=1 origin "$DEPOT_TOOLS_REVISION"
+          git -C "$DEPOT_TOOLS_ROOT" checkout --detach FETCH_HEAD
+          test "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)" = "$DEPOT_TOOLS_REVISION"
+          printf '%s\n' "$DEPOT_TOOLS_ROOT" >> "$GITHUB_PATH"
+          DEPOT_TOOLS_UPDATE=0 "$DEPOT_TOOLS_ROOT/ensure_bootstrap"
+          test "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)" = "$DEPOT_TOOLS_REVISION"
+
+      - name: Fetch exact Chromium source and dependencies
+        timeout-minutes: 45
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$CHROMIUM_ROOT"
+          python3 - "$CHROMIUM_ROOT/.gclient" <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          revision = os.environ["CHROMIUM_REVISION"]
+          path.write_text(
+              "solutions = [\n"
+              "  {\n"
+              "    'managed': False,\n"
+              "    'name': 'src',\n"
+              f"    'url': 'https://chromium.googlesource.com/chromium/src.git@{revision}',\n"
+              "    'custom_deps': {},\n"
+              "    'custom_vars': {},\n"
+              "  },\n"
+              "]\n"
+              "target_os = ['mac']\n"
+              "target_os_only = True\n",
+              encoding="utf-8",
+          )
+          PY
+          cd "$CHROMIUM_ROOT"
+          gclient sync --no-history
+          test "$(git -C src rev-parse HEAD)" = "$CHROMIUM_REVISION"
+          resolved_angle_revision=$(git -C src show "$CHROMIUM_REVISION:DEPS" | \
+            sed -nE "s/^[[:space:]]*'angle_revision':[[:space:]]*'([0-9a-f]{40})'.*/\1/p" | head -n 1)
+          test "$resolved_angle_revision" = "$ANGLE_REVISION"
+          {
+            printf 'CHROMIUM_REVISION=%s\n' "$(git -C src rev-parse HEAD)"
+            printf 'ANGLE_REVISION_FROM_DEPS=%s\n' "$resolved_angle_revision"
+          } > "$DIAG_DIR/source-revisions.txt"
+
+      - name: Apply URLLoader diagnostic patch
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CHROMIUM_ROOT/src"
+          git apply --unidiff-zero --check -- "$GITHUB_WORKSPACE/$DIAGNOSTIC_PATCH_PATH"
+          git apply --unidiff-zero -- "$GITHUB_WORKSPACE/$DIAGNOSTIC_PATCH_PATH"
+          expected_status=$(printf '%s\n' \
+            content/browser/storage_partition_impl.cc \
+            services/network/url_loader.cc \
+            services/network/url_loader_factory.cc)
+          test "$(git status --short | sed 's/^.. //' | LC_ALL=C sort)" = "$expected_status"
+          shasum -a 256 "$GITHUB_WORKSPACE/$DIAGNOSTIC_PATCH_PATH" > "$DIAG_DIR/diagnostic-patch.sha256"
+
+      - name: Build unbranded exact-revision Chromium
+        timeout-minutes: 165
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CHROMIUM_ROOT/src"
+          mkdir -p out/Phase5URLDiagnostic
+          cat > out/Phase5URLDiagnostic/args.gn <<'EOF'
+          is_debug = false
+          is_component_build = false
+          is_chrome_branded = false
+          is_official_build = false
+          target_cpu = "x64"
+          use_system_xcode = true
+          symbol_level = 0
+          blink_symbol_level = 0
+          v8_symbol_level = 0
+          chrome_pgo_phase = 0
+          enable_nacl = false
+          EOF
+          gn gen out/Phase5URLDiagnostic > "$DIAG_DIR/gn-stdout.log" 2> "$DIAG_DIR/gn-stderr.log"
+          autoninja -C out/Phase5URLDiagnostic chrome > "$DIAG_DIR/chromium-build.log" 2>&1
+          test -d out/Phase5URLDiagnostic/Chromium.app
+          printf '%s\n' "$CHROMIUM_ROOT/src/out/Phase5URLDiagnostic/Chromium.app" > "$DIAG_DIR/chromium-app-path.txt"
+          file out/Phase5URLDiagnostic/Chromium.app/Contents/MacOS/Chromium > "$DIAG_DIR/chromium-file.txt"
+
+      - name: Download and verify exact ANGLE artifact
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/download-angle-artifact.sh "$ANGLE_BUILD_RUN_ID" "$ANGLE_ARTIFACT"
+          scripts/verify-phase5-runtime-artifact.sh "$ANGLE_ARTIFACT" > "$DIAG_DIR/angle-runtime-verification.txt"
+          test "$(grep '^CHROMIUM_REVISION=' "$ANGLE_ARTIFACT/ANGLE_RELEASE_MANIFEST" | cut -d= -f2-)" = "$CHROMIUM_REVISION"
+          test "$(grep '^ANGLE_REVISION=' "$ANGLE_ARTIFACT/ANGLE_RELEASE_MANIFEST" | cut -d= -f2-)" = "$ANGLE_REVISION"
+
+      - name: Run exact-revision unsigned U0/U1 diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          revisions_file="$DIAG_DIR/REVISIONS"
+          jq -n --arg chromium "$CHROMIUM_REVISION" --arg angle "$ANGLE_REVISION" \
+            '{chromium_revision:"local-source-build",got_revision:$chromium,got_angle_revision:$angle}' > "$revisions_file"
+          scripts/run-phase5-unsigned-chromium-u0u1.sh \
+            --snapshot-position 0 \
+            --snapshot-sha256 0000000000000000000000000000000000000000000000000000000000000000 \
+            --expected-chromium-revision "$CHROMIUM_REVISION" \
+            --expected-angle-revision "$ANGLE_REVISION" \
+            --angle-build-run-id "$ANGLE_BUILD_RUN_ID" \
+            --results-dir "$RESULTS_DIR" \
+            --local-source-app "$(cat "$DIAG_DIR/chromium-app-path.txt")" \
+            --local-revisions "$revisions_file"
+
+      - name: Upload exact-revision URL diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase5-chromium-url-diagnostic-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/phase5-chromium-url-diagnostic
+            ${{ runner.temp }}/phase5-chromium-url-diagnostic-results
+          if-no-files-found: error
+          retention-days: 14
