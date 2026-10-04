@@ -209,6 +209,14 @@ jobs:
             else
               printf '%s\n' 'chromium-build.log=missing'
             fi
+            for gn_log in gn-stdout.log gn-stderr.log; do
+              if [[ -f "$DIAG_DIR/$gn_log" ]]; then
+                printf '%s\n' "--- $gn_log tail ---"
+                tail -n 120 "$DIAG_DIR/$gn_log"
+              else
+                printf '%s=missing\n' "$gn_log"
+              fi
+            done
           } > "$DIAG_DIR/chromium-build-failure-diagnostics.txt"
           sanitized_tail=$(tail -n 40 "$DIAG_DIR/chromium-build-failure-diagnostics.txt" | \
             sed "s#${RUNNER_TEMP}#<runner-temp>#g" | tr '\n' ' ' | cut -c1-6000)
