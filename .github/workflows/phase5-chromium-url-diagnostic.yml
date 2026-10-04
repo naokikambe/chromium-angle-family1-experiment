@@ -192,7 +192,12 @@ jobs:
           EOF
           gn gen out/Phase5URLDiagnostic > "$DIAG_DIR/gn-stdout.log" 2> "$DIAG_DIR/gn-stderr.log"
           {
-            for target in //build/modules:mac_sysroot //build/modules:system_modulemap; do
+            printf '%s\n' '--- gn ls //build/modules:* ---'
+            gn ls out/Phase5URLDiagnostic '//build/modules:*' || true
+            for target in \
+              '//build/modules:mac_sysroot(//build/toolchain/mac:clang_x64)' \
+              '//build/modules:system_modulemap(//build/toolchain/mac:clang_x64)' \
+              '//build/config/mac:sdk_inputs(//build/toolchain/mac:clang_x64)'; do
               printf '%s\n' "--- gn desc $target outputs ---"
               gn desc out/Phase5URLDiagnostic "$target" outputs || true
               printf '%s\n' "--- gn desc $target inputs ---"
