@@ -87,12 +87,14 @@ diff --git a/services/network/url_loader.cc b/services/network/url_loader.cc
 diff --git a/build/modules/BUILD.gn b/build/modules/BUILD.gn
 --- a/build/modules/BUILD.gn
 +++ b/build/modules/BUILD.gn
-@@ -59,4 +59,4 @@
+@@ -59,4 +59,6 @@
          outputs = filter_exclude(
                  expand_directory(mac_sdk_path + "/usr/include", true),
                  # Avoid overlap with //build/config/mac:sdk_inputs
 -                [ "*.defs" ])
-+                [ "*.defs", "DarwinFoundation*.modulemap" ])
++                [ "*.defs", "$mac_sdk_path/usr/include/DarwinFoundation1.modulemap",
++                  "$mac_sdk_path/usr/include/DarwinFoundation2.modulemap",
++                  "$mac_sdk_path/usr/include/DarwinFoundation3.modulemap" ])
 @@ -181,10 +181,7 @@
      if (is_apple) {
        # Apple provides its own modulemap files. We don't need to do sysroot
