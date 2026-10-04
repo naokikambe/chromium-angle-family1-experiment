@@ -204,7 +204,6 @@ jobs:
           set -euo pipefail
           run_id="${ANGLE_BUILD_RUN_ID#unsigned-u0u1:}"
           results_dir="$RUNNER_TEMP/phase5-unsigned-chromium-u0u1-results"
-          mkdir -p "$results_dir"
           scripts/run-phase5-unsigned-chromium-u0u1.sh \
             --snapshot-position 1689422 \
             --snapshot-sha256 cdf57adeb21f946e3cf7b5897bf3656dbfdbec5d95281bfb828202b2d7cf35cf \
