@@ -159,6 +159,7 @@ jobs:
           git apply --unidiff-zero -- "$GITHUB_WORKSPACE/$DIAGNOSTIC_PATCH_PATH"
           expected_status=$(printf '%s\n' \
             build/config/mac/BUILD.gn \
+            build/modules/BUILD.gn \
             content/browser/storage_partition_impl.cc \
             services/network/url_loader.cc \
             services/network/url_loader_factory.cc)
