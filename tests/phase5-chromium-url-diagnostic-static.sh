@@ -38,12 +38,13 @@ grep -F 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' "$wor
 grep -F 'diff --git a/content/browser/storage_partition_impl.cc' "$diagnostic_patch" >/dev/null
 grep -F 'diff --git a/services/network/url_loader_factory.cc' "$diagnostic_patch" >/dev/null
 grep -F 'diff --git a/services/network/url_loader.cc' "$diagnostic_patch" >/dev/null
+grep -F 'diff --git a/build/modules/BUILD.gn' "$diagnostic_patch" >/dev/null
 for marker in browser_factory_create factory_request factory_loader_created schedule_start schedule_decision response_started completed mojo_disconnect; do
   grep -F "[PHASE5_URL_DIAG] $marker" "$diagnostic_patch" >/dev/null
 done
 
 test "$(shasum -a 256 "$diagnostic_patch" | awk '{print $1}')" = \
-  1be36abf18ac58b94ff1421607be18152c0373a9f92b0aeeb14ad8e352a250c1
+  12968eb11c8c5ebc23855f7f892e7709a9714dbccdf1171c9f914e62408b2baf
 grep -F 'SIGNING_OPERATION=none' "$runner" >/dev/null
 grep -F 'XATTR_OPERATION=none' "$runner" >/dev/null
 grep -F 'RUNTIME_DEVICE_READY' "$runner" >/dev/null

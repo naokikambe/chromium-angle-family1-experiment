@@ -83,3 +83,29 @@ diff --git a/services/network/url_loader.cc b/services/network/url_loader.cc
 +          << " request_id=" << request_id_;
    NotifyCompleted(net::ERR_FAILED);
  }
+
+diff --git a/build/modules/BUILD.gn b/build/modules/BUILD.gn
+--- a/build/modules/BUILD.gn
++++ b/build/modules/BUILD.gn
+@@ -181,10 +181,7 @@
+     if (is_apple) {
+       # Apple provides its own modulemap files. We don't need to do sysroot
+       # scanning.
+       foreach(modulemap,
+               [
+-                "DarwinFoundation1.modulemap",
+-                "DarwinFoundation2.modulemap",
+-                "DarwinFoundation3.modulemap",
+                 "libunwind.modulemap",
+               ]) {
+@@ -198,10 +195,7 @@
+       foreach(module,
+               [
+                 "TargetConditionals",
+                 "_AvailabilityInternal",
+-                "_DarwinFoundation1",
+-                "_DarwinFoundation2",
+-                "_DarwinFoundation3",
+                 "alloca",
+                 "libunwind",
+                 "nl_types",

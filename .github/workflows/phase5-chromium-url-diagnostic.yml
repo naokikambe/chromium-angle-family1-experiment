@@ -21,7 +21,7 @@ on:
       diagnostic_patch_sha256:
         description: SHA-256 of the checked-in Chromium URL diagnostic patch
         required: true
-        default: 1be36abf18ac58b94ff1421607be18152c0373a9f92b0aeeb14ad8e352a250c1
+        default: 12968eb11c8c5ebc23855f7f892e7709a9714dbccdf1171c9f914e62408b2baf
         type: string
   workflow_call:
     inputs:
@@ -158,6 +158,7 @@ jobs:
           git apply --unidiff-zero --check -- "$GITHUB_WORKSPACE/$DIAGNOSTIC_PATCH_PATH"
           git apply --unidiff-zero -- "$GITHUB_WORKSPACE/$DIAGNOSTIC_PATCH_PATH"
           expected_status=$(printf '%s\n' \
+            build/modules/BUILD.gn \
             content/browser/storage_partition_impl.cc \
             services/network/url_loader.cc \
             services/network/url_loader_factory.cc)
