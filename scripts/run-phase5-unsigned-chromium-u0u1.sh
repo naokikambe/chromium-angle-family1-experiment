@@ -154,17 +154,23 @@ printf 'runtime_device_ready=%s\n' "$angle_runtime_device_ready" >> "$results_di
 
 server_log="$results_dir/loopback-server.log"
 server_port_file="$work_dir/loopback-port"
+server_stdout="$results_dir/loopback-server.stdout"
+server_stderr="$results_dir/loopback-server.stderr"
 python3 "$SCRIPT_DIR/phase5-unsigned-loopback-server.py" \
   --directory "$REPO_ROOT/tests/fixtures" \
   --log "$server_log" \
   --port-file "$server_port_file" \
-  --port 0 > "$work_dir/loopback-server.stdout" 2> "$work_dir/loopback-server.stderr" &
+  --port 0 > "$server_stdout" 2> "$server_stderr" &
 server_pid=$!
 for _ in $(seq 1 50); do
   [[ -s "$server_port_file" ]] && break
+  kill -0 "$server_pid" 2>/dev/null || break
   sleep 0.2
 done
-[[ -s "$server_port_file" ]] || phase3_fail 'loopback server did not publish its port'
+if [[ ! -s "$server_port_file" ]]; then
+  cat "$server_stdout" "$server_stderr" >&2 || true
+  phase3_fail 'loopback server did not publish its port'
+fi
 loopback_port=$(tr -d '[:space:]' < "$server_port_file")
 [[ "$loopback_port" =~ ^[0-9]+$ ]] || phase3_fail 'loopback server port is invalid'
 curl --fail --silent --show-error --max-time 2 "http://127.0.0.1:$loopback_port/healthz" > "$results_dir/loopback-healthz.txt"
