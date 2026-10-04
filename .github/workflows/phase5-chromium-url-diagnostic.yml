@@ -21,7 +21,7 @@ on:
       diagnostic_patch_sha256:
         description: SHA-256 of the checked-in Chromium URL diagnostic patch
         required: true
-        default: 646c6b5a166b2054f664c97e373dd2760292d447c84cb8266ed36e32d599dc22
+        default: 1be36abf18ac58b94ff1421607be18152c0373a9f92b0aeeb14ad8e352a250c1
         type: string
   workflow_call:
     inputs:
