@@ -367,9 +367,10 @@ u0_inventory="$results_dir/U0/inventory.txt"
 u1_inventory="$results_dir/U1/inventory.txt"
 extra_inventory=$(comm -13 "$u0_inventory" "$u1_inventory")
 missing_inventory=$(comm -23 "$u0_inventory" "$u1_inventory")
-expected_extra=$(printf '%s\n%s' \
-  'Contents/Frameworks/Chromium Framework.framework/Versions/Current/Libraries/libEGL.dylib' \
-  'Contents/Frameworks/Chromium Framework.framework/Versions/Current/Libraries/libGLESv2.dylib')
+expected_extra=$(grep -E '^Contents/Frameworks/Chromium Framework\.framework/Versions/[^/]+/Libraries/lib(EGL|GLESv2)\.dylib$' \
+  "$u1_inventory" || true)
+expected_extra_count=$(printf '%s\n' "$expected_extra" | sed '/^$/d' | wc -l | tr -d ' ')
+[[ "$expected_extra_count" == 2 ]] || phase3_fail 'U1 inventory did not contain exactly the two ANGLE dylibs'
 [[ "$extra_inventory" == "$expected_extra" ]] || phase3_fail 'U1 inventory differs from U0 by more than the two ANGLE dylibs'
 [[ -z "$missing_inventory" ]] || phase3_fail 'U1 inventory is missing a stock file'
 u0_main_hash=$(awk -F= '$1 == "main_executable_sha256" {print $2}' "$results_dir/U0/components.txt")
