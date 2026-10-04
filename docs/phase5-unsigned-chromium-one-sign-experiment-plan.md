@@ -129,7 +129,33 @@ VM/CIでGatekeeperが実行を許す場合、次の2つを完全未署名のま�
 
 この経路では`codesign --sign`、ad-hoc signing、entitlement追加、xattr変更を行わない。署名状態は読み取り専用で確認する。Gatekeeperが未署名bundleの起動を拒否した場合は、署名やxattr変更で回避せず停止する。
 
-### 3.2 実機の初回署名経路
+### 3.2 CI優先の実施順と実機移行ゲート
+
+この実験は、実機でしか判定できない項目以外を先にCIで消化する。実機操作は、CIで次のゲートを満たした後に限る。
+
+| CIで先に実施する項目 | 実機へ渡す判定・証跡 |
+| --- | --- |
+| 入力archiveのarchitecture、bundle構造、`REVISIONS`、Chromium/ANGLE revision | stock/ANGLEの入力が同定され、revision不一致が明示されている |
+| stockとANGLE追加copyのmanifest、dylib hash、Mach-O依存、配置先 | U0/U1の入力差分がANGLE dylibだけとして記録されている |
+| stock/ANGLEの署名状態とbundle sealの読み取り | U0/U1が完全未署名、または署名状態が試験目的に反しないことを確認する |
+| `--disable-gpu`でのloopback URL、HTTP 200、document/title、CDP navigation | U0をURL基準、U1をANGLE追加後のURL比較として判定する |
+| `file://`またはfixtureでのdynamic/stock WebGL smoke、ANGLE load marker、起動ログ | CIで再現可能なANGLEロード・WebGL範囲を固定する。これは実機GPU能力の証明ではない |
+| static test、workflowの対象、artifact manifest、digest、保存可能な診断ログ | 実機投入するartifactと証跡の取り違えがないことを確認する |
+
+CIで一つでも必須ゲートが失敗した場合、または未署名bundleをrunnerが起動できない場合は、署名・xattr・profile・実機操作で回避せず停止する。既存workflowで足りないCI確認がある場合は、workflow変更またはdispatchを別途承認してから行う。CIの成功だけでは、Apple Development identityの初回署名後のURL挙動、Intel HD Graphics 5000のMetal/EGL、実機WebGL、KOOVを合格とはしない。
+
+CIで証明できない項目は次のとおりである。
+
+- 実機のIntel HD Graphics 5000が選択されること
+- 実機のMetal device、command queue、shader library、EGL初期化
+- 実機での`requireGpuFamily2`境界、ES3からES2へのfallback
+- 実機GPU Helperでのreplacement dylibロード
+- 初回署名identityとmacOS実行時のURLLoader/renderer境界の相互作用
+- KOOVのdocument到達、画面描画、認証、保存、USB/Bluetooth
+
+したがって、実機開始条件は「CIが成功した」だけではなく、「CIのU0/U1 URL比較と入力証跡が揃い、実機でしか判定できない項目だけが残っていること」とする。`RUNTIME_DEVICE_READY=false`はこのゲートを自動的に解除しない。
+
+### 3.3 実機の初回署名経路
 
 実機で署名が必要な場合の許可範囲は、各最終bundleへの初回署名一回だけとする。
 
@@ -300,4 +326,4 @@ rollbackは、stock copy、ANGLE copy、profile、結果ディレクトリを分
 
 ## 9. 次のチャットでの開始条件
 
-新しい実験チャットでは、まずこの文書と`AGENTS.md`、`docs/phase-status.md`、`docs/phase3d-vm-observability.md`、`docs/phase5-real-device-observation.md`を読み、未署名inventoryとrevision整合性だけを読み取り確認する。初回署名、profile、Chromium起動、実機操作は、別途明示承認を受けるまで行わない。
+新しい実験チャットでは、まずこの文書と`AGENTS.md`、`docs/phase-status.md`、`docs/phase3d-vm-observability.md`、`docs/phase5-real-device-observation.md`を読み、未署名inventoryとrevision整合性だけを読み取り確認する。次にCIでU0/U1、manifest/hash、static test、保存可能な診断を優先して実施し、CIゲート未達なら実機へ進まない。初回署名、profile、Chromium起動、実機操作は、CIゲート確認後かつ必要な承認を受けるまで行わない。
