@@ -156,7 +156,7 @@ server_log="$results_dir/loopback-server.log"
 server_port_file="$work_dir/loopback-port"
 server_stdout="$results_dir/loopback-server.stdout"
 server_stderr="$results_dir/loopback-server.stderr"
-loopback_server_port=8765
+loopback_server_port=0
 {
   printf 'python3_path='
   command -v python3
