@@ -165,6 +165,8 @@ jobs:
           shasum -a 256 "$GITHUB_WORKSPACE/$DIAGNOSTIC_PATCH_PATH" > "$DIAG_DIR/diagnostic-patch.sha256"
 
       - name: Build unbranded exact-revision Chromium
+        id: build_chromium
+        continue-on-error: true
         timeout-minutes: 165
         shell: bash
         run: |
@@ -191,6 +193,31 @@ jobs:
           test -d out/Phase5URLDiagnostic/Chromium.app
           printf '%s\n' "$CHROMIUM_ROOT/src/out/Phase5URLDiagnostic/Chromium.app" > "$DIAG_DIR/chromium-app-path.txt"
           file out/Phase5URLDiagnostic/Chromium.app/Contents/MacOS/Chromium > "$DIAG_DIR/chromium-file.txt"
+
+      - name: Record Chromium build failure diagnostics
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf 'build_step_outcome=%s\n' '${{ steps.build_chromium.outcome }}'
+            printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            df -h "$RUNNER_TEMP" || true
+            if [[ -f "$DIAG_DIR/chromium-build.log" ]]; then
+              printf '%s\n' '--- chromium-build.log tail ---'
+              tail -n 120 "$DIAG_DIR/chromium-build.log"
+            else
+              printf '%s\n' 'chromium-build.log=missing'
+            fi
+          } > "$DIAG_DIR/chromium-build-failure-diagnostics.txt"
+          sanitized_tail=$(tail -n 40 "$DIAG_DIR/chromium-build-failure-diagnostics.txt" | \
+            sed "s#${RUNNER_TEMP}#<runner-temp>#g" | tr '\n' ' ' | cut -c1-6000)
+          printf '### Chromium build diagnostics\n\n```text\n%s\n```\n' \
+            "$(cat "$DIAG_DIR/chromium-build-failure-diagnostics.txt")" >> "$GITHUB_STEP_SUMMARY"
+          if [[ '${{ steps.build_chromium.outcome }}' != success ]]; then
+            printf '::error title=Chromium build failure tail::%s\n' "$sanitized_tail"
+            exit 1
+          fi
 
       - name: Download and verify exact ANGLE artifact
         timeout-minutes: 15
