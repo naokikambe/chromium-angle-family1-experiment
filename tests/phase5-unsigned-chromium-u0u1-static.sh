@@ -41,6 +41,7 @@ grep -F -- '--use-gl=angle' "$runner" >/dev/null
 grep -F -- '--use-angle=metal' "$runner" >/dev/null
 grep -F -- '--use-dynamic-angle' "$runner" >/dev/null
 grep -F 'DYLD_PRINT_LIBRARIES' "$workflow" "$runner" >/dev/null
+grep -F 'loopback-server.stderr' "$runner" >/dev/null
 grep -F 'phase3d-webgl-smoke.html' "$runner" >/dev/null
 grep -F 'RUNTIME_DEVICE_READY' "$runner" >/dev/null
 grep -F 'APPROVED_BASE_REVISION: eb21b3b30fe0d062d5bf500d46d74a7a57ad56f5' "$workflow" >/dev/null
