@@ -280,6 +280,18 @@ validate_webgl_result() {
     "$output/cdp-result.json" >/dev/null
 }
 
+report_probe_failure() {
+  local case_name=$1 probe_name=$2 output=$3
+  printf '%s %s probe diagnostic summary:\n' "$case_name" "$probe_name" >&2
+  if [[ -f "$output/cdp-result.json" ]]; then
+    jq -c '{probe_success, failure, frame_navigated, load_event_fired, navigation_error, title, document_url, net_log_exists, net_log_bytes, page_events, network_events}' \
+      "$output/cdp-result.json" >&2 || true
+  else
+    printf 'missing cdp-result.json: %s\n' "$output/cdp-result.json" >&2
+  fi
+  phase3_fail "$case_name $probe_name probe validation failed"
+}
+
 run_case() {
   local case_name=$1 angle_added=$2 app case_dir profile libraries framework
   case_dir="$results_dir/$case_name"
@@ -322,30 +334,55 @@ run_case() {
     otool -L "$libraries/libGLESv2.dylib" > "$case_dir/libGLESv2-dependencies.txt"
   fi
 
-  run_cdp_probe "$app" "$profile/url" "$loopback_url" "$case_dir/url" \
+  if ! run_cdp_probe "$app" "$profile/url" "$loopback_url" "$case_dir/url" \
     'Phase 5 unsigned Chromium loopback' '' "$case_dir/url/net-log.json" \
-    '--disable-gpu' '--enable-sandbox-logging' "--vmodule=$URL_DIAGNOSTIC_VMODULE"
-  validate_url_result "$case_dir/url" "$loopback_url"
-  test -s "$case_dir/url/net-log.json"
-  grep -F '"method": "Network.requestWillBeSent"' "$case_dir/url/cdp-events.jsonl" >/dev/null
+    '--disable-gpu' '--enable-sandbox-logging' "--vmodule=$URL_DIAGNOSTIC_VMODULE"; then
+    report_probe_failure "$case_name" URL "$case_dir/url"
+  fi
+  if ! validate_url_result "$case_dir/url" "$loopback_url"; then
+    report_probe_failure "$case_name" URL "$case_dir/url"
+  fi
+  if [[ ! -s "$case_dir/url/net-log.json" ]]; then
+    printf '%s URL NetLog is missing or empty: %s\n' "$case_name" "$case_dir/url/net-log.json" >&2
+    ls -l "$case_dir/url" >&2 || true
+    phase3_fail "$case_name URL NetLog validation failed"
+  fi
+  if ! grep -F '"method": "Network.requestWillBeSent"' "$case_dir/url/cdp-events.jsonl" >/dev/null; then
+    printf '%s URL CDP events did not contain Network.requestWillBeSent\n' "$case_name" >&2
+    tail -n 40 "$case_dir/url/cdp-events.jsonl" >&2 || true
+    phase3_fail "$case_name URL CDP event validation failed"
+  fi
   grep -F 'GET /probe ' "$server_log" >/dev/null || phase3_fail "$case_name loopback server did not receive /probe"
 
-  run_cdp_probe "$app" "$profile/webgl" "file://$REPO_ROOT/tests/fixtures/phase3d-webgl-smoke.html" \
-    "$case_dir/webgl" '' 'phase3d-webgl-smoke:' '' '--disable-gpu'
-  validate_webgl_result "$case_dir/webgl"
+  if ! run_cdp_probe "$app" "$profile/webgl" "file://$REPO_ROOT/tests/fixtures/phase3d-webgl-smoke.html" \
+    "$case_dir/webgl" '' 'phase3d-webgl-smoke:' '' '--disable-gpu'; then
+    report_probe_failure "$case_name" WebGL "$case_dir/webgl"
+  fi
+  if ! validate_webgl_result "$case_dir/webgl"; then
+    report_probe_failure "$case_name" WebGL "$case_dir/webgl"
+  fi
   if [[ "$angle_added" == true ]]; then
-    run_cdp_probe "$app" "$profile/angle-webgl" "file://$REPO_ROOT/tests/fixtures/phase3d-webgl-smoke.html" \
+    if ! run_cdp_probe "$app" "$profile/angle-webgl" "file://$REPO_ROOT/tests/fixtures/phase3d-webgl-smoke.html" \
       "$case_dir/angle-webgl" '' 'phase3d-webgl-smoke:' '' \
       '--use-gl=angle' '--use-angle=metal' '--use-dynamic-angle' "$angle_runtime_opt_in" \
-      'env:DYLD_PRINT_LIBRARIES=1'
-    validate_webgl_result "$case_dir/angle-webgl"
-    jq -e \
+      'env:DYLD_PRINT_LIBRARIES=1'; then
+      report_probe_failure "$case_name" ANGLE-WebGL "$case_dir/angle-webgl"
+    fi
+    if ! validate_webgl_result "$case_dir/angle-webgl"; then
+      report_probe_failure "$case_name" ANGLE-WebGL "$case_dir/angle-webgl"
+    fi
+    if ! jq -e \
       '.webgl_result.webgl1_context_created == true and .webgl_result.draw_operation_completed == true' \
-      "$case_dir/angle-webgl/cdp-result.json" >/dev/null ||
-      phase3_fail "$case_name ANGLE WebGL1 context/draw smoke failed"
-    grep -E 'libEGL\.dylib|libGLESv2\.dylib' "$case_dir/angle-webgl/browser-stderr.log" > \
-      "$case_dir/angle-webgl/angle-load-marker.txt"
-    test "$(wc -l < "$case_dir/angle-webgl/angle-load-marker.txt" | tr -d ' ')" -ge 2
+      "$case_dir/angle-webgl/cdp-result.json" >/dev/null; then
+      report_probe_failure "$case_name" ANGLE-WebGL "$case_dir/angle-webgl"
+    fi
+    if ! grep -E 'libEGL\.dylib|libGLESv2\.dylib' "$case_dir/angle-webgl/browser-stderr.log" > \
+      "$case_dir/angle-webgl/angle-load-marker.txt"; then
+      phase3_fail "$case_name ANGLE load marker was missing"
+    fi
+    if [[ "$(wc -l < "$case_dir/angle-webgl/angle-load-marker.txt" | tr -d ' ')" -lt 2 ]]; then
+      phase3_fail "$case_name ANGLE load marker was incomplete"
+    fi
   fi
   validate_unsigned_bundle "$app" "$case_dir/unsigned-codesign-after-probe"
   {
