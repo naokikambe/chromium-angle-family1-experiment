@@ -220,6 +220,17 @@ jobs:
                 printf '%s=missing\n' "$gn_log"
               fi
             done
+            for siso_log in \
+              out/Phase5URLDiagnostic/siso_failed_commands.sh \
+              out/Phase5URLDiagnostic/siso_output \
+              out/Phase5URLDiagnostic/siso.INFO; do
+              if [[ -f "$CHROMIUM_ROOT/src/$siso_log" ]]; then
+                printf '%s\n' "--- $siso_log tail ---"
+                tail -n 240 "$CHROMIUM_ROOT/src/$siso_log"
+              else
+                printf '%s=missing\n' "$siso_log"
+              fi
+            done
           } > "$DIAG_DIR/chromium-build-failure-diagnostics.txt"
           sanitized_tail=$(tail -n 40 "$DIAG_DIR/chromium-build-failure-diagnostics.txt" | \
             sed "s#${RUNNER_TEMP}#<runner-temp>#g" | tr '\n' ' ' | cut -c1-6000)
