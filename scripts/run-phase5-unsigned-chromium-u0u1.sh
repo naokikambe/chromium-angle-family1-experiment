@@ -267,7 +267,7 @@ validate_url_result() {
 validate_webgl_result() {
   local output=$1
   jq -e \
-    '.probe_success == true and .frame_navigated == true and .load_event_fired == true and (.webgl_result.schema == "phase3d-webgl-smoke-v1") and (.webgl_result.page_loaded == true)' \
+    '.probe_success == true and .frame_navigated == true and (.webgl_result.schema == "phase3d-webgl-smoke-v1") and (.webgl_result.page_loaded == true)' \
     "$output/cdp-result.json" >/dev/null
 }
 
@@ -327,6 +327,10 @@ run_case() {
       '--use-gl=angle' '--use-angle=metal' '--use-dynamic-angle' "$angle_runtime_opt_in" \
       'env:DYLD_PRINT_LIBRARIES=1'
     validate_webgl_result "$case_dir/angle-webgl"
+    jq -e \
+      '.webgl_result.webgl1_context_created == true and .webgl_result.draw_operation_completed == true' \
+      "$case_dir/angle-webgl/cdp-result.json" >/dev/null ||
+      phase3_fail "$case_name ANGLE WebGL1 context/draw smoke failed"
     grep -E 'libEGL\.dylib|libGLESv2\.dylib' "$case_dir/angle-webgl/browser-stderr.log" > \
       "$case_dir/angle-webgl/angle-load-marker.txt"
     test "$(wc -l < "$case_dir/angle-webgl/angle-load-marker.txt" | tr -d ' ')" -ge 2

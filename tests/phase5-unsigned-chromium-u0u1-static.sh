@@ -41,6 +41,8 @@ grep -F -- '--use-gl=angle' "$runner" >/dev/null
 grep -F -- '--use-angle=metal' "$runner" >/dev/null
 grep -F -- '--use-dynamic-angle' "$runner" >/dev/null
 grep -F -- '--browser-arg=' "$runner" >/dev/null
+grep -F 'webgl1_context_created' "$runner" >/dev/null
+grep -F 'draw_operation_completed' "$runner" >/dev/null
 grep -F 'DYLD_PRINT_LIBRARIES' "$workflow" "$runner" >/dev/null
 grep -F 'loopback-server.stderr' "$runner" >/dev/null
 grep -F 'python3-preflight.txt' "$runner" >/dev/null
