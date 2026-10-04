@@ -5,8 +5,9 @@ repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
 workflow="$repo_root/.github/workflows/phase5-chromium-url-diagnostic.yml"
 runner="$repo_root/scripts/run-phase5-unsigned-chromium-u0u1.sh"
 diagnostic_patch="$repo_root/patches/phase5-chromium-url-loader-diagnostics.patch"
+compat_patch="$repo_root/patches/phase5-chromium-xcode16-compat.patch"
 
-for path in "$workflow" "$runner" "$diagnostic_patch"; do
+for path in "$workflow" "$runner" "$diagnostic_patch" "$compat_patch"; do
   test -f "$path"
 done
 bash -n "$runner"
@@ -30,6 +31,8 @@ grep -F 'clang_use_chrome_plugins = false' "$workflow" >/dev/null
 grep -F 'use_clang_modules = false' "$workflow" >/dev/null
 grep -F 'use_unified_system_module = false' "$workflow" >/dev/null
 grep -F 'enable_precompiled_headers = false' "$workflow" >/dev/null
+grep -F 'Apply Xcode 16 SDK compatibility patch' "$workflow" >/dev/null
+grep -F 'XCODE16_COMPAT_PATCH_SHA256' "$workflow" >/dev/null
 grep -F 'mac_deployment_target = "13.0"' "$workflow" >/dev/null
 grep -F 'mac_min_system_version = "13.0"' "$workflow" >/dev/null
 grep -F -- '--local-source-app' "$workflow" "$runner" >/dev/null
@@ -46,6 +49,8 @@ done
 
 test "$(shasum -a 256 "$diagnostic_patch" | awk '{print $1}')" = \
   1be36abf18ac58b94ff1421607be18152c0373a9f92b0aeeb14ad8e352a250c1
+test "$(shasum -a 256 "$compat_patch" | awk '{print $1}')" = \
+  d8a5c8b4c9011686e87aa23720fdf0f3b034af15f15eca6d9c63e26c68e005b0
 grep -F 'SIGNING_OPERATION=none' "$runner" >/dev/null
 grep -F 'XATTR_OPERATION=none' "$runner" >/dev/null
 grep -F 'RUNTIME_DEVICE_READY' "$runner" >/dev/null
