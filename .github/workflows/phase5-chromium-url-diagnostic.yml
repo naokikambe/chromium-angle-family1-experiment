@@ -224,7 +224,8 @@ jobs:
             sed "s#${RUNNER_TEMP}#<runner-temp>#g" | tr '\n' ' ' | cut -c1-6000)
           printf '### Chromium build diagnostics\n\n```text\n%s\n```\n' \
             "$(cat "$DIAG_DIR/chromium-build-failure-diagnostics.txt")" >> "$GITHUB_STEP_SUMMARY"
-          if [[ '${{ steps.build_chromium.conclusion }}' != success ]]; then
+          if [[ '${{ steps.build_chromium.outcome }}' != success ]]; then
+            cat "$DIAG_DIR/chromium-build-failure-diagnostics.txt" >&2
             printf '::error title=Chromium build failure tail::%s\n' "$sanitized_tail"
             exit 1
           fi

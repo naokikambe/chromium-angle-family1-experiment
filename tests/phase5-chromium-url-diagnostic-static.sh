@@ -25,6 +25,7 @@ grep -F 'gclient sync --no-history' "$workflow" >/dev/null
 grep -F 'git apply --unidiff-zero --check' "$workflow" >/dev/null
 grep -F 'gn gen out/Phase5URLDiagnostic' "$workflow" >/dev/null
 grep -F 'autoninja -C out/Phase5URLDiagnostic chrome' "$workflow" >/dev/null
+grep -F "steps.build_chromium.outcome" "$workflow" >/dev/null
 grep -F 'clang_use_chrome_plugins = false' "$workflow" >/dev/null
 grep -F 'mac_deployment_target = "13.0"' "$workflow" >/dev/null
 grep -F 'mac_min_system_version = "13.0"' "$workflow" >/dev/null
