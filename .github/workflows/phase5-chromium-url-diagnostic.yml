@@ -202,6 +202,7 @@ jobs:
           set -euo pipefail
           {
             printf 'build_step_outcome=%s\n' '${{ steps.build_chromium.outcome }}'
+            printf 'build_step_conclusion=%s\n' '${{ steps.build_chromium.conclusion }}'
             printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             df -h "$RUNNER_TEMP" || true
             if [[ -f "$DIAG_DIR/chromium-build.log" ]]; then
@@ -223,7 +224,7 @@ jobs:
             sed "s#${RUNNER_TEMP}#<runner-temp>#g" | tr '\n' ' ' | cut -c1-6000)
           printf '### Chromium build diagnostics\n\n```text\n%s\n```\n' \
             "$(cat "$DIAG_DIR/chromium-build-failure-diagnostics.txt")" >> "$GITHUB_STEP_SUMMARY"
-          if [[ '${{ steps.build_chromium.outcome }}' != success ]]; then
+          if [[ '${{ steps.build_chromium.conclusion }}' != success ]]; then
             printf '::error title=Chromium build failure tail::%s\n' "$sanitized_tail"
             exit 1
           fi
