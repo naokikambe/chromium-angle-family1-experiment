@@ -1,0 +1,14 @@
+diff --git a/base/process/launch_mac.cc b/base/process/launch_mac.cc
+--- a/base/process/launch_mac.cc
++++ b/base/process/launch_mac.cc
+@@ -159,9 +159,5 @@ class PosixSpawnFileActions {
+ #if BUILDFLAG(IS_MAC)
+   void Chdir(const char* path) {
+-    if (__builtin_available(macOS 26, *)) {
+-      DPSXCHECK(posix_spawn_file_actions_addchdir(&file_actions_, path));
+-    } else {
+-      DPSXCHECK(posix_spawn_file_actions_addchdir_np(&file_actions_, path));
+-    }
++    DPSXCHECK(posix_spawn_file_actions_addchdir_np(&file_actions_, path));
+   }
+ #endif
