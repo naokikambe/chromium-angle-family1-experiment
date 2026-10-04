@@ -23,6 +23,7 @@ grep -F 'permissions:' "$workflow" >/dev/null
 grep -F 'actions: read' "$workflow" >/dev/null
 grep -F 'contents: read' "$workflow" >/dev/null
 grep -F 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' "$workflow" >/dev/null
+grep -F 'fetch-depth: 0' "$workflow" >/dev/null
 grep -F 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' "$workflow" >/dev/null
 grep -F 'persist-credentials: false' "$workflow" >/dev/null
 grep -F 'if: always()' "$workflow" >/dev/null
