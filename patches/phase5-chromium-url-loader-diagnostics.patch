@@ -95,7 +95,6 @@ diff --git a/build/config/mac/BUILD.gn b/build/config/mac/BUILD.gn
 +      "$mac_sdk_path/usr/include/DarwinFoundation1.modulemap",
 +      "$mac_sdk_path/usr/include/DarwinFoundation2.modulemap",
 +      "$mac_sdk_path/usr/include/DarwinFoundation3.modulemap",
-+      "$mac_sdk_path/usr/include/libunwind.modulemap",
        "$mac_sdk_path/usr/include/mach/exc.defs",
        "$mac_sdk_path/usr/include/mach/mach_exc.defs",
        "$mac_sdk_path/usr/include/mach/notify.defs",
