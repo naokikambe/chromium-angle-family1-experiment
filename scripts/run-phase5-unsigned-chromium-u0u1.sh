@@ -156,18 +156,26 @@ server_log="$results_dir/loopback-server.log"
 server_port_file="$work_dir/loopback-port"
 server_stdout="$results_dir/loopback-server.stdout"
 server_stderr="$results_dir/loopback-server.stderr"
-python3 "$SCRIPT_DIR/phase5-unsigned-loopback-server.py" \
+{
+  printf 'python3_path='
+  command -v python3
+  python3 --version
+  python3 -c 'print("python3_exec_ok")'
+} > "$results_dir/python3-preflight.txt" 2>&1
+python3 -u "$SCRIPT_DIR/phase5-unsigned-loopback-server.py" \
   --directory "$REPO_ROOT/tests/fixtures" \
   --log "$server_log" \
   --port-file "$server_port_file" \
   --port 0 > "$server_stdout" 2> "$server_stderr" &
 server_pid=$!
+ps -p "$server_pid" -o pid=,ppid=,stat=,etime=,command= > "$results_dir/loopback-server-process.txt" 2>&1 || true
 for _ in $(seq 1 50); do
   [[ -s "$server_port_file" ]] && break
   kill -0 "$server_pid" 2>/dev/null || break
   sleep 0.2
 done
 if [[ ! -s "$server_port_file" ]]; then
+  ps -p "$server_pid" -o pid=,ppid=,stat=,etime=,command= >> "$results_dir/loopback-server-process.txt" 2>&1 || true
   cat "$server_stdout" "$server_stderr" >&2 || true
   phase3_fail 'loopback server did not publish its port'
 fi
