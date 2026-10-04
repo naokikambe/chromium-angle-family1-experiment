@@ -182,6 +182,7 @@ jobs:
           use_system_xcode = true
           use_clang_modules = false
           use_unified_system_module = false
+          enable_precompiled_headers = false
           clang_use_chrome_plugins = false
           mac_deployment_target = "13.0"
           mac_min_system_version = "13.0"

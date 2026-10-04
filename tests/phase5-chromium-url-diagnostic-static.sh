@@ -29,6 +29,7 @@ grep -F "steps.build_chromium.outcome" "$workflow" >/dev/null
 grep -F 'clang_use_chrome_plugins = false' "$workflow" >/dev/null
 grep -F 'use_clang_modules = false' "$workflow" >/dev/null
 grep -F 'use_unified_system_module = false' "$workflow" >/dev/null
+grep -F 'enable_precompiled_headers = false' "$workflow" >/dev/null
 grep -F 'mac_deployment_target = "13.0"' "$workflow" >/dev/null
 grep -F 'mac_min_system_version = "13.0"' "$workflow" >/dev/null
 grep -F -- '--local-source-app' "$workflow" "$runner" >/dev/null
