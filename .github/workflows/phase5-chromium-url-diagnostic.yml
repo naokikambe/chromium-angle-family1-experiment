@@ -191,6 +191,14 @@ jobs:
           chrome_pgo_phase = 0
           EOF
           gn gen out/Phase5URLDiagnostic > "$DIAG_DIR/gn-stdout.log" 2> "$DIAG_DIR/gn-stderr.log"
+          {
+            for target in //build/modules:mac_sysroot //build/modules:system_modulemap; do
+              printf '%s\n' "--- gn desc $target outputs ---"
+              gn desc out/Phase5URLDiagnostic "$target" outputs || true
+              printf '%s\n' "--- gn desc $target inputs ---"
+              gn desc out/Phase5URLDiagnostic "$target" inputs || true
+            done
+          } > "$DIAG_DIR/gn-target-outputs-inputs.log" 2>&1
           autoninja -C out/Phase5URLDiagnostic chrome > "$DIAG_DIR/chromium-build.log" 2>&1
           test -d out/Phase5URLDiagnostic/Chromium.app
           printf '%s\n' "$CHROMIUM_ROOT/src/out/Phase5URLDiagnostic/Chromium.app" > "$DIAG_DIR/chromium-app-path.txt"
@@ -220,6 +228,12 @@ jobs:
                 printf '%s=missing\n' "$gn_log"
               fi
             done
+            if [[ -f "$DIAG_DIR/gn-target-outputs-inputs.log" ]]; then
+              printf '%s\n' '--- gn-target-outputs-inputs.log ---'
+              cat "$DIAG_DIR/gn-target-outputs-inputs.log"
+            else
+              printf '%s\n' 'gn-target-outputs-inputs.log=missing'
+            fi
           } > "$DIAG_DIR/chromium-build-failure-diagnostics.txt"
           sanitized_tail=$(tail -n 40 "$DIAG_DIR/chromium-build-failure-diagnostics.txt" | \
             sed "s#${RUNNER_TEMP}#<runner-temp>#g" | tr '\n' ' ' | cut -c1-6000)
