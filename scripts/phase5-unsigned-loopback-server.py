@@ -54,17 +54,23 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    print("loopback_startup=parse_args", file=sys.stderr, flush=True)
     directory = os.path.abspath(args.directory)
     fixture = os.path.join(directory, "phase5-unsigned-loopback.html")
     if not os.path.isfile(fixture):
         raise SystemExit(f"loopback fixture is missing: {fixture}")
+    print("loopback_startup=fixture_ok", file=sys.stderr, flush=True)
 
     log_file = open(args.log, "a", encoding="utf-8", buffering=1)
+    print("loopback_startup=log_open", file=sys.stderr, flush=True)
     handler = functools.partial(LoopbackHandler, directory=directory)
+    print("loopback_startup=server_construct_begin", file=sys.stderr, flush=True)
     server = LoopbackServer(("127.0.0.1", args.port), handler)
+    print("loopback_startup=server_constructed", file=sys.stderr, flush=True)
     server.phase5_log = log_file  # type: ignore[attr-defined]
     with open(args.port_file, "w", encoding="utf-8") as port_file:
         port_file.write(f"{server.server_address[1]}\n")
+    print("loopback_startup=port_file_written", file=sys.stderr, flush=True)
     print(f"loopback_port={server.server_address[1]}", flush=True)
 
     def stop(_signum: int, _frame: object) -> None:
