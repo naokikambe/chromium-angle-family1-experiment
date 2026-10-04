@@ -240,21 +240,61 @@ jobs:
           test "$(grep '^ANGLE_REVISION=' "$ANGLE_ARTIFACT/ANGLE_RELEASE_MANIFEST" | cut -d= -f2-)" = "$ANGLE_REVISION"
 
       - name: Run exact-revision unsigned U0/U1 diagnostic
+        id: run_u0_u1_diagnostic
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
           revisions_file="$DIAG_DIR/REVISIONS"
           jq -n --arg chromium "$CHROMIUM_REVISION" --arg angle "$ANGLE_REVISION" \
             '{chromium_revision:"local-source-build",got_revision:$chromium,got_angle_revision:$angle}' > "$revisions_file"
+          printf 'local_source_app='; cat "$DIAG_DIR/chromium-app-path.txt"
+          printf 'local_revisions=%s\n' "$revisions_file"
           scripts/run-phase5-unsigned-chromium-u0u1.sh \
-            --snapshot-position 0 \
-            --snapshot-sha256 0000000000000000000000000000000000000000000000000000000000000000 \
             --expected-chromium-revision "$CHROMIUM_REVISION" \
             --expected-angle-revision "$ANGLE_REVISION" \
             --angle-build-run-id "$ANGLE_BUILD_RUN_ID" \
             --results-dir "$RESULTS_DIR" \
             --local-source-app "$(cat "$DIAG_DIR/chromium-app-path.txt")" \
             --local-revisions "$revisions_file"
+
+      - name: Record U0/U1 diagnostic failure details
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf 'u0_u1_step_outcome=%s\n' '${{ steps.run_u0_u1_diagnostic.outcome }}'
+            printf 'u0_u1_step_conclusion=%s\n' '${{ steps.run_u0_u1_diagnostic.conclusion }}'
+            printf 'local_source_app_file=%s\n' "$DIAG_DIR/chromium-app-path.txt"
+            if [[ -f "$DIAG_DIR/chromium-app-path.txt" ]]; then
+              printf 'local_source_app='; cat "$DIAG_DIR/chromium-app-path.txt"
+            else
+              printf '%s\n' 'local_source_app=missing'
+            fi
+            if [[ -d "$RESULTS_DIR" ]]; then
+              printf '%s\n' '--- result files ---'
+              find "$RESULTS_DIR" -type f -maxdepth 5 -print | sort
+              for result in "$RESULTS_DIR"/*/url/cdp-result.json "$RESULTS_DIR"/*/webgl/cdp-result.json "$RESULTS_DIR"/*/angle-webgl/cdp-result.json; do
+                if [[ -f "$result" ]]; then
+                  printf '%s\n' "--- $result ---"
+                  jq -c '{probe_success,failure,browser_started,browser_returncode,frame_navigated,load_event_fired,navigation_error,title,document_url,net_log_exists,net_log_bytes}' "$result"
+                fi
+              done
+              for codesign_state in "$RESULTS_DIR"/*/unsigned-codesign/target-*.txt; do
+                if [[ -f "$codesign_state" ]]; then
+                  printf '%s\n' "--- $codesign_state ---"
+                  cat "$codesign_state"
+                fi
+              done
+            else
+              printf '%s\n' 'results_dir=missing'
+            fi
+          } | tee "$DIAG_DIR/u0-u1-failure-diagnostics.txt" >> "$GITHUB_STEP_SUMMARY"
+          if [[ '${{ steps.run_u0_u1_diagnostic.outcome }}' != success ]]; then
+            printf '::error title=U0/U1 diagnostic failure::See the recorded U0/U1 diagnostic failure details.\n'
+            exit 1
+          fi
 
       - name: Upload exact-revision URL diagnostics
         if: always()
