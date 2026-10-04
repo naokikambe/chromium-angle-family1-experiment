@@ -86,14 +86,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          diag_dir="$RUNNER_TEMP/phase5-chromium-url-diagnostic"
           {
             printf 'CHROMIUM_ROOT=%s\n' "$RUNNER_TEMP/phase5-chromium-url-diagnostic-source"
             printf 'DEPOT_TOOLS_ROOT=%s\n' "$RUNNER_TEMP/phase5-chromium-url-diagnostic-depot-tools"
-            printf 'DIAG_DIR=%s\n' "$RUNNER_TEMP/phase5-chromium-url-diagnostic"
+            printf 'DIAG_DIR=%s\n' "$diag_dir"
             printf 'ANGLE_ARTIFACT=%s\n' "$RUNNER_TEMP/phase5-chromium-url-diagnostic-angle-artifact"
             printf 'RESULTS_DIR=%s\n' "$RUNNER_TEMP/phase5-chromium-url-diagnostic-results"
           } >> "$GITHUB_ENV"
-          mkdir -p "$DIAG_DIR"
+          mkdir -p "$diag_dir"
 
       - name: Fetch and bootstrap pinned depot_tools
         timeout-minutes: 15
