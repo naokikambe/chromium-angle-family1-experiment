@@ -23,6 +23,24 @@ on:
         required: true
         default: 646c6b5a166b2054f664c97e373dd2760292d447c84cb8266ed36e32d599dc22
         type: string
+  workflow_call:
+    inputs:
+      chromium_revision:
+        description: Exact Chromium source revision for the diagnostic build
+        required: true
+        type: string
+      angle_revision:
+        description: Exact ANGLE revision bound to the Chromium input
+        required: true
+        type: string
+      angle_build_run_id:
+        description: Successful Phase 5 ANGLE runtime workflow run to use for U1
+        required: true
+        type: string
+      diagnostic_patch_sha256:
+        description: SHA-256 of the checked-in Chromium URL diagnostic patch
+        required: true
+        type: string
 
 permissions:
   actions: read
