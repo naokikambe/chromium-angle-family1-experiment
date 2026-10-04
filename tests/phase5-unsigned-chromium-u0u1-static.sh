@@ -56,6 +56,7 @@ grep -F 'python3-preflight.txt' "$runner" >/dev/null
 grep -F 'loopback_server_port=0' "$runner" >/dev/null
 grep -F 'socketserver.TCPServer.server_bind' "$loopback_server" >/dev/null
 grep -F 'phase3d-webgl-smoke.html' "$runner" >/dev/null
+grep -F '#webgl1-only' "$runner" "$repo_root/tests/fixtures/phase3d-webgl-smoke.html" >/dev/null
 grep -F 'RUNTIME_DEVICE_READY' "$runner" >/dev/null
 grep -F 'APPROVED_BASE_REVISION: eb21b3b30fe0d062d5bf500d46d74a7a57ad56f5' "$workflow" >/dev/null
 grep -F 'git merge-base --is-ancestor "$APPROVED_BASE_REVISION" "$GITHUB_SHA"' "$workflow" >/dev/null
