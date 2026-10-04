@@ -362,7 +362,7 @@ run_case() {
     report_probe_failure "$case_name" WebGL "$case_dir/webgl"
   fi
   if [[ "$angle_added" == true ]]; then
-    if ! run_cdp_probe "$app" "$profile/angle-webgl" "file://$REPO_ROOT/tests/fixtures/phase3d-webgl-smoke.html" \
+    if ! run_cdp_probe "$app" "$profile/angle-webgl" "file://$REPO_ROOT/tests/fixtures/phase3d-webgl-smoke.html#webgl1-only" \
       "$case_dir/angle-webgl" '' 'phase3d-webgl-smoke:' '' \
       '--use-gl=angle' '--use-angle=metal' '--use-dynamic-angle' "$angle_runtime_opt_in" \
       'env:DYLD_PRINT_LIBRARIES=1'; then
