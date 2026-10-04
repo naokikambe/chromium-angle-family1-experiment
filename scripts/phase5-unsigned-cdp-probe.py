@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import shlex
@@ -21,7 +22,156 @@ import urllib.request
 from typing import Any
 
 
-SCHEMA = "phase5-unsigned-cdp-probe-v1"
+SCHEMA = "phase5-unsigned-cdp-probe-v2"
+
+
+def safe_url_summary(value: Any) -> dict[str, Any] | None:
+    """Return URL routing metadata without recording query, cookie, or header data."""
+
+    if not isinstance(value, str):
+        return None
+    parsed = urllib.parse.urlsplit(value)
+    path = parsed.path or "/"
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
+    return {
+        "scheme": parsed.scheme,
+        "host": parsed.hostname,
+        "port": port,
+        "path_sha256": hashlib.sha256(path.encode("utf-8")).hexdigest(),
+    }
+
+
+def diagnostic_event(message: dict[str, Any]) -> dict[str, Any] | None:
+    """Summarize navigation/network events without retaining request contents."""
+
+    method = message.get("method")
+    params = message.get("params", {})
+    if not isinstance(method, str) or not isinstance(params, dict):
+        return None
+
+    if method == "Network.requestWillBeSent":
+        request = params.get("request", {})
+        initiator = params.get("initiator", {})
+        return {
+            "method": method,
+            "request_id": params.get("requestId"),
+            "loader_id": params.get("loaderId"),
+            "type": params.get("type"),
+            "request_url": safe_url_summary(request.get("url")),
+            "document_url": safe_url_summary(params.get("documentURL")),
+            "initiator_type": initiator.get("type") if isinstance(initiator, dict) else None,
+        }
+    if method == "Network.responseReceived":
+        response = params.get("response", {})
+        return {
+            "method": method,
+            "request_id": params.get("requestId"),
+            "loader_id": params.get("loaderId"),
+            "type": params.get("type"),
+            "status": response.get("status") if isinstance(response, dict) else None,
+            "mime_type": response.get("mimeType") if isinstance(response, dict) else None,
+            "protocol": response.get("protocol") if isinstance(response, dict) else None,
+            "from_disk_cache": response.get("fromDiskCache") if isinstance(response, dict) else None,
+            "from_service_worker": response.get("fromServiceWorker") if isinstance(response, dict) else None,
+        }
+    if method == "Network.loadingFailed":
+        return {
+            "method": method,
+            "request_id": params.get("requestId"),
+            "type": params.get("type"),
+            "error_text": params.get("errorText"),
+            "canceled": params.get("canceled"),
+            "blocked_reason": params.get("blockedReason"),
+            "cors_error": params.get("corsError"),
+        }
+    if method == "Network.loadingFinished":
+        return {
+            "method": method,
+            "request_id": params.get("requestId"),
+            "encoded_data_length": params.get("encodedDataLength"),
+        }
+    if method == "Network.dataReceived":
+        return {
+            "method": method,
+            "request_id": params.get("requestId"),
+            "data_length": params.get("dataLength"),
+            "encoded_data_length": params.get("encodedDataLength"),
+        }
+    if method == "Page.frameStartedNavigating":
+        return {
+            "method": method,
+            "frame_id": params.get("frameId"),
+            "loader_id": params.get("loaderId"),
+            "url": safe_url_summary(params.get("url")),
+            "navigation_type": params.get("navigationType"),
+        }
+    if method == "Page.frameRequestedNavigation":
+        return {
+            "method": method,
+            "frame_id": params.get("frameId"),
+            "url": safe_url_summary(params.get("url")),
+            "reason": params.get("reason"),
+            "disposition": params.get("disposition"),
+        }
+    if method == "Page.frameNavigated":
+        frame = params.get("frame", {})
+        return {
+            "method": method,
+            "frame_id": frame.get("id") if isinstance(frame, dict) else None,
+            "parent_id": frame.get("parentId") if isinstance(frame, dict) else None,
+            "loader_id": frame.get("loaderId") if isinstance(frame, dict) else None,
+            "url": safe_url_summary(frame.get("url")) if isinstance(frame, dict) else None,
+            "type": frame.get("type") if isinstance(frame, dict) else None,
+        }
+    if method in {
+        "Page.frameClearedScheduledNavigation",
+        "Page.frameStoppedLoading",
+        "Page.loadEventFired",
+        "Page.domContentEventFired",
+    }:
+        return {"method": method, **{key: params.get(key) for key in ("frameId", "timestamp")}}
+    if method == "Page.lifecycleEvent":
+        return {
+            "method": method,
+            "frame_id": params.get("frameId"),
+            "loader_id": params.get("loaderId"),
+            "name": params.get("name"),
+        }
+    if method == "Page.navigatedWithinDocument":
+        return {
+            "method": method,
+            "frame_id": params.get("frameId"),
+            "url": safe_url_summary(params.get("url")),
+        }
+    return None
+
+
+def record_message(
+    event_file: Any,
+    message: dict[str, Any],
+    diagnostics: dict[str, list[dict[str, Any]]],
+) -> None:
+    summary = diagnostic_event(message)
+    method = message.get("method")
+    if isinstance(method, str) and method.startswith("Network."):
+        if summary is None:
+            params = message.get("params", {})
+            summary = {
+                "method": method,
+                "request_id": params.get("requestId") if isinstance(params, dict) else None,
+                "loader_id": params.get("loaderId") if isinstance(params, dict) else None,
+            }
+        diagnostics["network_events"].append(summary)
+        event_file.write(json.dumps(summary, sort_keys=True) + "\n")
+        event_file.flush()
+        return
+    if summary is not None:
+        diagnostics["page_events"].append(summary)
+    event_file.write(json.dumps(message, sort_keys=True) + "\n")
+    event_file.flush()
 
 
 def write_json(path: str, value: Any) -> None:
@@ -146,13 +296,17 @@ def command(
     method: str,
     params: dict[str, Any] | None = None,
     navigation_state: dict[str, Any] | None = None,
+    diagnostics: dict[str, list[dict[str, Any]]] | None = None,
 ) -> tuple[int, Any]:
     ws.send_json({"id": command_id, "method": method, "params": params or {}})
     deadline = time.monotonic() + 5.0
     while True:
         message = ws.recv_message(deadline)
-        ws.event_log.write(json.dumps(message, sort_keys=True) + "\n")
-        ws.event_log.flush()
+        if diagnostics is None:
+            ws.event_log.write(json.dumps(message, sort_keys=True) + "\n")
+            ws.event_log.flush()
+        else:
+            record_message(ws.event_log, message, diagnostics)
         if navigation_state is not None:
             event_method = message.get("method")
             event_params = message.get("params", {})
@@ -170,6 +324,7 @@ def evaluate(
     command_id: int,
     expression: str,
     navigation_state: dict[str, Any] | None = None,
+    diagnostics: dict[str, list[dict[str, Any]]] | None = None,
 ) -> tuple[int, dict[str, Any]]:
     next_id, response = command(
         ws,
@@ -177,6 +332,7 @@ def evaluate(
         "Runtime.evaluate",
         {"expression": expression, "returnByValue": True, "awaitPromise": True},
         navigation_state,
+        diagnostics,
     )
     return next_id, response
 
@@ -202,6 +358,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--results-dir", required=True)
     parser.add_argument("--browser-arg", action="append", default=[])
     parser.add_argument("--browser-env", action="append", default=[])
+    parser.add_argument("--net-log", default="")
     parser.add_argument("--expected-title", default="")
     parser.add_argument("--expected-title-prefix", default="")
     parser.add_argument("--timeout-seconds", type=float, default=20.0)
@@ -235,7 +392,13 @@ def main() -> int:
         "failure": None,
         "browser_terminated_by_probe": False,
         "browser_returncode": None,
+        "net_log_path": os.path.abspath(args.net_log) if args.net_log else None,
+        "net_log_exists": False,
+        "net_log_bytes": 0,
+        "page_events": [],
+        "network_events": [],
     }
+    diagnostics: dict[str, list[dict[str, Any]]] = {"page_events": [], "network_events": []}
     process: subprocess.Popen[bytes] | None = None
     ws: WebSocket | None = None
     event_file = open(events_path, "w", encoding="utf-8")
@@ -255,6 +418,12 @@ def main() -> int:
             f"--user-data-dir={os.path.abspath(args.profile)}",
         ]
         command_line.extend(args.browser_arg)
+        if args.net_log:
+            net_log_path = os.path.abspath(args.net_log)
+            net_log_parent = os.path.dirname(net_log_path)
+            if net_log_parent:
+                os.makedirs(net_log_parent, exist_ok=True)
+            command_line.append(f"--log-net-log={net_log_path}")
         command_line.append("about:blank")
         with open(os.path.join(results_dir, "browser-stdout.log"), "wb") as stdout_file, open(
             os.path.join(results_dir, "browser-stderr.log"), "wb"
@@ -277,10 +446,13 @@ def main() -> int:
         target = wait_for_target(port, time.monotonic() + 10.0)
         ws = WebSocket(target["webSocketDebuggerUrl"], event_file)
         command_id = 1
-        command_id, enable_response = command(ws, command_id, "Page.enable")
+        command_id, enable_response = command(ws, command_id, "Page.enable", diagnostics=diagnostics)
         if "error" in enable_response:
             raise RuntimeError(f"Page.enable failed: {enable_response['error']}")
-        command_id, runtime_response = command(ws, command_id, "Runtime.enable")
+        command_id, network_response = command(ws, command_id, "Network.enable", diagnostics=diagnostics)
+        if "error" in network_response:
+            raise RuntimeError(f"Network.enable failed: {network_response['error']}")
+        command_id, runtime_response = command(ws, command_id, "Runtime.enable", diagnostics=diagnostics)
         if "error" in runtime_response:
             raise RuntimeError(f"Runtime.enable failed: {runtime_response['error']}")
         navigation_state: dict[str, Any] = {
@@ -289,7 +461,7 @@ def main() -> int:
             "document_url": None,
         }
         command_id, navigate_response = command(
-            ws, command_id, "Page.navigate", {"url": args.url}, navigation_state
+            ws, command_id, "Page.navigate", {"url": args.url}, navigation_state, diagnostics
         )
         result["frame_navigated"] = navigation_state["frame_navigated"]
         result["load_event_fired"] = navigation_state["load_event_fired"]
@@ -303,8 +475,7 @@ def main() -> int:
         while time.monotonic() < deadline:
             try:
                 message = ws.recv_message(min(deadline, time.monotonic() + 0.5))
-                event_file.write(json.dumps(message, sort_keys=True) + "\n")
-                event_file.flush()
+                record_message(event_file, message, diagnostics)
                 method = message.get("method")
                 params = message.get("params", {})
                 if method == "Page.frameNavigated" and params.get("frame", {}).get("parentId") is None:
@@ -315,7 +486,7 @@ def main() -> int:
             except TimeoutError:
                 pass
             if result["frame_navigated"] or result["load_event_fired"]:
-                command_id, evaluation = evaluate(ws, command_id, expression, navigation_state)
+                command_id, evaluation = evaluate(ws, command_id, expression, navigation_state, diagnostics)
                 result["frame_navigated"] = result["frame_navigated"] or navigation_state["frame_navigated"]
                 result["load_event_fired"] = result["load_event_fired"] or navigation_state["load_event_fired"]
                 evaluation_result = evaluation.get("result", {}).get("result", {})
@@ -363,6 +534,13 @@ def main() -> int:
                     process.wait(timeout=3.0)
             result["browser_returncode"] = process.returncode
         event_file.close()
+        result["page_events"] = diagnostics["page_events"]
+        result["network_events"] = diagnostics["network_events"]
+        if args.net_log:
+            net_log_path = os.path.abspath(args.net_log)
+            result["net_log_exists"] = os.path.isfile(net_log_path)
+            if result["net_log_exists"]:
+                result["net_log_bytes"] = os.path.getsize(net_log_path)
         write_json(os.path.join(results_dir, "cdp-result.json"), result)
     return 0 if result["probe_success"] else 1
 

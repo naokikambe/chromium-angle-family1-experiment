@@ -6,6 +6,7 @@ readonly SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd -P)
 readonly REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd -P)
 readonly SNAPSHOT_BASE_URL='https://commondatastorage.googleapis.com/chromium-browser-snapshots/Mac'
 readonly ANGLE_REPOSITORY='naokikambe/chromium-angle-family1-experiment'
+readonly URL_DIAGNOSTIC_VMODULE='browser_url_loader_factory=2,storage_partition_impl=2,url_loader_factory=2,url_loader=2,network_service=2,network_context=2,network_delegate=2,url_request=2,http_stream_factory=2,render_frame_host_impl=2'
 source "$SCRIPT_DIR/phase3-test-copy-common.sh"
 
 usage() {
@@ -142,6 +143,13 @@ angle_manifest_sha256=$(shasum -a 256 "$angle_manifest" | awk '{print $1}')
 angle_artifact_digest=$(gh api "repos/$ANGLE_REPOSITORY/actions/runs/$angle_build_run_id/artifacts" \
   --jq ".artifacts[] | select(.name == \"$angle_artifact_name\") | .digest")
 [[ "$angle_artifact_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || phase3_fail 'ANGLE artifact digest was not available'
+revision_match_chromium=$([[ "$snapshot_chromium_revision" == "$angle_chromium_revision" ]] && printf true || printf false)
+revision_match_angle=$([[ "$snapshot_angle_revision" == "$angle_revision" ]] && printf true || printf false)
+if [[ "$revision_match_chromium" == true && "$revision_match_angle" == true ]]; then
+  revision_scope='strict-same-input'
+else
+  revision_scope='exploratory-revision-mismatch'
+fi
 
 printf 'snapshot_chromium_revision=%s\n' "$snapshot_chromium_revision" >> "$results_dir/input-acquisition.txt"
 printf 'snapshot_angle_revision=%s\n' "$snapshot_angle_revision" >> "$results_dir/input-acquisition.txt"
@@ -235,8 +243,8 @@ record_inventory() {
 }
 
 run_cdp_probe() {
-  local app=$1 profile=$2 url=$3 output=$4 expected_title=$5 expected_prefix=$6
-  shift 6
+  local app=$1 profile=$2 url=$3 output=$4 expected_title=$5 expected_prefix=$6 net_log_path=$7
+  shift 7
   mkdir -p "$profile" "$output"
   local args=(
     --executable "$app/Contents/MacOS/Chromium"
@@ -246,6 +254,7 @@ run_cdp_probe() {
   )
   [[ -n "$expected_title" ]] && args+=(--expected-title "$expected_title")
   [[ -n "$expected_prefix" ]] && args+=(--expected-title-prefix "$expected_prefix")
+  [[ -n "$net_log_path" ]] && args+=(--net-log "$net_log_path")
   while [[ $# -gt 0 ]]; do
     if [[ "$1" == env:* ]]; then
       args+=("--browser-env=${1#env:}")
@@ -314,16 +323,19 @@ run_case() {
   fi
 
   run_cdp_probe "$app" "$profile/url" "$loopback_url" "$case_dir/url" \
-    'Phase 5 unsigned Chromium loopback' '' '--disable-gpu'
+    'Phase 5 unsigned Chromium loopback' '' "$case_dir/url/net-log.json" \
+    '--disable-gpu' '--enable-sandbox-logging' "--vmodule=$URL_DIAGNOSTIC_VMODULE"
   validate_url_result "$case_dir/url" "$loopback_url"
+  test -s "$case_dir/url/net-log.json"
+  grep -F '"method": "Network.requestWillBeSent"' "$case_dir/url/cdp-events.jsonl" >/dev/null
   grep -F 'GET /probe ' "$server_log" >/dev/null || phase3_fail "$case_name loopback server did not receive /probe"
 
   run_cdp_probe "$app" "$profile/webgl" "file://$REPO_ROOT/tests/fixtures/phase3d-webgl-smoke.html" \
-    "$case_dir/webgl" '' 'phase3d-webgl-smoke:' '--disable-gpu'
+    "$case_dir/webgl" '' 'phase3d-webgl-smoke:' '' '--disable-gpu'
   validate_webgl_result "$case_dir/webgl"
   if [[ "$angle_added" == true ]]; then
     run_cdp_probe "$app" "$profile/angle-webgl" "file://$REPO_ROOT/tests/fixtures/phase3d-webgl-smoke.html" \
-      "$case_dir/angle-webgl" '' 'phase3d-webgl-smoke:' \
+      "$case_dir/angle-webgl" '' 'phase3d-webgl-smoke:' '' \
       '--use-gl=angle' '--use-angle=metal' '--use-dynamic-angle' "$angle_runtime_opt_in" \
       'env:DYLD_PRINT_LIBRARIES=1'
     validate_webgl_result "$case_dir/angle-webgl"
@@ -349,8 +361,9 @@ run_case() {
     printf 'ANGLE_MANIFEST_SHA256=%s\n' "$angle_manifest_sha256"
     printf 'ANGLE_CHROMIUM_REVISION=%s\n' "$angle_chromium_revision"
     printf 'ANGLE_REVISION=%s\n' "$angle_revision"
-    printf 'REVISION_MATCH_CHROMIUM=%s\n' "$([[ "$snapshot_chromium_revision" == "$angle_chromium_revision" ]] && printf true || printf false)"
-    printf 'REVISION_MATCH_ANGLE=%s\n' "$([[ "$snapshot_angle_revision" == "$angle_revision" ]] && printf true || printf false)"
+    printf 'REVISION_MATCH_CHROMIUM=%s\n' "$revision_match_chromium"
+    printf 'REVISION_MATCH_ANGLE=%s\n' "$revision_match_angle"
+    printf 'RESULT_SCOPE=%s\n' "$revision_scope"
     printf 'RUNTIME_DEVICE_READY=%s\n' "$angle_runtime_device_ready"
     printf 'SIGNING_STATE=unsigned\n'
     printf 'SIGNING_OPERATION=none\n'
@@ -380,8 +393,7 @@ u1_framework_hash=$(awk -F= '$1 == "framework_sha256" {print $2}' "$results_dir/
 [[ "$u0_main_hash" == "$u1_main_hash" && "$u0_framework_hash" == "$u1_framework_hash" ]] ||
   phase3_fail 'U0 and U1 changed a Chromium main/framework binary outside ANGLE dylibs'
 printf '%s\n' "$extra_inventory" > "$results_dir/u1-only-files.txt"
-printf 'SCHEMA=phase5-unsigned-chromium-u0u1-result-v1\nU0_URL=pass\nU1_URL=pass\nU0_WEBGL_SMOKE=pass\nU1_WEBGL_SMOKE=pass\nU1_ANGLE_LOAD=pass\nINPUT_REVISION_MATCH_CHROMIUM=%s\nINPUT_REVISION_MATCH_ANGLE=%s\n' \
-  "$([[ "$snapshot_chromium_revision" == "$angle_chromium_revision" ]] && printf true || printf false)" \
-  "$([[ "$snapshot_angle_revision" == "$angle_revision" ]] && printf true || printf false)" \
+printf 'SCHEMA=phase5-unsigned-chromium-u0u1-result-v1\nU0_URL=pass\nU1_URL=pass\nU0_WEBGL_SMOKE=pass\nU1_WEBGL_SMOKE=pass\nU1_ANGLE_LOAD=pass\nINPUT_REVISION_MATCH_CHROMIUM=%s\nINPUT_REVISION_MATCH_ANGLE=%s\nRESULT_SCOPE=%s\n' \
+  "$revision_match_chromium" "$revision_match_angle" "$revision_scope" \
   > "$results_dir/experiment-summary.txt"
 printf '%s\n' 'phase5 unsigned Chromium U0/U1 probe passed'

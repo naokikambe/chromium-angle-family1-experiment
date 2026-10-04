@@ -44,6 +44,12 @@ grep -F -- '--browser-arg=' "$runner" >/dev/null
 grep -F 'webgl1_context_created' "$runner" >/dev/null
 grep -F 'draw_operation_completed' "$runner" >/dev/null
 grep -F 'DYLD_PRINT_LIBRARIES' "$workflow" "$runner" >/dev/null
+grep -F -- '--net-log' "$cdp_probe" "$runner" >/dev/null
+grep -F 'Network.enable' "$cdp_probe" >/dev/null
+grep -F 'Network.requestWillBeSent' "$cdp_probe" >/dev/null
+grep -F 'Page.frameStartedNavigating' "$cdp_probe" >/dev/null
+grep -F -- '--enable-sandbox-logging' "$runner" >/dev/null
+grep -F 'URL_DIAGNOSTIC_VMODULE' "$runner" >/dev/null
 grep -F 'loopback-server.stderr' "$runner" >/dev/null
 grep -F 'python3-preflight.txt' "$runner" >/dev/null
 grep -F 'loopback_server_port=0' "$runner" >/dev/null
@@ -60,5 +66,6 @@ grep -F 'U1' "$workflow" >/dev/null
 ! grep -E '/Applications|Chrome\.app|Google Chrome' "$runner" "$workflow" >/dev/null
 grep -F 'SIGNING_OPERATION=none' "$runner" >/dev/null
 grep -F 'XATTR_OPERATION=none' "$runner" >/dev/null
+grep -F "revision_scope='exploratory-revision-mismatch'" "$runner" >/dev/null
 
 printf '%s\n' 'phase5 unsigned Chromium U0/U1 static audit passed'
