@@ -8,6 +8,7 @@ import functools
 import http.server
 import os
 import signal
+import socketserver
 import sys
 import urllib.parse
 
@@ -41,6 +42,14 @@ class LoopbackHandler(http.server.SimpleHTTPRequestHandler):
 class LoopbackServer(http.server.ThreadingHTTPServer):
     allow_reuse_address = True
     daemon_threads = True
+
+    def server_bind(self) -> None:
+        # HTTPServer.server_bind() reverse-resolves 127.0.0.1 via
+        # socket.getfqdn(). The macOS runner can wait indefinitely for that
+        # lookup, so retain the TCPServer bind without the DNS dependency.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name = "127.0.0.1"
+        self.server_port = self.server_address[1]
 
 
 def parse_args() -> argparse.Namespace:
