@@ -156,6 +156,7 @@ server_log="$results_dir/loopback-server.log"
 server_port_file="$work_dir/loopback-port"
 server_stdout="$results_dir/loopback-server.stdout"
 server_stderr="$results_dir/loopback-server.stderr"
+loopback_server_port=8765
 {
   printf 'python3_path='
   command -v python3
@@ -166,7 +167,7 @@ python3 -u "$SCRIPT_DIR/phase5-unsigned-loopback-server.py" \
   --directory "$REPO_ROOT/tests/fixtures" \
   --log "$server_log" \
   --port-file "$server_port_file" \
-  --port 0 > "$server_stdout" 2> "$server_stderr" &
+  --port "$loopback_server_port" > "$server_stdout" 2> "$server_stderr" &
 server_pid=$!
 ps -p "$server_pid" -o pid=,ppid=,stat=,etime=,command= > "$results_dir/loopback-server-process.txt" 2>&1 || true
 for _ in $(seq 1 50); do
