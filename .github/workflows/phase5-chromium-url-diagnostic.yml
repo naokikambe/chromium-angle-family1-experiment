@@ -21,7 +21,7 @@ on:
       diagnostic_patch_sha256:
         description: SHA-256 of the checked-in Chromium URL diagnostic patch
         required: true
-        default: c774b510f24ba3ca8b701785b80edce8d70ec6ca370b5b008c2956360b76e05a
+        default: 1be36abf18ac58b94ff1421607be18152c0373a9f92b0aeeb14ad8e352a250c1
         type: string
   workflow_call:
     inputs:
@@ -158,7 +158,6 @@ jobs:
           git apply --unidiff-zero --check -- "$GITHUB_WORKSPACE/$DIAGNOSTIC_PATCH_PATH"
           git apply --unidiff-zero -- "$GITHUB_WORKSPACE/$DIAGNOSTIC_PATCH_PATH"
           expected_status=$(printf '%s\n' \
-            build/modules/BUILD.gn \
             content/browser/storage_partition_impl.cc \
             services/network/url_loader.cc \
             services/network/url_loader_factory.cc)
@@ -181,6 +180,7 @@ jobs:
           is_official_build = false
           target_cpu = "x64"
           use_system_xcode = true
+          use_clang_modules = false
           use_unified_system_module = false
           clang_use_chrome_plugins = false
           mac_deployment_target = "13.0"
@@ -191,19 +191,6 @@ jobs:
           chrome_pgo_phase = 0
           EOF
           gn gen out/Phase5URLDiagnostic > "$DIAG_DIR/gn-stdout.log" 2> "$DIAG_DIR/gn-stderr.log"
-          {
-            printf '%s\n' '--- gn ls //build/modules:* ---'
-            gn ls out/Phase5URLDiagnostic '//build/modules:*' || true
-            for target in \
-              '//build/modules:mac_sysroot(//build/toolchain/mac:clang_x64)' \
-              '//build/modules:system_modulemap(//build/toolchain/mac:clang_x64)' \
-              '//build/config/mac:sdk_inputs(//build/toolchain/mac:clang_x64)'; do
-              printf '%s\n' "--- gn desc $target outputs ---"
-              gn desc out/Phase5URLDiagnostic "$target" outputs || true
-              printf '%s\n' "--- gn desc $target inputs ---"
-              gn desc out/Phase5URLDiagnostic "$target" inputs || true
-            done
-          } > "$DIAG_DIR/gn-target-outputs-inputs.log" 2>&1
           autoninja -C out/Phase5URLDiagnostic chrome > "$DIAG_DIR/chromium-build.log" 2>&1
           test -d out/Phase5URLDiagnostic/Chromium.app
           printf '%s\n' "$CHROMIUM_ROOT/src/out/Phase5URLDiagnostic/Chromium.app" > "$DIAG_DIR/chromium-app-path.txt"
@@ -233,12 +220,6 @@ jobs:
                 printf '%s=missing\n' "$gn_log"
               fi
             done
-            if [[ -f "$DIAG_DIR/gn-target-outputs-inputs.log" ]]; then
-              printf '%s\n' '--- gn-target-outputs-inputs.log ---'
-              cat "$DIAG_DIR/gn-target-outputs-inputs.log"
-            else
-              printf '%s\n' 'gn-target-outputs-inputs.log=missing'
-            fi
           } > "$DIAG_DIR/chromium-build-failure-diagnostics.txt"
           sanitized_tail=$(tail -n 40 "$DIAG_DIR/chromium-build-failure-diagnostics.txt" | \
             sed "s#${RUNNER_TEMP}#<runner-temp>#g" | tr '\n' ' ' | cut -c1-6000)
