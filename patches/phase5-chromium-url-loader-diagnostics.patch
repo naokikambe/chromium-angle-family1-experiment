@@ -83,3 +83,19 @@ diff --git a/services/network/url_loader.cc b/services/network/url_loader.cc
 +          << " request_id=" << request_id_;
    NotifyCompleted(net::ERR_FAILED);
  }
+
+diff --git a/build/config/mac/BUILD.gn b/build/config/mac/BUILD.gn
+--- a/build/config/mac/BUILD.gn
++++ b/build/config/mac/BUILD.gn
+@@ -110,6 +110,10 @@
+ if (use_system_xcode && current_toolchain == host_toolchain) {
+   action("sdk_inputs") {
+     script = "//build/noop.py"
+     outputs = [
++      "$mac_sdk_path/usr/include/DarwinFoundation1.modulemap",
++      "$mac_sdk_path/usr/include/DarwinFoundation2.modulemap",
++      "$mac_sdk_path/usr/include/DarwinFoundation3.modulemap",
++      "$mac_sdk_path/usr/include/libunwind.modulemap",
+       "$mac_sdk_path/usr/include/mach/exc.defs",
+       "$mac_sdk_path/usr/include/mach/mach_exc.defs",
+       "$mac_sdk_path/usr/include/mach/notify.defs",
