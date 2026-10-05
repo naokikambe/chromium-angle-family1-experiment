@@ -198,7 +198,6 @@ jobs:
           is_chrome_branded = false
           is_official_build = false
           target_cpu = "x64"
-          use_jumbo_build = true
           use_system_xcode = true
           use_clang_modules = false
           use_unified_system_module = false

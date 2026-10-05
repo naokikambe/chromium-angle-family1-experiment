@@ -30,7 +30,6 @@ grep -F 'gn gen out/Phase5URLDiagnostic' "$workflow" >/dev/null
 grep -F 'autoninja -C out/Phase5URLDiagnostic chrome' "$workflow" >/dev/null
 grep -F "steps.build_chromium.outcome" "$workflow" >/dev/null
 grep -F 'clang_use_chrome_plugins = false' "$workflow" >/dev/null
-grep -F 'use_jumbo_build = true' "$workflow" >/dev/null
 grep -F 'use_clang_modules = false' "$workflow" >/dev/null
 grep -F 'use_unified_system_module = false' "$workflow" >/dev/null
 grep -F 'enable_precompiled_headers = false' "$workflow" >/dev/null
