@@ -59,7 +59,7 @@ jobs:
       DIAGNOSTIC_PATCH_SHA256: ${{ inputs.diagnostic_patch_sha256 }}
       DIAGNOSTIC_PATCH_PATH: patches/phase5-chromium-url-loader-diagnostics.patch
       XCODE16_COMPAT_PATCH_PATH: patches/phase5-chromium-xcode16-compat.patch
-      XCODE16_COMPAT_PATCH_SHA256: a1e5577b365dadec1a0dddb4b0529b1114c639e37034525d17ac4ce0771571b1
+      XCODE16_COMPAT_PATCH_SHA256: 59b2cf4e7b5e963d6416d3eb02ab37292f50fbd43854debac313b13297b0eaaa
       DEPOT_TOOLS_REVISION: 0306e4682b4ac35287c726fa35a983157a625902
       DEPOT_TOOLS_UPDATE: "0"
       APPROVED_BASE_REVISION: eb21b3b30fe0d062d5bf500d46d74a7a57ad56f5
