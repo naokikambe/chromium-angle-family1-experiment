@@ -16,7 +16,7 @@ diff --git a/base/process/launch_mac.cc b/base/process/launch_mac.cc
 diff --git a/skia/ext/skia_utils_mac.mm b/skia/ext/skia_utils_mac.mm
 --- a/skia/ext/skia_utils_mac.mm
 +++ b/skia/ext/skia_utils_mac.mm
-@@ -18,6 +18,14 @@
+@@ -18,4 +18,11 @@
  #include "third_party/skia/include/core/SkColorSpace.h"
  #include "third_party/skia/include/utils/mac/SkCGUtils.h"
 -
