@@ -126,14 +126,14 @@ KOOVの公式資料では、最新のChrome/Edge、WebGL対応環境、Bluetooth
 
 | ケース | 入力と署名 | URL / GPU結果 | 判定範囲 |
 | --- | --- | --- | --- |
-| U0 | 完全未署名stock Chromium | loopback URL pass、WebGL smoke pass | CI run `37180857723`。`INPUT_REVISION_MATCH_CHROMIUM=false`のため探索的 |
-| U1 | U0の別copyへANGLE 2 dylibだけを追加、未署名のまま | loopback URL pass、ANGLE load pass、WebGL smoke pass | `INPUT_REVISION_MATCH_ANGLE=false`のため探索的 |
+| U0 | 完全未署名stock Chromium | loopback URL pass、WebGL smoke pass | 最新CI run [`37314180383`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37314180383)。`INPUT_REVISION_MATCH_CHROMIUM=false`のため探索的 |
+| U1 | U0の別copyへANGLE 2 dylibだけを追加、未署名のまま | loopback URL pass、ANGLE load pass、WebGL smoke pass | 最新CI run [`37314180383`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37314180383)。`INPUT_REVISION_MATCH_ANGLE=false`のため探索的 |
 | S0 | stock Chromiumを凍結後、Apple Developmentで初回署名一回 | strict verify pass。ただしHTTP stream/document前にURL失敗、`/probe`未到達 | stockでも失敗するためANGLE追加は必要条件ではない |
 | S1 | ANGLE追加済みChromiumを凍結後、Apple Developmentで初回署名一回 | S0と同じURL失敗。Intel HD Graphics 5000ではMetal/EGL、WebGL1 context/draw pass、WebGL2は`context-null` | URL失敗とGPU/WebGL1到達は別境界 |
 | Chrome official | Google Developer ID署名のChrome `154.0.8037.98`、未改変source | 同一flags・新規profile・loopbackで`/probe` HTTP 200、DOM/title到達 | URL基準 |
 | Chrome C0 | official sourceの別copy。ANGLE replacementなし、bundle凍結後にApple Developmentで初回署名一回 | 署名後strict verify pass、xattr変更なし。ただし`/probe`未到達、DOM空 | Chromeでも再署名差を再現 |
 
-U0/U1のCI結果は、result schema `phase5-unsigned-chromium-u0u1-result-v1`の全必須ゲート（U0/U1 URL、U0/U1 WebGL smoke、U1 ANGLE load）をpassした。ただし、CIで使ったChromium snapshot/ANGLE revisionとPhase 5 runtime artifactのrevisionが一致せず、正式な同一入力の因果証明ではなく探索的結果として扱う。U0/U1のCI成功は、S0/S1のApple Development署名後のURL成功を保証しない。
+U0/U1のCI結果は、result schema `phase5-unsigned-chromium-u0u1-result-v1`の全必須ゲート（U0/U1 URL、U0/U1 WebGL smoke、U1 ANGLE load）をpassした。最新の公式未署名snapshot runは`37314180383`で、sourceからのfull Chromium buildは使用していない。ただし、CIで使ったChromium snapshot/ANGLE revisionとPhase 5 runtime artifactのrevisionが一致せず、正式な同一入力の因果証明ではなく探索的結果として扱う。U0/U1のCI成功は、S0/S1のApple Development署名後のURL成功を保証しない。
 
 Chrome C0では、公式sourceとC0に同じrestricted headless flags、loopback fixture、新規profileを使用した。公式sourceは`/probe`のHTTP 200とDOMを取得した一方、C0は規定観測時間内に`/probe`へ到達せずDOMも空だった。C0終了時のプロセス停止に伴うexit `127`は、すでにURL判定を終えた後の停止処理によるため、URL失敗の根拠には使わない。C0にはreplacement ANGLEを追加していないため、ChromeでANGLE追加がURL失敗の必要条件ではないことも確認できた。公式sourceの作業用コピーでnested helperのhost-side deep verify差が出た点は別の証跡として保存し、URL判定は公式sourceの実測結果とC0の署名後strict verify・request結果で行う。
 
