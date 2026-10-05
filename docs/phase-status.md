@@ -238,9 +238,12 @@ build jobはjob上限360分、build step上限280分、診断job上限150分と�
 8時間30分とする。初回clean実行の見積もりは4〜7時間で、queue待ちは含めない。cacheや高性能Intel
 runnerは初回成功の前提にせず、利用可能性と整合性を確認できた場合の再実行最適化に限定する。
 
-現在の状態は「workflow再構成を実装・static検証中、full build未dispatch」である。CI必須ゲートが
-すべて成功するまで、署名、profile作成、Chromium起動、実機操作へ進まない。`RUNTIME_DEVICE_READY=false`
-は維持し、既存S0/S1、retry、evidence、artifact、profileは変更しない。
+現在の状態は「workflow再構成・static検証完了、対象branchへのpush完了、full build未dispatch」である。
+GitHubのActions登録一覧にはdefault branch上のworkflowだけが表示されるため、対象branchに追加した
+workflowは`workflow_dispatch`で登録されず、dispatchはHTTP 404で拒否された。main/他branchへの
+workflow登録や既存workflowの変更による回避は行わない。CI必須ゲートがすべて成功するまで、署名、
+profile作成、Chromium起動、実機操作へ進まない。`RUNTIME_DEVICE_READY=false`は維持し、既存S0/S1、
+retry、evidence、artifact、profileは変更しない。
 
 公式Chromium snapshotも読み取り確認した。Chrome `.57`のbranch point `1689415`用Mac archiveは
 404だったが、近傍`Mac/1689422/chrome-mac.zip`はHTTP 200で取得可能で、`Chromium.app`を含む。
