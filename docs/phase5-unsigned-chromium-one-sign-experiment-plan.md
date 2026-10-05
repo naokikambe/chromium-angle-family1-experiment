@@ -1,8 +1,8 @@
 # Phase 5: 未署名Chromium・初回署名のみ実験計画
 
-更新日: 2026-10-04
+更新日: 2026-10-05
 
-状態: 実験完了。U0/U1のCI、Chromium S0/S1の実機比較、Google Chrome C0の再署名controlを実施済み。C0で再署名差が再現したため、C1（ANGLE追加後の別bundle署名）は実施していない。KOOV操作と`RUNTIME_DEVICE_READY=false`の変更は行っていない。
+状態: 実験完了。U0/U1のCI、CI成功後に新規作成したChromium S0/S1の実機比較、Google Chrome C0の再署名controlを実施済み。C0で再署名差が再現したため、C1（ANGLE追加後の別bundle署名）は実施していない。KOOV操作と`RUNTIME_DEVICE_READY=false`の変更は行っていない。
 
 ## 1. 目的と結論
 
@@ -142,6 +142,25 @@ Chrome C0では、公式sourceとC0に同じrestricted headless flags、loopback
 この結果から、テストした範囲では「再署名」は白ではなく、URL document navigationを止める原因カテゴリとして黒と判定する。ChromeとChromiumで、未署名または公式Google署名sourceはURLに到達し、Apple Developmentへ再署名したbundleはHTTP stream/document前で止まるという同じ層の差を再現した。ただし、identity、designated requirement、entitlement、nested signing closure、またはそれに伴うmacOS実行時ポリシーのどの属性が直接原因かは未特定であり、「同じ原因カテゴリ」であって「同じ単一キー」とまでは断定しない。ANGLE追加自体はS0とChrome C0で必要条件から除外できる。
 
 C0で実際に用いた署名順序は、(1) 現行Framework内のnested Mach-O、(2) 最深部からのnested `.app`／`.bundle` container、(3) Framework root、(4) main executable、(5) outer appである。bundle、Framework、dylib、Resources、Info.plist、entitlementを凍結してからこの順序で初回署名を行い、strict verifyを通過させた。C0は32段階の初回署名操作を一回だけ行い、署名後の再署名、bundle変更、xattr変更、Applications置換は行っていない。verify失敗時に再署名する経路も使用していない。C0で目的の差が確定したため、C1の追加署名・ANGLE追加後再署名・再試行は不要かつ禁止とする。
+
+### 2.9 2026-10-05 CI成功後の新規S0/S1証跡
+
+専用U0/U1 workflow run [`37314180383`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37314180383) は、static audit、未署名状態、manifest/hash、U0/U1 loopback URL、U0/U1 WebGL smoke、U1 ANGLE loadの必須ゲートをすべてpassした。workflowのHEADは`fe1d32095737d946c9484f6ddb5647352fe37edf`である。公式snapshotはposition `1689422`、Chromium `82303c21a18acdc256c6264cd2ed0e1588df99d4`、ANGLE `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`で、runtime artifactのChromium `b510e9d7cd3a2fbd78d0ddc42234103206c5f78d`／ANGLE `e12217f3e133cb1029b050d893b1806d141483be`とは一致しない。このため、今回も探索的比較として扱う。sourceからのfull Chromium buildは使用していない。
+
+CI成功後、公式snapshotからS0とS1を別々の新規bundleとして組み立て、未署名状態、bundle構造、ANGLE差分、Resources、Info.plist、entitlement、xattrを凍結してから初回署名を行った。証跡名は`phase5-s0s1-after-ci-37314180383-20261005-b`である。
+
+| ケース | 署名・検証 | URL / 実機結果 |
+| --- | --- | --- |
+| S0 | 26 targetsを内側から外側へ一回だけ署名。署名直後のdeep strict verifyはstatus 0 | `--disable-gpu`でbrowserは起動したが、loopbackの`/probe`へ到達せず、HTTP stream/document前で停止。`frameStartedNavigating`後に`frameNavigated`、title、HTTP responseは得られなかった |
+| S1 | S0と別bundle。28 targetsを同じ順序で一回だけ署名。署名直後のdeep strict verifyはstatus 0 | S0と同じURL停止。ANGLE/Metal/WebGL1は下記のとおり成功 |
+
+署名後は再署名、署名やり直し、ANGLE追加、Framework/dylib/Resources/Info.plist/entitlement変更、xattr変更、Applications置換を行っていない。観測後に再計算したmain executable、Framework、S1の`libEGL.dylib`／`libGLESv2.dylib`、Info.plistのhashは署名直後のreceiptと一致した。
+
+最初の手動WebGL観測は通常sandboxから起動したため、Crashpadの`bootstrap_check_in ... Permission denied`で有効なページ結果を作れなかった。同じbundleの通常sandbox検証が`CSSMERR_TP_NOT_TRUSTED`を返したが、その環境では`security find-identity`が0件だった。署名時と同じホスト権限での読み取り専用再検証はS1 pre/postともstatus 0で、`valid on disk`かつdesignated requirementを満たした。したがって、この2つはbundle破損ではなく観測環境差として記録し、再署名は行っていない。
+
+新規profileで、Crashpad起動を抑制する`--disable-breakpad`を追加した読み取り専用観測を実施した。S1のfull runtime opt-inは`--disable-angle-features=requireGpuFamily2,requireMsl21`であり、bundleは変更していない。Metal/EGLログは`libEGL_loaded`、`libGLESv2_loaded`、`metal_device_selection=success`、`require_gpu_family2 enabled=false has_override=true`、`command_queue=success`、`display_initialize_result=success`、`eglInitialize_return_success`、`max_es_version=2.0`、`family1_es3_to_es2_fallback requested=3.0 max_supported=2.0`、`context_initialize_success`を記録した。WebGL smokeの結果はpage loaded、WebGL1 context、最小drawがすべて`true`で、rendererは`ANGLE (Intel, ANGLE Metal Renderer: Intel HD Graphics 5000, Unspecified Version)`、versionは`WebGL 1.0 (OpenGL ES 2.0 Chromium)`だった。今回のページは`#webgl1-only`なので、今回の結果だけではWebGL2の成否を新たに判定しない。既存の別観測におけるWebGL2 `context-null`は能力境界として別記録する。
+
+このfresh runでも、URLとGPU/WebGL1は別境界である。U0/U1の未署名CI URLがpassし、S0/S1のApple Development初回署名後URLがfailしたため、テスト範囲では再署名差は黒のままである。`RUNTIME_DEVICE_READY=false`は変更していない。KOOV、認証、保存、USB/Bluetoothは実施していない。
 
 ## 3. 署名方針
 
