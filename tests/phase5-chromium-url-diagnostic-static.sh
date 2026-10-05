@@ -36,6 +36,7 @@ grep -F 'phase5-chromium-url-build-' "$workflow" >/dev/null
 grep -F 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093' "$workflow" >/dev/null
 grep -F 'compression-level: 0' "$workflow" >/dev/null
 grep -F 'gclient sync --no-history' "$workflow" >/dev/null
+grep -F 'git merge-base --is-ancestor "$APPROVED_BASE_REVISION" HEAD' "$workflow" >/dev/null
 grep -F 'git apply --unidiff-zero --check' "$workflow" >/dev/null
 grep -F 'gn gen out/Phase5URLDiagnostic' "$workflow" >/dev/null
 grep -F 'autoninja -C out/Phase5URLDiagnostic chrome' "$workflow" >/dev/null
