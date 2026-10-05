@@ -21,9 +21,20 @@ grep -F 'angle_build_run_id:' "$workflow" >/dev/null
 grep -F 'diagnostic_patch_sha256:' "$workflow" >/dev/null
 grep -F 'runs-on: macos-15-intel' "$workflow" >/dev/null
 grep -F 'timeout-minutes: 360' "$workflow" >/dev/null
-grep -F 'timeout-minutes: 240' "$workflow" >/dev/null
+grep -F 'timeout-minutes: 280' "$workflow" >/dev/null
+grep -F 'timeout-minutes: 150' "$workflow" >/dev/null
+grep -F 'timeout-minutes: 45' "$workflow" >/dev/null
+! grep -F 'timeout-minutes: 240' "$workflow" >/dev/null
 grep -F 'actions: read' "$workflow" >/dev/null
 grep -F 'contents: read' "$workflow" >/dev/null
+grep -F 'prepare-angle:' "$workflow" >/dev/null
+grep -F 'build-chromium:' "$workflow" >/dev/null
+grep -F 'diagnose-u0-u1:' "$workflow" >/dev/null
+grep -F 'needs: [prepare-angle, build-chromium]' "$workflow" >/dev/null
+grep -F 'phase5-chromium-angle-input-' "$workflow" >/dev/null
+grep -F 'phase5-chromium-url-build-' "$workflow" >/dev/null
+grep -F 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093' "$workflow" >/dev/null
+grep -F 'compression-level: 0' "$workflow" >/dev/null
 grep -F 'gclient sync --no-history' "$workflow" >/dev/null
 grep -F 'git apply --unidiff-zero --check' "$workflow" >/dev/null
 grep -F 'gn gen out/Phase5URLDiagnostic' "$workflow" >/dev/null
@@ -40,6 +51,7 @@ grep -F 'mac_deployment_target = "13.0"' "$workflow" >/dev/null
 grep -F 'mac_min_system_version = "13.0"' "$workflow" >/dev/null
 grep -F -- '--local-source-app' "$workflow" "$runner" >/dev/null
 grep -F -- '--local-revisions' "$workflow" "$runner" >/dev/null
+grep -F -- '--local-angle-artifact' "$workflow" "$runner" >/dev/null
 grep -F 'phase5-chromium-url-diagnostic-' "$workflow" >/dev/null
 grep -F 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' "$workflow" >/dev/null
 

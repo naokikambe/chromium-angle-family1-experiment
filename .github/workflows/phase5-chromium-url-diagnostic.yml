@@ -47,8 +47,52 @@ permissions:
   contents: read
 
 jobs:
-  chromium-url-diagnostic:
-    name: chromium-url-diagnostic-macos-intel
+  prepare-angle:
+    name: phase5-angle-input-macos-intel
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CHROMIUM_REVISION: ${{ inputs.chromium_revision }}
+      ANGLE_REVISION: ${{ inputs.angle_revision }}
+      ANGLE_BUILD_RUN_ID: ${{ inputs.angle_build_run_id }}
+
+    steps:
+      - name: Check out the approved experiment revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download and verify exact ANGLE artifact
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          angle_input_dir="$RUNNER_TEMP/phase5-chromium-angle-input"
+          angle_input_tar="$RUNNER_TEMP/phase5-chromium-angle-input.tar"
+          mkdir -p "$angle_input_dir"
+          scripts/download-angle-artifact.sh "$ANGLE_BUILD_RUN_ID" "$angle_input_dir"
+          scripts/verify-phase5-runtime-artifact.sh "$angle_input_dir" > "$angle_input_dir/angle-runtime-verification.txt"
+          test "$(grep '^CHROMIUM_REVISION=' "$angle_input_dir/ANGLE_RELEASE_MANIFEST" | cut -d= -f2-)" = "$CHROMIUM_REVISION"
+          test "$(grep '^ANGLE_REVISION=' "$angle_input_dir/ANGLE_RELEASE_MANIFEST" | cut -d= -f2-)" = "$ANGLE_REVISION"
+          tar -C "$angle_input_dir" -cf "$angle_input_tar" .
+          printf '%s  %s\n' "$(shasum -a 256 "$angle_input_tar" | awk '{print $1}')" \
+            "$(basename "$angle_input_tar")" > "$angle_input_tar.sha256"
+
+      - name: Upload prepared ANGLE input
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase5-chromium-angle-input-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/phase5-chromium-angle-input.tar
+            ${{ runner.temp }}/phase5-chromium-angle-input.tar.sha256
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+
+  build-chromium:
+    name: phase5-chromium-build-macos-intel
     runs-on: macos-15-intel
     timeout-minutes: 360
     env:
@@ -94,10 +138,9 @@ jobs:
             printf 'CHROMIUM_ROOT=%s\n' "$RUNNER_TEMP/phase5-chromium-url-diagnostic-source"
             printf 'DEPOT_TOOLS_ROOT=%s\n' "$RUNNER_TEMP/phase5-chromium-url-diagnostic-depot-tools"
             printf 'DIAG_DIR=%s\n' "$diag_dir"
-            printf 'ANGLE_ARTIFACT=%s\n' "$RUNNER_TEMP/phase5-chromium-url-diagnostic-angle-artifact"
-            printf 'RESULTS_DIR=%s\n' "$RUNNER_TEMP/phase5-chromium-url-diagnostic-results"
+            printf 'BUILD_INPUT_DIR=%s\n' "$RUNNER_TEMP/phase5-chromium-build-input"
           } >> "$GITHUB_ENV"
-          mkdir -p "$diag_dir"
+          mkdir -p "$diag_dir" "$RUNNER_TEMP/phase5-chromium-build-input"
 
       - name: Fetch and bootstrap pinned depot_tools
         timeout-minutes: 15
@@ -186,7 +229,7 @@ jobs:
       - name: Build unbranded exact-revision Chromium
         id: build_chromium
         continue-on-error: true
-        timeout-minutes: 240
+        timeout-minutes: 280
         shell: bash
         run: |
           set -euo pipefail
@@ -262,15 +305,123 @@ jobs:
             exit 1
           fi
 
-      - name: Download and verify exact ANGLE artifact
-        timeout-minutes: 15
+      - name: Freeze and package unsigned Chromium input
         shell: bash
         run: |
           set -euo pipefail
-          scripts/download-angle-artifact.sh "$ANGLE_BUILD_RUN_ID" "$ANGLE_ARTIFACT"
-          scripts/verify-phase5-runtime-artifact.sh "$ANGLE_ARTIFACT" > "$DIAG_DIR/angle-runtime-verification.txt"
-          test "$(grep '^CHROMIUM_REVISION=' "$ANGLE_ARTIFACT/ANGLE_RELEASE_MANIFEST" | cut -d= -f2-)" = "$CHROMIUM_REVISION"
-          test "$(grep '^ANGLE_REVISION=' "$ANGLE_ARTIFACT/ANGLE_RELEASE_MANIFEST" | cut -d= -f2-)" = "$ANGLE_REVISION"
+          app="$CHROMIUM_ROOT/src/out/Phase5URLDiagnostic/Chromium.app"
+          [[ -d "$app" && ! -L "$app" ]]
+          tar -C "$(dirname "$app")" -cf "$BUILD_INPUT_DIR/chromium-app.tar" Chromium.app
+          printf '%s  %s\n' "$(shasum -a 256 "$BUILD_INPUT_DIR/chromium-app.tar" | awk '{print $1}')" \
+            "$(basename "$BUILD_INPUT_DIR/chromium-app.tar")" > "$BUILD_INPUT_DIR/chromium-app.tar.sha256"
+          cp "$DIAG_DIR/source-revisions.txt" "$BUILD_INPUT_DIR/source-revisions.txt"
+          cp "$DIAG_DIR/diagnostic-patch.sha256" "$BUILD_INPUT_DIR/diagnostic-patch.sha256"
+          cp "$DIAG_DIR/xcode16-compat-patch.sha256" "$BUILD_INPUT_DIR/xcode16-compat-patch.sha256"
+          {
+            printf 'SCHEMA=phase5-chromium-url-diagnostic-build-input-v1\n'
+            printf 'CHROMIUM_REVISION=%s\n' "$CHROMIUM_REVISION"
+            printf 'ANGLE_REVISION=%s\n' "$ANGLE_REVISION"
+            printf 'DIAGNOSTIC_PATCH_SHA256=%s\n' "$DIAGNOSTIC_PATCH_SHA256"
+            printf 'XCODE16_COMPAT_PATCH_SHA256=%s\n' "$XCODE16_COMPAT_PATCH_SHA256"
+            printf 'SIGNING_STATE=unsigned\nSIGNING_OPERATION=none\nXATTR_OPERATION=none\n'
+          } > "$BUILD_INPUT_DIR/chromium-input-manifest.txt"
+          tar -tf "$BUILD_INPUT_DIR/chromium-app.tar" > "$BUILD_INPUT_DIR/chromium-app.tar.listing"
+
+      - name: Upload unsigned Chromium build input
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase5-chromium-url-build-${{ github.run_id }}
+          path: ${{ runner.temp }}/phase5-chromium-build-input
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Chromium build diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase5-chromium-build-diagnostics-${{ github.run_id }}
+          path: ${{ runner.temp }}/phase5-chromium-url-diagnostic
+          if-no-files-found: warn
+          retention-days: 14
+
+  diagnose-u0-u1:
+    name: phase5-chromium-u0-u1-macos-intel
+    needs: [prepare-angle, build-chromium]
+    if: ${{ needs.prepare-angle.result == 'success' && needs.build-chromium.result == 'success' }}
+    runs-on: macos-15-intel
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CHROMIUM_REVISION: ${{ inputs.chromium_revision }}
+      ANGLE_REVISION: ${{ inputs.angle_revision }}
+      ANGLE_BUILD_RUN_ID: ${{ inputs.angle_build_run_id }}
+      DIAGNOSTIC_PATCH_SHA256: ${{ inputs.diagnostic_patch_sha256 }}
+      APPROVED_BASE_REVISION: eb21b3b30fe0d062d5bf500d46d74a7a57ad56f5
+
+    steps:
+      - name: Check out the approved experiment revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Initialize diagnostic paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf 'DIAG_DIR=%s\n' "$RUNNER_TEMP/phase5-chromium-url-diagnostic"
+            printf 'RESULTS_DIR=%s\n' "$RUNNER_TEMP/phase5-chromium-url-diagnostic-results"
+            printf 'BUILD_INPUT_DIR=%s\n' "$RUNNER_TEMP/phase5-chromium-build-input"
+            printf 'ANGLE_INPUT_DIR=%s\n' "$RUNNER_TEMP/phase5-chromium-angle-input"
+          } >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/phase5-chromium-url-diagnostic" \
+            "$RUNNER_TEMP/phase5-chromium-url-diagnostic-results" \
+            "$RUNNER_TEMP/phase5-chromium-build-input" \
+            "$RUNNER_TEMP/phase5-chromium-angle-input"
+
+      - name: Download and verify frozen unsigned inputs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: phase5-chromium-url-build-${{ github.run_id }}
+          path: ${{ runner.temp }}/phase5-chromium-build-input
+
+      - name: Download and verify prepared ANGLE input
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: phase5-chromium-angle-input-${{ github.run_id }}
+          path: ${{ runner.temp }}/phase5-chromium-angle-download
+
+      - name: Extract and verify frozen inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_tar="$BUILD_INPUT_DIR/chromium-app.tar"
+          angle_tar="$RUNNER_TEMP/phase5-chromium-angle-download/phase5-chromium-angle-input.tar"
+          shasum -a 256 -c "$BUILD_INPUT_DIR/chromium-app.tar.sha256"
+          shasum -a 256 -c "$RUNNER_TEMP/phase5-chromium-angle-download/phase5-chromium-angle-input.tar.sha256"
+          grep -F "CHROMIUM_REVISION=$CHROMIUM_REVISION" "$BUILD_INPUT_DIR/chromium-input-manifest.txt" >/dev/null
+          grep -F "ANGLE_REVISION=$ANGLE_REVISION" "$BUILD_INPUT_DIR/chromium-input-manifest.txt" >/dev/null
+          grep -F 'SIGNING_STATE=unsigned' "$BUILD_INPUT_DIR/chromium-input-manifest.txt" >/dev/null
+          for archive in "$build_tar" "$angle_tar"; do
+            while IFS= read -r entry; do
+              case "$entry" in
+                /*|../*|*/../*|*/..)
+                  printf 'unsafe archive entry: %s\n' "$entry" >&2
+                  exit 1
+                  ;;
+              esac
+            done < <(tar -tf "$archive")
+          done
+          tar -xf "$build_tar" -C "$BUILD_INPUT_DIR"
+          tar -xf "$angle_tar" -C "$ANGLE_INPUT_DIR"
+          local_source_app="$BUILD_INPUT_DIR/Chromium.app"
+          [[ -d "$local_source_app" && ! -L "$local_source_app" ]]
+          scripts/verify-phase5-runtime-artifact.sh "$ANGLE_INPUT_DIR" > "$DIAG_DIR/angle-runtime-verification.txt"
+          test "$(grep '^CHROMIUM_REVISION=' "$ANGLE_INPUT_DIR/ANGLE_RELEASE_MANIFEST" | cut -d= -f2-)" = "$CHROMIUM_REVISION"
+          test "$(grep '^ANGLE_REVISION=' "$ANGLE_INPUT_DIR/ANGLE_RELEASE_MANIFEST" | cut -d= -f2-)" = "$ANGLE_REVISION"
+          printf '%s\n' "$local_source_app" > "$DIAG_DIR/chromium-app-path.txt"
 
       - name: Run exact-revision unsigned U0/U1 diagnostic
         id: run_u0_u1_diagnostic
@@ -281,15 +432,14 @@ jobs:
           revisions_file="$DIAG_DIR/REVISIONS"
           jq -n --arg chromium "$CHROMIUM_REVISION" --arg angle "$ANGLE_REVISION" \
             '{chromium_revision:"local-source-build",got_revision:$chromium,got_angle_revision:$angle}' > "$revisions_file"
-          printf 'local_source_app='; cat "$DIAG_DIR/chromium-app-path.txt"
-          printf 'local_revisions=%s\n' "$revisions_file"
           scripts/run-phase5-unsigned-chromium-u0u1.sh \
             --expected-chromium-revision "$CHROMIUM_REVISION" \
             --expected-angle-revision "$ANGLE_REVISION" \
             --angle-build-run-id "$ANGLE_BUILD_RUN_ID" \
             --results-dir "$RESULTS_DIR" \
             --local-source-app "$(cat "$DIAG_DIR/chromium-app-path.txt")" \
-            --local-revisions "$revisions_file"
+            --local-revisions "$revisions_file" \
+            --local-angle-artifact "$ANGLE_INPUT_DIR"
 
       - name: Record U0/U1 diagnostic failure details
         if: always()
