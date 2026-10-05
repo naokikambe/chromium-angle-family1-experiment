@@ -1,6 +1,6 @@
 # Phase 状態
 
-更新日: 2026-10-05
+更新日: 2026-10-06
 
 ## Orchestration
 
@@ -47,8 +47,8 @@ for new real-device work. Any separately approved historical device-test record 
 
 | Phase 5 After-CI fresh S0/S1（2026-10-05） | 実験完了。新規bundleの初回署名は各一回、再署名なし | 専用CI run [`37314180383`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37314180383)の全U0/U1ゲート成功後、snapshot revision mismatchを明示した探索的S0/S1を実施。S0は26 targets、S1は28 targetsを正しいnested signing順序で一回だけ署名し、署名直後とprivileged再検証でdeep strict verify status 0。両方のURLはHTTP stream/document前で停止。S1はIntel HD Graphics 5000でANGLE/Metal/EGL初期化、ES3→ES2 fallback、WebGL1 context/draw成功を記録。通常sandboxの一時的なCrashpad/trustエラーはbundle破損ではなく、同じホスト権限の再検証でpassした。署名後変更・xattr変更・Applications置換・KOOV操作なし。詳細は[`docs/phase5-unsigned-chromium-one-sign-experiment-plan.md`](phase5-unsigned-chromium-one-sign-experiment-plan.md)。 |
 
-Chromium実験は、公式未署名`chrome-mac.zip`を取得する専用U0/U1 workflowを主経路とする。workflowはarchive SHA-256、公式`REVISIONS`、x86_64、bundle全体の未署名状態、stock/ANGLE差分、loopback URL、WebGL smoke、ANGLE loadをCIで検証する。公式snapshot経路の最新run [`37314180383`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37314180383) はsuccess（U0/U1 URL、WebGL smoke、U1 ANGLE load、未署名検証をpass）だった。snapshotはposition `1689422`、archive SHA-256 `cdf57adeb21f946e3cf7b5897bf3656dbfdbec5d95281bfb828202b2d7cf35cf`、Chromium revision `82303c21a18acdc256c6264cd2ed0e1588df99d4`で、Phase 5 runtime artifactとはrevision不一致のため探索的結果である。sourceからのfull Chromium buildはこの実験の承認経路ではなく、dispatchしない。CI全ゲート成功を実験開始条件として満たしたため、承認済みのS0/S1初回署名・profile・実機観測を実施済みである。追加の署名・profile・実機操作は別判断とする。
-Chromium実験は、公式未署名`chrome-mac.zip`を取得する専用U0/U1 workflowを主経路とする。workflowはarchive SHA-256、公式`REVISIONS`、x86_64、bundle全体の未署名状態、stock/ANGLE差分、loopback URL、WebGL smoke、ANGLE loadをCIで検証する。公式snapshot経路の最新run [`37314180383`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37314180383) はsuccess（U0/U1 URL、WebGL smoke、U1 ANGLE load、未署名検証をpass）だった。snapshotはposition `1689422`、archive SHA-256 `cdf57adeb21f946e3cf7b5897bf3656dbfdbec5d95281bfb828202b2d7cf35cf`、Chromium revision `82303c21a18acdc256c6264cd2ed0e1588df99d4`で、Phase 5 runtime artifactとはrevision不一致のため探索的結果である。position `1689414`〜`1689423`の追加読み取り確認でも、厳密一致する別の公式未署名snapshotは見つからなかった。sourceからのfull Chromium buildはこの実験の承認経路ではなく、dispatchしない。CI全ゲート成功を実験開始条件として満たしたため、承認済みのS0/S1初回署名・profile・実機観測を実施済みである。追加の署名・profile・実機操作は別判断とする。
+Chromium実験は、公式未署名`chrome-mac.zip`を取得する専用U0/U1 workflowを主経路とする。workflowはarchive SHA-256、公式`REVISIONS`、x86_64、bundle全体の未署名状態、stock/ANGLE差分、loopback URL、WebGL smoke、ANGLE loadをCIで検証する。公式snapshot経路の最新run [`37314180383`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37314180383) はsuccess（U0/U1 URL、WebGL smoke、U1 ANGLE load、未署名検証をpass）だった。snapshotはposition `1689422`、archive SHA-256 `cdf57adeb21f946e3cf7b5897bf3656dbfdbec5d95281bfb828202b2d7cf35cf`、Chromium revision `82303c21a18acdc256c6264cd2ed0e1588df99d4`で、Phase 5 runtime artifactとはrevision不一致のため探索的結果である。2026-10-05時点ではsourceからのfull Chromium buildは未承認・未dispatchだった。CI全ゲート成功を実験開始条件として満たしたため、承認済みのS0/S1初回署名・profile・実機観測を実施済みである。追加の署名・profile・実機操作は別判断とする。
+Chromium実験は、公式未署名`chrome-mac.zip`を取得する専用U0/U1 workflowを主経路とする。workflowはarchive SHA-256、公式`REVISIONS`、x86_64、bundle全体の未署名状態、stock/ANGLE差分、loopback URL、WebGL smoke、ANGLE loadをCIで検証する。公式snapshot経路の最新run [`37314180383`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37314180383) はsuccess（U0/U1 URL、WebGL smoke、U1 ANGLE load、未署名検証をpass）だった。snapshotはposition `1689422`、archive SHA-256 `cdf57adeb21f946e3cf7b5897bf3656dbfdbec5d95281bfb828202b2d7cf35cf`、Chromium revision `82303c21a18acdc256c6264cd2ed0e1588df99d4`で、Phase 5 runtime artifactとはrevision不一致のため探索的結果である。position `1689414`〜`1689423`の追加読み取り確認でも、厳密一致する別の公式未署名snapshotは見つからなかった。2026-10-05時点ではsourceからのfull Chromium buildは未承認・未dispatchだった。CI全ゲート成功を実験開始条件として満たしたため、承認済みのS0/S1初回署名・profile・実機観測を実施済みである。追加の署名・profile・実機操作は別判断とする。
 
 最新の再構築・再試行はruntime CI [`37009376538`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37009376538)のartifact `angle-macos-x86_64-chrome-154.0.8037.97-angle-e12217f3-family1-experiment-37009376538`（GitHub digest `sha256:247f0ee4be552c8e4f8790db04c39753631abc62312b78318dcdd5a80808652d`、manifest SHA-256 `97b03d254b67b604173436bdf64a9c09c93f61d468b66880b36508c5e8d3bab2`）であり、同じ実機結果を再現した。WebGL2のES3要求だけが`EGL_CONTEXT_CLIENT_VERSION (0x3098)=3`で`EGL_BAD_ATTRIBUTE`となり、WebGL1 context/drawは成功した。追加のKOOV実機観測では、App ID方式はpage target未到達、URL app-modeと通常タブはtarget metadataまで進んだがdocumentは`about:blank`、最終URLの直接指定でも同じ結果となり、CDP `Page.navigate`はtimeoutした。HTTP確認ではサーバーは応答した。`RUNTIME_DEVICE_READY=false`は維持し、KOOVの画面描画・基本操作・認証・保存・USB/Bluetoothは未実施である。
 同日の読み取り専用比較では、同じ`154.0.8037.97`のsource Chromeを新規空profileでCDP遷移すると`https://account.sonyged.com/users/oauth/sign_in`のHTTP 200 documentまで到達した一方、署名済みtest copyはdynamic ANGLE引数の有無にかかわらず初期`about:blank` targetからの`Page.navigate`がtimeoutし、navigation eventを記録しなかった。このため、KOOV未達の切り分け対象はURL不存在やChrome版差ではなく、test copyのbundle起動後navigation/profile/page-process境界に更新した。認証情報・保存・USB/Bluetoothは引き続き未実施である。詳細は[`docs/phase5-real-device-observation.md`](phase5-real-device-observation.md)。
@@ -220,6 +220,27 @@ Chromium diagnostic buildと、`URLLoaderFactory::CreateLoaderAndStart`、`URLLo
 または`out/Release`は見つからなかった。既存CI成果物はfull ChromiumではなくANGLEの2 dylibと
 メタデータだけである。従ってnative Chromium URL controlを実施するには、別保有bundleの場所指定
 またはfull Chromium diagnostic buildが必要であり、既存Chrome test copyを代用しない。
+
+## Phase 5 Chromium source診断の再計画（2026-10-06）
+
+Human承認により、初回full Chromium buildをCIで進めるための現状最適構成を採用した。
+Job A相当のsource取得とbuildは同一`macos-15-intel` runner内に維持し、source/deps一式を
+Job間artifactで転送しない。`autoninja`の依存グラフ並列化をそのまま利用し、ANGLE入力準備と
+U0/U1診断だけを分離する。
+
+- `prepare-angle`: exact ANGLE artifactを検証し、tar/SHA-256を保存する（buildと並列）。
+- `build-chromium`: exact Chromium source/deps、固定patch、unbranded `is_component_build=false`
+  x64 full buildを実施し、未署名`Chromium.app`とrevision/patch hash/未署名manifestだけを保存する。
+- `diagnose-u0-u1`: build/ANGLE artifactをSHA-256検証後に展開し、ANGLEを再取得せず、U0/U1の
+  URLLoader診断、loopback URL、ANGLE load、WebGL smokeを実行する。
+
+build jobはjob上限360分、build step上限280分、診断job上限150分とし、成功時のrunner時間上限は
+8時間30分とする。初回clean実行の見積もりは4〜7時間で、queue待ちは含めない。cacheや高性能Intel
+runnerは初回成功の前提にせず、利用可能性と整合性を確認できた場合の再実行最適化に限定する。
+
+現在の状態は「workflow再構成を実装・static検証中、full build未dispatch」である。CI必須ゲートが
+すべて成功するまで、署名、profile作成、Chromium起動、実機操作へ進まない。`RUNTIME_DEVICE_READY=false`
+は維持し、既存S0/S1、retry、evidence、artifact、profileは変更しない。
 
 公式Chromium snapshotも読み取り確認した。Chrome `.57`のbranch point `1689415`用Mac archiveは
 404だったが、近傍`Mac/1689422/chrome-mac.zip`はHTTP 200で取得可能で、`Chromium.app`を含む。

@@ -10,7 +10,7 @@ readonly URL_DIAGNOSTIC_VMODULE='browser_url_loader_factory=2,storage_partition_
 source "$SCRIPT_DIR/phase3-test-copy-common.sh"
 
 usage() {
-  printf 'usage: %s --snapshot-position POSITION --snapshot-sha256 SHA256 --expected-chromium-revision REVISION --expected-angle-revision REVISION --angle-build-run-id RUN_ID --results-dir DIRECTORY [--local-source-app APP --local-revisions FILE]\n' "$0" >&2
+  printf 'usage: %s --snapshot-position POSITION --snapshot-sha256 SHA256 --expected-chromium-revision REVISION --expected-angle-revision REVISION --angle-build-run-id RUN_ID --results-dir DIRECTORY [--local-source-app APP --local-revisions FILE] [--local-angle-artifact DIRECTORY]\n' "$0" >&2
   exit 64
 }
 
@@ -22,6 +22,7 @@ angle_build_run_id=''
 results_dir=''
 local_source_app=''
 local_revisions=''
+local_angle_artifact=''
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --snapshot-position)
@@ -64,6 +65,11 @@ while [[ $# -gt 0 ]]; do
       local_revisions=$2
       shift 2
       ;;
+    --local-angle-artifact)
+      [[ $# -ge 2 ]] || usage
+      local_angle_artifact=$2
+      shift 2
+      ;;
     *) usage ;;
   esac
 done
@@ -86,6 +92,15 @@ fi
 [[ ! -e "$results_dir" && ! -L "$results_dir" ]] || phase3_fail "refusing an existing results directory: $results_dir"
 phase3_reject_symlink_components "$results_dir"
 phase3_reject_applications_path "$results_dir"
+if [[ -n "$local_angle_artifact" ]]; then
+  [[ "$local_angle_artifact" == /* && -d "$local_angle_artifact" && ! -L "$local_angle_artifact" ]] ||
+    phase3_fail 'local ANGLE artifact must be an existing non-symlink directory'
+  phase3_reject_symlink_components "$local_angle_artifact"
+  phase3_reject_applications_path "$local_angle_artifact"
+  case "$local_angle_artifact/" in
+    "$REPO_ROOT/"*) phase3_fail 'local ANGLE artifact may not be inside the Git repository' ;;
+  esac
+fi
 case "$results_dir/" in
   "$REPO_ROOT/"*) phase3_fail 'results directory may not be inside the Git repository' ;;
 esac
@@ -165,9 +180,14 @@ printf '%s\n' "$source_file_output" | grep -F 'x86_64' >/dev/null || phase3_fail
 lipo -info "$source_executable" > "$results_dir/source-lipo.txt" 2>&1
 plutil -p "$source_app/Contents/Info.plist" > "$results_dir/source-info-plist.txt"
 
-angle_artifact="$work_dir/angle-artifact"
-mkdir "$work_dir/angle-parent"
-"$SCRIPT_DIR/download-angle-artifact.sh" "$angle_build_run_id" "$angle_artifact"
+if [[ -n "$local_angle_artifact" ]]; then
+  angle_artifact="$local_angle_artifact"
+  printf 'angle_artifact_source=local-prepared-input\n' >> "$results_dir/input-acquisition.txt"
+else
+  angle_artifact="$work_dir/angle-artifact"
+  "$SCRIPT_DIR/download-angle-artifact.sh" "$angle_build_run_id" "$angle_artifact"
+  printf 'angle_artifact_source=direct-run-download\n' >> "$results_dir/input-acquisition.txt"
+fi
 "$SCRIPT_DIR/verify-phase5-runtime-artifact.sh" "$angle_artifact" > "$results_dir/angle-runtime-verification.txt"
 angle_manifest="$angle_artifact/ANGLE_RELEASE_MANIFEST"
 angle_artifact_name=$(phase3_manifest_value "$angle_manifest" ARTIFACT_NAME)

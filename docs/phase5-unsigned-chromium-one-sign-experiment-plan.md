@@ -1,8 +1,8 @@
 # Phase 5: 未署名Chromium・初回署名のみ実験計画
 
-更新日: 2026-10-05
+更新日: 2026-10-06
 
-状態: 実験完了。U0/U1のCI、CI成功後に新規作成したChromium S0/S1の実機比較、Google Chrome C0の再署名controlを実施済み。C0で再署名差が再現したため、C1（ANGLE追加後の別bundle署名）は実施していない。KOOV操作と`RUNTIME_DEVICE_READY=false`の変更は行っていない。
+状態: 初回署名実験とChrome/Chromiumの再署名差比較は完了。現在は、同一revisionのChromium source側URLLoader診断をCIで行うための再計画・workflow検証段階であり、full Chromium buildのdispatchと実行は未実施。C1（ANGLE追加後の別bundle署名）、追加署名、KOOV操作、`RUNTIME_DEVICE_READY=false`の変更は行わない。
 
 ## 1. 目的と結論
 
@@ -380,3 +380,23 @@ U0/U1の必須CIゲート、S0/S1の一回限り初回署名後の実機確認�
 
 Chromium再開用に、`.github/workflows/phase5-chromium-url-diagnostic.yml`と
 `patches/phase5-chromium-url-loader-diagnostics.patch`を追加した。このworkflowは、runtime artifactと同じChromium `b510e9d7...`／ANGLE `e12217f3...`を入力として、unbranded `is_component_build=false`のfull ChromiumをCIでbuildし、source patchを適用したU0/U1を未署名のまま比較する。local source bundleを受け取る経路では公式snapshotのrevision mismatchを迂回するが、manifest、Chromium/ANGLE revision、未署名状態、U0/U1の入力差分を検証する。static auditは実行済みであり、CI実行結果が出るまで署名・profile・実機操作へ進まない。
+
+### 9.1 2026-10-06 採用したCI実行構成
+
+初回full buildの余裕を確保するため、sourceツリーを別Jobへ転送する分割は採用しない。Chromium source/depsと生成物は大きく、Job間artifact化で転送時間と整合性リスクが増え、`autoninja`が既に依存グラフを並列化しているためである。採用する構成は次の3Jobとする。
+
+1. `prepare-angle`: `macos-15-intel`で既承認のANGLE artifactを取得・検証し、tarとSHA-256だけを保存する。
+2. `build-chromium`: `macos-15-intel`の同一runner内でdepot_tools、exact Chromium source/deps、Xcode 16互換patch、URLLoader診断patch、unbranded `is_component_build=false` x64 full buildを実施する。完成した未署名`Chromium.app`だけをtar化し、revision、patch hash、未署名状態とともにartifact化する。
+3. `diagnose-u0-u1`: Job 1/2のartifactをSHA-256検証後に展開し、ANGLEを再取得せず、未署名のままU0/U1のloopback URL、URLLoader診断、ANGLE load、WebGL smokeを実行する。
+
+Job 2が失敗またはtimeoutした場合はJob 3を実行しない。Job 3で使用するartifactはJob 2の生成物とJob 1の検証済みANGLE入力に限定し、署名、xattr、profile、Applications、実機操作は行わない。初回clean buildではcacheを成功条件にせず、depot_tools/CIPD/Siso cacheはrevision、DEPSのANGLE revision、診断patch hash、GN argsを束縛できる場合に限って再実行用の任意最適化とする。高性能Intel runnerは利用可能性と承認を別途確認するまで採用しない。
+
+この構成の時間管理は次のとおりである。
+
+| 対象 | 通常見積もり | 強制上限 |
+| --- | ---: | ---: |
+| `build-chromium` | 2.5〜5時間 | 360分（build stepは280分） |
+| `diagnose-u0-u1` | 30〜60分 | 150分 |
+| 初回CI全体 | 4〜7時間 | 8時間30分（Job 1はJob 2と並列） |
+
+GitHub Actionsのqueue待ちはこの上限に含めない。timeout、revision/manifest/hash不一致、未署名検証失敗、URLLoader必須ゲート失敗時は、署名や実機操作で回避せずartifactと診断ログを保存して停止する。新構成のstatic audit、push、dispatch、full build実行はそれぞれHuman承認の範囲で扱い、CI成功後にのみ実機用S0/S1の別判断へ進む。
