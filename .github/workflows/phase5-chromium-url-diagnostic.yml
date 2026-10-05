@@ -71,7 +71,6 @@ jobs:
           set -euo pipefail
           angle_input_dir="$RUNNER_TEMP/phase5-chromium-angle-input"
           angle_input_tar="$RUNNER_TEMP/phase5-chromium-angle-input.tar"
-          mkdir -p "$angle_input_dir"
           scripts/download-angle-artifact.sh "$ANGLE_BUILD_RUN_ID" "$angle_input_dir"
           scripts/verify-phase5-runtime-artifact.sh "$angle_input_dir" > "$angle_input_dir/angle-runtime-verification.txt"
           test "$(grep '^CHROMIUM_REVISION=' "$angle_input_dir/ANGLE_RELEASE_MANIFEST" | cut -d= -f2-)" = "$CHROMIUM_REVISION"
@@ -119,7 +118,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git merge-base --is-ancestor "$APPROVED_BASE_REVISION" "$GITHUB_SHA"
+          git merge-base --is-ancestor "$APPROVED_BASE_REVISION" HEAD
           [[ "$CHROMIUM_REVISION" =~ ^[0-9a-f]{40}$ ]]
           [[ "$ANGLE_REVISION" =~ ^[0-9a-f]{40}$ ]]
           [[ "$ANGLE_BUILD_RUN_ID" =~ ^[0-9]+$ ]]
@@ -264,21 +263,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          diag_dir="${DIAG_DIR:-$RUNNER_TEMP/phase5-chromium-url-diagnostic}"
+          chromium_root="${CHROMIUM_ROOT:-$RUNNER_TEMP/phase5-chromium-url-diagnostic-source}"
+          mkdir -p "$diag_dir"
           {
             printf 'build_step_outcome=%s\n' '${{ steps.build_chromium.outcome }}'
             printf 'build_step_conclusion=%s\n' '${{ steps.build_chromium.conclusion }}'
             printf 'timestamp_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             df -h "$RUNNER_TEMP" || true
-            if [[ -f "$DIAG_DIR/chromium-build.log" ]]; then
+            if [[ -f "$diag_dir/chromium-build.log" ]]; then
               printf '%s\n' '--- chromium-build.log tail ---'
-              tail -n 120 "$DIAG_DIR/chromium-build.log"
+              tail -n 120 "$diag_dir/chromium-build.log"
             else
               printf '%s\n' 'chromium-build.log=missing'
             fi
             for gn_log in gn-stdout.log gn-stderr.log; do
-              if [[ -f "$DIAG_DIR/$gn_log" ]]; then
+              if [[ -f "$diag_dir/$gn_log" ]]; then
                 printf '%s\n' "--- $gn_log tail ---"
-                tail -n 120 "$DIAG_DIR/$gn_log"
+                tail -n 120 "$diag_dir/$gn_log"
               else
                 printf '%s=missing\n' "$gn_log"
               fi
@@ -287,20 +289,20 @@ jobs:
               out/Phase5URLDiagnostic/siso_failed_commands.sh \
               out/Phase5URLDiagnostic/siso_output \
               out/Phase5URLDiagnostic/siso.INFO; do
-              if [[ -f "$CHROMIUM_ROOT/src/$siso_log" ]]; then
+              if [[ -f "$chromium_root/src/$siso_log" ]]; then
                 printf '%s\n' "--- $siso_log tail ---"
-                tail -n 240 "$CHROMIUM_ROOT/src/$siso_log"
+                tail -n 240 "$chromium_root/src/$siso_log"
               else
                 printf '%s=missing\n' "$siso_log"
               fi
             done
-          } > "$DIAG_DIR/chromium-build-failure-diagnostics.txt"
-          sanitized_tail=$(tail -n 40 "$DIAG_DIR/chromium-build-failure-diagnostics.txt" | \
+          } > "$diag_dir/chromium-build-failure-diagnostics.txt"
+          sanitized_tail=$(tail -n 40 "$diag_dir/chromium-build-failure-diagnostics.txt" | \
             sed "s#${RUNNER_TEMP}#<runner-temp>#g" | tr '\n' ' ' | cut -c1-6000)
           printf '### Chromium build diagnostics\n\n```text\n%s\n```\n' \
-            "$(cat "$DIAG_DIR/chromium-build-failure-diagnostics.txt")" >> "$GITHUB_STEP_SUMMARY"
+            "$(cat "$diag_dir/chromium-build-failure-diagnostics.txt")" >> "$GITHUB_STEP_SUMMARY"
           if [[ '${{ steps.build_chromium.outcome }}' != success ]]; then
-            cat "$DIAG_DIR/chromium-build-failure-diagnostics.txt" >&2
+            cat "$diag_dir/chromium-build-failure-diagnostics.txt" >&2
             printf '::error title=Chromium build failure tail::%s\n' "$sanitized_tail"
             exit 1
           fi
