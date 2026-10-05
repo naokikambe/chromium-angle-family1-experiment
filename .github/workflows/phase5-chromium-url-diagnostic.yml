@@ -178,7 +178,8 @@ jobs:
             base/process/launch_mac.cc \
             content/browser/storage_partition_impl.cc \
             services/network/url_loader.cc \
-            services/network/url_loader_factory.cc)
+            services/network/url_loader_factory.cc \
+            skia/ext/skia_utils_mac.mm)
           test "$(git status --short | sed 's/^.. //' | LC_ALL=C sort)" = "$expected_status"
           shasum -a 256 "$GITHUB_WORKSPACE/$DIAGNOSTIC_PATCH_PATH" > "$DIAG_DIR/diagnostic-patch.sha256"
 
