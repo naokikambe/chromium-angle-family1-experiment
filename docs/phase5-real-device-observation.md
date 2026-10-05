@@ -1,6 +1,6 @@
 # Phase 5 実機観測記録
 
-更新日: 2026-10-04
+更新日: 2026-10-05
 
 ## 2026-10-03以前の実機観測: Chrome 154.0.8037.97（fallback Case C/WebGL・KOOV URL境界）
 
@@ -970,3 +970,20 @@ Chromium再開用に、runtime artifactと同じChromium/ANGLE revisionをCIでf
 `.github/workflows/phase5-chromium-url-diagnostic.yml`を追加した。source patchは
 URLLoaderFactory生成、URLLoader生成・開始、response、completion、Mojo disconnect、browser側factory生成を
 `[PHASE5_URL_DIAG]` markerで記録する。local source U0/U1経路とstatic auditは準備済みだが、CIのfull build・診断結果はまだ取得していない。これがpassするまで新規署名・実機再試行へ進まない。
+
+## 2026-10-05 CI成功後のChromium S0/S1 fresh実機観測
+
+専用U0/U1 CI run [`37314180383`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37314180383) の全必須ゲート成功後、公式snapshotからS0/S1を別々に組み立てた。snapshotのChromium/ANGLE revisionはruntime artifactと一致しないため、結果は探索的である。証跡名は`phase5-s0s1-after-ci-37314180383-20261005-b`で、source Chrome、既存retry/evidence、既存artifact、既存profileは変更していない。
+
+| 項目 | S0 | S1 |
+| --- | --- | --- |
+| 初回署名 | 26 targets、内側から外側へ一回だけ | 28 targets、内側から外側へ一回だけ |
+| 署名直後deep strict verify | status 0 | status 0 |
+| loopback URL | browser起動後、`frameStartedNavigating`まで。`/probe`、HTTP response、document/title未到達 | S0と同じ |
+| 署名後変更 | なし。再署名・xattr変更・Applications置換なし | なし。再署名・xattr変更・Applications置換なし |
+
+最初の手動観測は通常sandboxのCrashpad `bootstrap_check_in ... Permission denied`でページ結果を取得できなかった。同環境の`codesign --verify`は`CSSMERR_TP_NOT_TRUSTED`だったが、`security find-identity`が0件だった。署名時と同じホスト権限で読み取り専用検証を行うと、S1はpre/postともstatus 0、`valid on disk`、designated requirement成立だった。したがって、これはbundle破損ではなく観測環境のtrust可視性差であり、再署名は行っていない。
+
+新規profileで`--disable-breakpad`を追加してS1を再観測した。full opt-inは`--disable-angle-features=requireGpuFamily2,requireMsl21`で、bundleは変更していない。`libEGL`／`libGLESv2`ロード、Metal device選択、`require_gpu_family2 enabled=false has_override=true`、command queue、format table、shader library、render utils、display、`eglInitialize`がすべて成功し、`max_es_version=2.0`とES3→ES2 fallbackを記録した。WebGL smokeはpage loaded、WebGL1 context、最小drawがすべて成功し、rendererは`ANGLE (Intel, ANGLE Metal Renderer: Intel HD Graphics 5000, Unspecified Version)`、versionは`WebGL 1.0 (OpenGL ES 2.0 Chromium)`だった。今回のページは`#webgl1-only`なのでWebGL2は今回未判定であり、別観測の`context-null`とは区別する。
+
+このfresh観測でも、未署名CI U0/U1のURL成功と、Apple Development初回署名後S0/S1のURL停止が分離して再現した。URL停止はANGLE追加の必要条件ではなく、Metal/EGL/WebGL1成功とも独立している。`RUNTIME_DEVICE_READY=false`は変更せず、KOOV、認証、保存、USB/Bluetoothは実施していない。
