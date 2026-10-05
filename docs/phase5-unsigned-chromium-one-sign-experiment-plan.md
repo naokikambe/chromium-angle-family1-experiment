@@ -2,7 +2,7 @@
 
 更新日: 2026-10-06
 
-状態: 初回署名実験とChrome/Chromiumの再署名差比較は完了。現在は、同一revisionのChromium source側URLLoader診断をCIで行うための再計画・workflow検証段階であり、full Chromium buildのdispatchと実行は未実施。C1（ANGLE追加後の別bundle署名）、追加署名、KOOV操作、`RUNTIME_DEVICE_READY=false`の変更は行わない。
+状態: 初回署名実験とChrome/Chromiumの再署名差比較は完了。現在は、同一revisionのChromium source側URLLoader診断workflowを対象branchへpushし、static検証まで完了した段階である。GitHub default branchにworkflowが未登録のためfull Chromium buildのdispatchと実行は未実施。C1（ANGLE追加後の別bundle署名）、追加署名、KOOV操作、`RUNTIME_DEVICE_READY=false`の変更は行わない。
 
 ## 1. 目的と結論
 
