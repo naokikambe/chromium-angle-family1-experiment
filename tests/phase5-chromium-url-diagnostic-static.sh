@@ -50,7 +50,7 @@ done
 test "$(shasum -a 256 "$diagnostic_patch" | awk '{print $1}')" = \
   1be36abf18ac58b94ff1421607be18152c0373a9f92b0aeeb14ad8e352a250c1
 test "$(shasum -a 256 "$compat_patch" | awk '{print $1}')" = \
-  d8a5c8b4c9011686e87aa23720fdf0f3b034af15f15eca6d9c63e26c68e005b0
+  a1e5577b365dadec1a0dddb4b0529b1114c639e37034525d17ac4ce0771571b1
 grep -F 'SIGNING_OPERATION=none' "$runner" >/dev/null
 grep -F 'XATTR_OPERATION=none' "$runner" >/dev/null
 grep -F 'RUNTIME_DEVICE_READY' "$runner" >/dev/null

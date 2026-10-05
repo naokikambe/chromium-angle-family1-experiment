@@ -59,7 +59,7 @@ jobs:
       DIAGNOSTIC_PATCH_SHA256: ${{ inputs.diagnostic_patch_sha256 }}
       DIAGNOSTIC_PATCH_PATH: patches/phase5-chromium-url-loader-diagnostics.patch
       XCODE16_COMPAT_PATCH_PATH: patches/phase5-chromium-xcode16-compat.patch
-      XCODE16_COMPAT_PATCH_SHA256: d8a5c8b4c9011686e87aa23720fdf0f3b034af15f15eca6d9c63e26c68e005b0
+      XCODE16_COMPAT_PATCH_SHA256: a1e5577b365dadec1a0dddb4b0529b1114c639e37034525d17ac4ce0771571b1
       DEPOT_TOOLS_REVISION: 0306e4682b4ac35287c726fa35a983157a625902
       DEPOT_TOOLS_UPDATE: "0"
       APPROVED_BASE_REVISION: eb21b3b30fe0d062d5bf500d46d74a7a57ad56f5
@@ -160,7 +160,10 @@ jobs:
           cd "$CHROMIUM_ROOT/src"
           git apply --unidiff-zero --check -- "$GITHUB_WORKSPACE/$XCODE16_COMPAT_PATCH_PATH"
           git apply --unidiff-zero -- "$GITHUB_WORKSPACE/$XCODE16_COMPAT_PATCH_PATH"
-          test "$(git status --short | sed 's/^.. //' | LC_ALL=C sort)" = base/process/launch_mac.cc
+          expected_status=$(printf '%s\n' \
+            base/process/launch_mac.cc \
+            skia/ext/skia_utils_mac.mm)
+          test "$(git status --short | sed 's/^.. //' | LC_ALL=C sort)" = "$expected_status"
           shasum -a 256 "$GITHUB_WORKSPACE/$XCODE16_COMPAT_PATCH_PATH" > "$DIAG_DIR/xcode16-compat-patch.sha256"
 
       - name: Apply URLLoader diagnostic patch
