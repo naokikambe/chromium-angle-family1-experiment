@@ -93,6 +93,8 @@ CI run `36514821653`はsuccessだったが、対象はANGLE artifact検証とChr
 
 このsnapshotはnative ChromiumのURL controlには使えるが、Phase 5 artifactと同一入力ではない。ANGLE追加試験に使う場合は、結果を探索的と明示する。厳密な試験には、Phase 5 artifactと同じChromium revisionで`is_component_build=false`、非branded、x86_64の未署名Chromiumをfull buildする必要がある。
 
+2026-10-05の読み取り確認では、公式Mac snapshotの`REVISIONS`をposition `1689414`〜`1689423`で確認したが、取得できたのは`1689422`だけだった。そこに記録されたChromiumは`82303c21a18acdc256c6264cd2ed0e1588df99d4`、ANGLEは`8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`であり、対象のPhase 5 runtime inputとは一致しない。full Chromium source buildは承認経路ではないため、この範囲で厳密一致する未署名prebuilt binaryは未成立として扱う。
+
 ### 2.5 公式資料から分かる再署名の影響範囲
 
 「再署名したChromiumはURLアクセス不能になる」という一般的な公式既知問題は確認できていない。しかし、公式資料から次の影響経路は確認できる。
