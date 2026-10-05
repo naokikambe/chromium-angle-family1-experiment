@@ -20,6 +20,8 @@ grep -F 'angle_revision:' "$workflow" >/dev/null
 grep -F 'angle_build_run_id:' "$workflow" >/dev/null
 grep -F 'diagnostic_patch_sha256:' "$workflow" >/dev/null
 grep -F 'runs-on: macos-15-intel' "$workflow" >/dev/null
+grep -F 'timeout-minutes: 360' "$workflow" >/dev/null
+grep -F 'timeout-minutes: 240' "$workflow" >/dev/null
 grep -F 'actions: read' "$workflow" >/dev/null
 grep -F 'contents: read' "$workflow" >/dev/null
 grep -F 'gclient sync --no-history' "$workflow" >/dev/null
