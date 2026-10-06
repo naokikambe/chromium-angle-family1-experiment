@@ -21,7 +21,7 @@ grep -F 'angle_build_run_id:' "$workflow" >/dev/null
 grep -F 'diagnostic_patch_sha256:' "$workflow" >/dev/null
 grep -F 'runs-on: macos-15-intel' "$workflow" >/dev/null
 grep -F 'timeout-minutes: 360' "$workflow" >/dev/null
-grep -F 'timeout-minutes: 280' "$workflow" >/dev/null
+grep -F 'timeout-minutes: 330' "$workflow" >/dev/null
 grep -F 'timeout-minutes: 150' "$workflow" >/dev/null
 grep -F 'timeout-minutes: 45' "$workflow" >/dev/null
 ! grep -F 'timeout-minutes: 240' "$workflow" >/dev/null

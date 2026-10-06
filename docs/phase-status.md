@@ -234,7 +234,7 @@ U0/U1診断だけを分離する。
 - `diagnose-u0-u1`: build/ANGLE artifactをSHA-256検証後に展開し、ANGLEを再取得せず、U0/U1の
   URLLoader診断、loopback URL、ANGLE load、WebGL smokeを実行する。
 
-build jobはjob上限360分、build step上限280分、診断job上限150分とし、成功時のrunner時間上限は
+build jobはjob上限360分、build step上限330分、診断job上限150分とし、成功時のrunner時間上限は
 8時間30分とする。初回clean実行の見積もりは4〜7時間で、queue待ちは含めない。cacheや高性能Intel
 runnerは初回成功の前提にせず、利用可能性と整合性を確認できた場合の再実行最適化に限定する。
 
