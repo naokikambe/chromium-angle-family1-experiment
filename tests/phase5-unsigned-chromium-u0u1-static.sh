@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+trap 'printf "phase5 unsigned Chromium static audit failed at line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 
 repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
 workflow="$repo_root/.github/workflows/phase5-unsigned-chromium-u0u1.yml"
