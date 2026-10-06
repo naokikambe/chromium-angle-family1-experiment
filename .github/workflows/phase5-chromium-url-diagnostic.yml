@@ -228,7 +228,7 @@ jobs:
       - name: Build unbranded exact-revision Chromium
         id: build_chromium
         continue-on-error: true
-        timeout-minutes: 280
+        timeout-minutes: 330
         shell: bash
         run: |
           set -euo pipefail

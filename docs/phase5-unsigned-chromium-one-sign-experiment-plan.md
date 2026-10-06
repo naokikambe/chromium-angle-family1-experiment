@@ -395,7 +395,7 @@ Job 2が失敗またはtimeoutした場合はJob 3を実行しない。Job 3で�
 
 | 対象 | 通常見積もり | 強制上限 |
 | --- | ---: | ---: |
-| `build-chromium` | 2.5〜5時間 | 360分（build stepは280分） |
+| `build-chromium` | 2.5〜5時間 | 360分（build stepは330分） |
 | `diagnose-u0-u1` | 30〜60分 | 150分 |
 | 初回CI全体 | 4〜7時間 | 8時間30分（Job 1はJob 2と並列） |
 
