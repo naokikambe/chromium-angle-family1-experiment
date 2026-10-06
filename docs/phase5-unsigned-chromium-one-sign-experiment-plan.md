@@ -2,7 +2,7 @@
 
 更新日: 2026-10-06
 
-状態: 初回署名実験とChrome/Chromiumの再署名差比較は完了。現在は、同一revisionのChromium source側URLLoader診断workflowを対象branchへpushし、static検証まで完了した段階である。GitHub default branchにworkflowが未登録のためfull Chromium buildのdispatchと実行は未実施。C1（ANGLE追加後の別bundle署名）、追加署名、KOOV操作、`RUNTIME_DEVICE_READY=false`の変更は行わない。
+状態: 初回署名実験とChrome/Chromiumの再署名差比較は完了。同一revisionのChromium source側URLLoader診断workflowは対象branchへpushし、run `37464208418`を実行した。static audit、ANGLE入力、source/deps取得、両patch適用は成功したが、full Chromium buildは親jobの360分上限でキャンセルされ、unsigned bundleとU0/U1診断は未完である。C1（ANGLE追加後の別bundle署名）、追加署名、KOOV操作、`RUNTIME_DEVICE_READY=false`の変更は行わない。
 
 ## 1. 目的と結論
 
@@ -161,6 +161,36 @@ CI成功後、公式snapshotからS0とS1を別々の新規bundleとして組み
 新規profileで、Crashpad起動を抑制する`--disable-breakpad`を追加した読み取り専用観測を実施した。S1のfull runtime opt-inは`--disable-angle-features=requireGpuFamily2,requireMsl21`であり、bundleは変更していない。Metal/EGLログは`libEGL_loaded`、`libGLESv2_loaded`、`metal_device_selection=success`、`require_gpu_family2 enabled=false has_override=true`、`command_queue=success`、`display_initialize_result=success`、`eglInitialize_return_success`、`max_es_version=2.0`、`family1_es3_to_es2_fallback requested=3.0 max_supported=2.0`、`context_initialize_success`を記録した。WebGL smokeの結果はpage loaded、WebGL1 context、最小drawがすべて`true`で、rendererは`ANGLE (Intel, ANGLE Metal Renderer: Intel HD Graphics 5000, Unspecified Version)`、versionは`WebGL 1.0 (OpenGL ES 2.0 Chromium)`だった。今回のページは`#webgl1-only`なので、今回の結果だけではWebGL2の成否を新たに判定しない。既存の別観測におけるWebGL2 `context-null`は能力境界として別記録する。
 
 このfresh runでも、URLとGPU/WebGL1は別境界である。U0/U1の未署名CI URLがpassし、S0/S1のApple Development初回署名後URLがfailしたため、テスト範囲では再署名差は黒のままである。`RUNTIME_DEVICE_READY=false`は変更していない。KOOV、認証、保存、USB/Bluetoothは実施していない。
+
+### 2.10 2026-10-06 同一revision source URLLoader diagnostic CI
+
+同一revision入力で、source側のURLLoader内部ログを含むunbranded Chromiumを作るworkflowを
+Human承認のもとで実行した。
+
+| 項目 | 結果 |
+| --- | --- |
+| workflow / run | `phase5-chromium-url-diagnostic.yml` / [`37464208418`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37464208418) |
+| branch / HEAD | `phase3-dynamic-angle-prep` / `f444054a141b808043b69c6e0bf0ebfb57008dd4` |
+| Chromium revision | `b510e9d7cd3a2fbd78d0ddc42234103206c5f78d` |
+| ANGLE revision | `e12217f3e133cb1029b050d893b1806d141483be` |
+| ANGLE build run | `37009376538` / success |
+| static audit | success |
+| source/deps、Xcode patch、URLLoader patch | success |
+| full Chromium build | parent jobの360分上限でcancelled |
+| unsigned bundle / U0/U1 | 未生成 / 未実施 |
+| diagnostics | build diagnostics artifactを保存 |
+
+build logにはコンパイルエラーはなく、`offline mode`、`fastlocal=1->0`、`localexec/4`の長時間待ちが
+記録された。空のoutディレクトリから`autoninja -C out/Phase5URLDiagnostic chrome`を実行し、約84,000
+タスクをローカルで処理した。build開始前の準備に約49分、buildは約5時間11分継続したが、約
+79,594タスク中7,277タスクでjob timeoutに到達した。従って、今回の未完了はsource/compiler error
+ではなく、clean full buildの実行性能とjob timeout設計の不一致である。
+
+次回候補は、同じIntel/x64/Xcode条件の高性能・永続runner、Siso fast localまたはRBE/remote cache、
+revision・GN args・patch SHA単位のbuild cacheである。`use_clang_modules=false`、
+`use_unified_system_module=false`、`enable_precompiled_headers=false`はXcode互換性のための設定で
+あり、速度改善目的で変更する場合は正式比較とは別の探索として扱う。単純なtimeout延長や同一条件の
+無目的な再実行は行わない。
 
 ## 3. 署名方針
 

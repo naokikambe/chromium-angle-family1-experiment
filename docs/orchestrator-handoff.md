@@ -50,6 +50,32 @@
   Framework version is discovered via `Versions/Current`, not pinned to `.17`
   or `.45`.
 
+### Phase 5 source URLLoader diagnostic latest record (2026-10-06)
+
+- Branch `phase3-dynamic-angle-prep`, HEAD
+  `f444054a141b808043b69c6e0bf0ebfb57008dd4`, clean worktree.
+- Same-revision source diagnostic run
+  [`37464208418`](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37464208418)
+  used Chromium `b510e9d7cd3a2fbd78d0ddc42234103206c5f78d`, ANGLE
+  `e12217f3e133cb1029b050d893b1806d141483be`, and ANGLE build run
+  `37009376538`.
+- Static audit, ANGLE preparation, source/dependency checkout, Xcode 16
+  compatibility patch, and URLLoader diagnostic patch all succeeded.
+- The unbranded `chrome` full build was cancelled by the parent job's
+  360-minute limit. No unsigned Chromium bundle was produced and U0/U1
+  diagnostics did not run; the build diagnostics artifact was uploaded.
+- The log shows `offline mode`, `fastlocal=1->0`, and prolonged
+  `localexec/4` waits while compiling roughly 84,000 tasks from an empty
+  output directory. This is an execution-throughput/timeout mismatch, not a
+  confirmed compiler error.
+- Do not repeat the same clean workflow blindly. Candidate remediation is a
+  persistent high-performance Intel macOS runner with Siso fast-local or
+  remote cache/execution and a revision/GN-args/patch-keyed build cache.
+  Smaller diagnostic targets remain exploratory and are not formal Chromium
+  comparisons.
+- Signing, xattr changes, real-device work, KOOV, and
+  `RUNTIME_DEVICE_READY=false` changes remain prohibited/unchanged.
+
 ## Outstanding Work
 
 1. Review release-manifest generation/validation, dynamic attempt-root safety,
