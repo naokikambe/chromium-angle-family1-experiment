@@ -221,7 +221,7 @@ Chromium diagnostic buildと、`URLLoaderFactory::CreateLoaderAndStart`、`URLLo
 メタデータだけである。従ってnative Chromium URL controlを実施するには、別保有bundleの場所指定
 またはfull Chromium diagnostic buildが必要であり、既存Chrome test copyを代用しない。
 
-## Phase 5 Chromium source診断の再計画（2026-10-06）
+## Phase 5 Chromium source診断の再計画・初回実行記録（2026-10-06）
 
 Human承認により、初回full Chromium buildをCIで進めるための現状最適構成を採用した。
 Job A相当のsource取得とbuildは同一`macos-15-intel` runner内に維持し、source/deps一式を
@@ -235,15 +235,23 @@ U0/U1診断だけを分離する。
   URLLoader診断、loopback URL、ANGLE load、WebGL smokeを実行する。
 
 build jobはjob上限360分、build step上限330分、診断job上限150分とし、成功時のrunner時間上限は
-8時間30分とする。初回clean実行の見積もりは4〜7時間で、queue待ちは含めない。cacheや高性能Intel
-runnerは初回成功の前提にせず、利用可能性と整合性を確認できた場合の再実行最適化に限定する。
+8時間30分とする計画だった。初回clean実行の見積もり4〜7時間は不十分だった。実績では準備工程に
+約49分、その後のbuildが約5時間11分継続し、約79,594タスク中7,277タスクの時点で親job timeoutに
+到達した。build stepの330分上限に先行して親jobの360分上限が発動した。
 
-現在の状態は「workflow再構成・static検証完了、対象branchへのpush完了、full build未dispatch」である。
-GitHubのActions登録一覧にはdefault branch上のworkflowだけが表示されるため、対象branchに追加した
-workflowは`workflow_dispatch`で登録されず、dispatchはHTTP 404で拒否された。main/他branchへの
-workflow登録や既存workflowの変更による回避は行わない。CI必須ゲートがすべて成功するまで、署名、
-profile作成、Chromium起動、実機操作へ進まない。`RUNTIME_DEVICE_READY=false`は維持し、既存S0/S1、
-retry、evidence、artifact、profileは変更しない。
+現在の状態は「対象branchへのpush、static/source準備、full build開始まで完了。run
+`37464208418`はjob timeoutでキャンセル、full build未完」である。Sisoログには`offline mode`、
+`fastlocal=1->0`、`localexec/4`の長時間待ちがあり、空のoutディレクトリから約84,000タスクを
+ローカル実行した。cache、永続workspace、remote executionは使用していない。コンパイルエラーで
+はなく、build中断時の診断artifactが保存されている。main/他branchへのworkflow登録や既存workflow
+の変更による回避は行わない。CI必須ゲートがすべて成功するまで、署名、profile作成、Chromium起動、
+実機操作へ進まない。`RUNTIME_DEVICE_READY=false`は維持し、既存S0/S1、retry、evidence、artifact、
+profileは変更しない。
+
+同一条件での無目的な再実行は停止している。次回の候補は、同じIntel/x64/Xcode条件を満たす
+高性能・永続runner、Siso fast localまたはremote cache/RBE、revision・GN args・patch SHA単位の
+build cacheである。小さいdiagnostic targetへの変更は探索用に限り、正式なChromium比較とは別判定に
+する。単にtimeout値を延長するだけでは、今回観測したlocal build throughputの問題を解決しない。
 
 公式Chromium snapshotも読み取り確認した。Chrome `.57`のbranch point `1689415`用Mac archiveは
 404だったが、近傍`Mac/1689422/chrome-mac.zip`はHTTP 200で取得可能で、`Chromium.app`を含む。
