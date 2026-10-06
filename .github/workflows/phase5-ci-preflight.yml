@@ -1,0 +1,207 @@
+name: Phase 5 CI preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: Approved branch baseline SHA to validate
+        required: true
+        default: a3bb53b3e0f9e58aff547b26811643a967cdf5fa
+        type: string
+      chromium_revision:
+        description: Chromium source revision for source/deps and graph checks
+        required: true
+        default: b510e9d7cd3a2fbd78d0ddc42234103206c5f78d
+        type: string
+      angle_revision:
+        description: ANGLE revision resolved from Chromium DEPS
+        required: true
+        default: e12217f3e133cb1029b050d893b1806d141483be
+        type: string
+      diagnostic_patch_sha256:
+        description: SHA-256 of the URLLoader diagnostic patch
+        required: true
+        default: 1be36abf18ac58b94ff1421607be18152c0373a9f92b0aeeb14ad8e352a250c1
+        type: string
+      run_small_target:
+        description: Compile only the approved exploratory network unit target
+        required: true
+        default: false
+        type: boolean
+      small_target_label:
+        description: GN label for the exploratory target
+        required: true
+        default: //services/network:network_service_unittests
+        type: string
+      small_target_ninja:
+        description: Ninja target name for the exploratory target
+        required: true
+        default: network_service_unittests
+        type: string
+
+concurrency:
+  group: phase5-ci-preflight-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  resolve-inputs:
+    name: phase5-ci-preflight-resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      deps_sha: ${{ steps.resolve.outputs.deps_sha }}
+      angle_revision: ${{ steps.resolve.outputs.angle_revision }}
+    steps:
+      - name: Resolve Chromium DEPS without source checkout
+        id: resolve
+        shell: bash
+        env:
+          CHROMIUM_REVISION: ${{ inputs.chromium_revision }}
+        run: |
+          set -euo pipefail
+          deps_file="$RUNNER_TEMP/DEPS"
+          deps_url="https://chromium.googlesource.com/chromium/src/+/$CHROMIUM_REVISION/DEPS?format=TEXT"
+          curl --fail --silent --show-error --location "$deps_url" | \
+            python3 -c 'import base64, sys; sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read()))' \
+            > "$deps_file"
+          test -s "$deps_file"
+          angle_revision=$(sed -nE "s/^[[:space:]]*'angle_revision':[[:space:]]*'([0-9a-f]{40})'.*/\1/p" "$deps_file" | head -n 1)
+          test -n "$angle_revision"
+          deps_sha=$(shasum -a 256 "$deps_file" | awk '{print $1}')
+          printf 'deps_sha=%s\n' "$deps_sha" >> "$GITHUB_OUTPUT"
+          printf 'angle_revision=%s\n' "$angle_revision" >> "$GITHUB_OUTPUT"
+          printf 'chromium_revision=%s\nangle_revision=%s\ndeps_sha=%s\n' \
+            "$CHROMIUM_REVISION" "$angle_revision" "$deps_sha"
+
+  preflight:
+    name: phase5-ci-preflight-macos-intel
+    needs: resolve-inputs
+    runs-on: macos-15-intel
+    timeout-minutes: 120
+    env:
+      CHROMIUM_REVISION: ${{ inputs.chromium_revision }}
+      ANGLE_REVISION: ${{ needs['resolve-inputs'].outputs.angle_revision }}
+      DIAGNOSTIC_PATCH_SHA256: ${{ inputs.diagnostic_patch_sha256 }}
+      XCODE16_COMPAT_PATCH_SHA256: 59b2cf4e7b5e963d6416d3eb02ab37292f50fbd43854debac313b13297b0eaaa
+      PREFLIGHT_TARGET_REF_SHA: ${{ inputs.target_ref }}
+      GN_ARGS_SHA256: 93d807c331865f0eec2dd2e08acee5466397e9fd4f8fa7594f1fbab756631495
+      DEPOT_TOOLS_REVISION: 0306e4682b4ac35287c726fa35a983157a625902
+      RUN_SMALL_TARGET: ${{ inputs.run_small_target }}
+      SMALL_TARGET_LABEL: ${{ inputs.small_target_label }}
+      SMALL_TARGET_NINJA: ${{ inputs.small_target_ninja }}
+      SMALL_TARGET_BUDGET_SECONDS: 1200
+      SISO_MODE_REQUESTED: unknown
+      FASTLOCAL_REQUESTED: unknown
+      REMOTE_EXECUTION_CONFIGURED: false
+      REMOTE_CACHE_CONFIGURED: false
+
+    steps:
+      - name: Check out preflight implementation
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Static preflight self-audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow=.github/workflows/phase5-ci-preflight.yml
+          script=scripts/phase5-ci-preflight.sh
+          bash -n "$script"
+          grep -F 'runs-on: macos-15-intel' "$workflow"
+          grep -F 'timeout-minutes: 120' "$workflow"
+          grep -F 'actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684' "$workflow"
+          grep -F 'contents: read' "$workflow"
+          grep -F 'persist-credentials: false' "$workflow"
+          forbidden=(
+            "upload-""artifact"
+            "download-""artifact"
+            "code""sign"
+            "x""attr"
+            "open ""-a"
+            "RUNTIME_DEVICE_READY=""true"
+          )
+          for pattern in "${forbidden[@]}"; do
+            if grep -F "$pattern" "$workflow" >/dev/null; then
+              printf 'forbidden preflight pattern: %s\n' "$pattern" >&2
+              exit 1
+            fi
+          done
+          if grep -E 'autoninja[[:space:]]+-C[^[:space:]]*[[:space:]]+chrome' "$script" >/dev/null; then
+            exit 1
+          fi
+          git diff --check
+
+      - name: Set up pinned depot_tools
+        shell: bash
+        env:
+          DEPOT_TOOLS_ROOT: ${{ runner.temp }}/phase5-preflight-depot-tools
+        run: |
+          set -euo pipefail
+          git init "$DEPOT_TOOLS_ROOT"
+          git -C "$DEPOT_TOOLS_ROOT" remote add origin https://chromium.googlesource.com/chromium/tools/depot_tools.git
+          git -C "$DEPOT_TOOLS_ROOT" fetch --depth=1 origin "$DEPOT_TOOLS_REVISION"
+          git -C "$DEPOT_TOOLS_ROOT" checkout --detach FETCH_HEAD
+          test "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)" = "$DEPOT_TOOLS_REVISION"
+          printf '%s\n' "$DEPOT_TOOLS_ROOT" >> "$GITHUB_PATH"
+          DEPOT_TOOLS_UPDATE=0 "$DEPOT_TOOLS_ROOT/ensure_bootstrap"
+          printf 'DEPOT_TOOLS_ROOT=%s\n' "$DEPOT_TOOLS_ROOT" >> "$GITHUB_ENV"
+
+      - name: Prepare bounded cache paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.cache/phase5-ci-preflight"
+          mkdir -p "$HOME/Library/Caches/phase5-ci-preflight"
+
+      - name: Restore bounded cache only
+        id: cache
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: |
+            ~/.cache/phase5-ci-preflight
+            ~/Library/Caches/phase5-ci-preflight
+          key: phase5-preflight-v1-${{ runner.os }}-${{ runner.arch }}-chromium-${{ inputs.chromium_revision }}-deps-${{ needs['resolve-inputs'].outputs.deps_sha }}-angle-${{ needs['resolve-inputs'].outputs.angle_revision }}-gn-93d807c331865f0eec2dd2e08acee5466397e9fd4f8fa7594f1fbab756631495-patch-${{ hashFiles('patches/phase5-chromium-url-loader-diagnostics.patch') }}-xcode-${{ hashFiles('patches/phase5-chromium-xcode16-compat.patch') }}
+
+      - name: Collect runner and cache facts
+        shell: bash
+        env:
+          PREFLIGHT_CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+          PREFLIGHT_CACHE_KEY: phase5-preflight-v1-${{ runner.os }}-${{ runner.arch }}-chromium-${{ inputs.chromium_revision }}-deps-${{ needs['resolve-inputs'].outputs.deps_sha }}-angle-${{ needs['resolve-inputs'].outputs.angle_revision }}-gn-93d807c331865f0eec2dd2e08acee5466397e9fd4f8fa7594f1fbab756631495-patch-${{ hashFiles('patches/phase5-chromium-url-loader-diagnostics.patch') }}-xcode-${{ hashFiles('patches/phase5-chromium-xcode16-compat.patch') }}
+        run: scripts/phase5-ci-preflight.sh --inventory-only
+
+      - name: Validate target revision and inputs
+        run: scripts/phase5-ci-preflight.sh --validate-inputs
+
+      - name: Fetch exact source and dependencies
+        id: source_deps
+        continue-on-error: true
+        timeout-minutes: 55
+        run: scripts/phase5-ci-preflight.sh --source-deps
+
+      - name: Generate graph and inspect exploratory target
+        id: graph
+        if: steps.source_deps.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 15
+        run: scripts/phase5-ci-preflight.sh --graph-only
+
+      - name: Compile exploratory target only
+        id: small_target
+        if: steps.graph.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 25
+        run: scripts/phase5-ci-preflight.sh --small-target
+
+      - name: Classify preflight result
+        if: always()
+        env:
+          PREFLIGHT_SOURCE_OUTCOME: ${{ steps.source_deps.outcome }}
+          PREFLIGHT_PROBE_OUTCOME: ${{ steps.small_target.outcome || steps.graph.outcome }}
+        run: scripts/phase5-ci-preflight.sh --classify
