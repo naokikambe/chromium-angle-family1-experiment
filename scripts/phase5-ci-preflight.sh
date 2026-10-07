@@ -214,34 +214,108 @@ run_bounded() {
   return "$rc"
 }
 
+target_exists_in_list() {
+  local targets_file="$1"
+  local candidate="$2"
+  awk -v candidate="$candidate" \
+    '{ field = $1; sub(/:$/, "", field); if (field == candidate) { found = 1; exit } } END { exit(found ? 0 : 1) }' \
+    "$targets_file"
+}
+
+resolve_small_target_from_list() {
+  local targets_file="$1"
+  local label="$2"
+  local requested="$3"
+  local label_path label_dir label_name candidate
+
+  if [[ "$requested" != auto ]]; then
+    if target_exists_in_list "$targets_file" "$requested"; then
+      printf '%s\t%s\n' "$requested" explicit
+      return 0
+    fi
+    return 1
+  fi
+
+  [[ "$label" == //*:* ]] || return 1
+  label_path="${label#//}"
+  label_dir="${label_path%%:*}"
+  label_name="${label_path##*:}"
+  for candidate in "$label_dir/$label_name" "$label_name" "$label_dir:$label_name"; do
+    if target_exists_in_list "$targets_file" "$candidate"; then
+      printf '%s\t%s\n' "$candidate" label-derived
+      return 0
+    fi
+  done
+  return 1
+}
+
+resolve_target_only() {
+  local targets_file="${PREFLIGHT_NINJA_TARGETS_FILE:-$diag_dir/ninja-targets.txt}"
+  local label="${SMALL_TARGET_LABEL:-//services/network:network_service_unittests}"
+  local requested="${SMALL_TARGET_NINJA:-auto}"
+  local resolved_info ninja_target resolution
+  [[ -f "$targets_file" ]] || fail "target list is not present: $targets_file"
+  if ! resolved_info=$(resolve_small_target_from_list "$targets_file" "$label" "$requested"); then
+    emit small_target_available false
+    emit small_target_label "$label"
+    emit small_target_ninja "$requested"
+    emit small_target_resolution not-found
+    emit small_target_status not-found
+    return 1
+  fi
+  IFS=$'\t' read -r ninja_target resolution <<< "$resolved_info"
+  printf '%s\n' "$ninja_target" > "$diag_dir/resolved-small-target"
+  emit small_target_available true
+  emit small_target_label "$label"
+  emit small_target_ninja "$ninja_target"
+  emit small_target_resolution "$resolution"
+  emit small_target_status success
+}
+
 graph_only() {
   [[ -d "$source_dir" ]] || fail 'source is not present'
   mkdir -p "$out_dir"
   gn_args_text > "$out_dir/args.gn"
-  local started ended label ninja_target inspection_budget
+  local started ended label requested ninja_target resolution inspection_budget
+  local ninja_targets_file resolved_info
   started=$(date +%s)
   (cd "$source_dir" && gn gen out/Phase5Preflight > "$diag_dir/gn-stdout.log" 2> "$diag_dir/gn-stderr.log")
   ended=$(date +%s)
   emit gn_duration_seconds "$((ended - started))"
-  emit graph_target_count "$(ninja -C "$out_dir" -t targets all 2>/dev/null | wc -l | tr -d ' ')"
+  ninja_targets_file="$diag_dir/ninja-targets.txt"
+  (cd "$source_dir" && ninja -C "$out_dir" -t targets all > "$ninja_targets_file" 2> "$diag_dir/ninja-targets-stderr.log")
+  emit graph_target_count "$(wc -l < "$ninja_targets_file" | tr -d ' ')"
   if [[ "${RUN_SMALL_TARGET:-false}" != true ]]; then
     emit graph_inspection_status not-run
     emit small_target_status not-run
     return 0
   fi
   label="${SMALL_TARGET_LABEL:-//services/network:network_service_unittests}"
-  ninja_target="${SMALL_TARGET_NINJA:-network_service_unittests}"
+  requested="${SMALL_TARGET_NINJA:-auto}"
   inspection_budget="${GRAPH_INSPECTION_BUDGET_SECONDS:-300}"
+  if ! resolved_info=$(resolve_small_target_from_list "$ninja_targets_file" "$label" "$requested"); then
+    emit small_target_available false
+    emit small_target_label "$label"
+    emit small_target_ninja "$requested"
+    emit small_target_resolution not-found
+    emit small_target_probe target-list
+    emit small_target_status not-found
+    emit graph_inspection_status not-found
+    return 1
+  fi
+  IFS=$'\t' read -r ninja_target resolution <<< "$resolved_info"
+  printf '%s\n' "$ninja_target" > "$diag_dir/resolved-small-target"
+  emit small_target_label "$label"
+  emit small_target_ninja "$ninja_target"
+  emit small_target_resolution "$resolution"
   probe_target() {
-    # A GN desc lookup can traverse the complete generated graph.  The Ninja
-    # dry-run validates the executable target without adding that second,
-    # unbounded graph walk.
+    # The target list is already generated for the graph count.  The bounded
+    # dry-run validates the resolved executable target without another graph
+    # description walk.
     ninja -C "$out_dir" -n "$ninja_target" > "$diag_dir/small-target-dry-run.log" 2>&1
   }
   if run_bounded "$inspection_budget" "$diag_dir/graph-inspection-timeout" probe_target; then
     emit small_target_available true
-    emit small_target_label "$label"
-    emit small_target_ninja "$ninja_target"
     emit small_target_probe ninja-dry-run
     emit graph_inspection_status success
   elif [[ -f "$diag_dir/graph-inspection-timeout" ]]; then
@@ -249,16 +323,12 @@ graph_only() {
     return 124
   elif grep -Eiq 'unknown target|unknown target name' "$diag_dir/small-target-dry-run.log"; then
     emit small_target_available false
-    emit small_target_label "$label"
-    emit small_target_ninja "$ninja_target"
     emit small_target_probe ninja-dry-run
     emit small_target_status not-found
     emit graph_inspection_status not-found
     return 1
   else
     emit small_target_available unknown
-    emit small_target_label "$label"
-    emit small_target_ninja "$ninja_target"
     emit small_target_probe ninja-dry-run
     emit small_target_status probe-failure
     emit graph_inspection_status probe-failure
@@ -296,8 +366,18 @@ small_target() {
   : > "$build_log"
   BUILD_START_SECONDS=$(date +%s)
   export BUILD_START_SECONDS
-  local build_pid monitor_pid watchdog_pid rc
-  (cd "$source_dir" && autoninja -C out/Phase5Preflight "$SMALL_TARGET_NINJA" > "$build_log" 2>&1) &
+  local build_pid monitor_pid watchdog_pid rc ninja_target
+  if [[ -f "$diag_dir/resolved-small-target" ]]; then
+    IFS= read -r ninja_target < "$diag_dir/resolved-small-target"
+  else
+    ninja_target="${SMALL_TARGET_NINJA:-}"
+  fi
+  [[ -n "$ninja_target" && "$ninja_target" != auto ]] || {
+    emit small_target_status preflight-rejected
+    return 1
+  }
+  emit small_target_ninja "$ninja_target"
+  (cd "$source_dir" && autoninja -C out/Phase5Preflight "$ninja_target" > "$build_log" 2>&1) &
   build_pid=$!
   (
     while kill -0 "$build_pid" 2>/dev/null; do
@@ -393,6 +473,7 @@ case "$mode" in
   --inventory-only) inventory ;;
   --validate-inputs) validate_inputs ;;
   --source-deps) source_deps ;;
+  --resolve-target) resolve_target_only ;;
   --graph-only) graph_only ;;
   --small-target) small_target ;;
   --classify) classify ;;

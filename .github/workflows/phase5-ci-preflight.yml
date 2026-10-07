@@ -34,9 +34,9 @@ on:
         default: //services/network:network_service_unittests
         type: string
       small_target_ninja:
-        description: Ninja target name for the exploratory target
+        description: Ninja target override; auto resolves from the generated target list
         required: true
-        default: network_service_unittests
+        default: auto
         type: string
 
 concurrency:
@@ -141,12 +141,18 @@ jobs:
             printf '%s\n' 'unbounded GN desc probe is forbidden' >&2
             exit 1
           fi
+          grep -F 'ninja-targets.txt' "$script" >/dev/null
+          grep -F 'resolved-small-target' "$script" >/dev/null
           grep -F 'ninja -C "$out_dir" -n "$ninja_target"' "$script" >/dev/null
           git diff --check
 
       - name: Unit-test preflight classification
         shell: bash
         run: bash tests/phase5-ci-preflight-classify.sh
+
+      - name: Unit-test exploratory target resolution
+        shell: bash
+        run: bash tests/phase5-ci-preflight-target-resolve.sh
 
       - name: Set up pinned depot_tools
         shell: bash
