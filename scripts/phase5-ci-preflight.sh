@@ -286,20 +286,26 @@ small_target() {
 
 classify() {
   local source_outcome="${PREFLIGHT_SOURCE_OUTCOME:-unknown}"
-  local probe_outcome="${PREFLIGHT_PROBE_OUTCOME:-unknown}"
+  local graph_outcome="${PREFLIGHT_GRAPH_OUTCOME:-unknown}"
+  local small_target_outcome="${PREFLIGHT_SMALL_TARGET_OUTCOME:-${PREFLIGHT_PROBE_OUTCOME:-unknown}}"
   local classification=unknown
   if [[ "$source_outcome" != success ]]; then
     classification=environment_failure
   elif [[ -f "$diag_dir/small-target-timeout" ]]; then
     classification=timeout
-  elif [[ "$probe_outcome" != success ]]; then
+  elif [[ "$graph_outcome" != success ]]; then
+    classification=environment_failure
+  elif [[ "${RUN_SMALL_TARGET:-false}" != true ]]; then
+    # Graph-only preflight is an intentional successful mode. The small-target
+    # step is skipped in this mode and must not turn a valid graph result into
+    # an environment failure.
+    classification=success
+  elif [[ "$small_target_outcome" != success ]]; then
     if grep -E '(^|[[:space:]])(FAILED:|fatal error:|error:)' "$build_log" >/dev/null 2>&1; then
       classification=compiler_failure
     else
       classification=environment_failure
     fi
-  elif [[ "${RUN_SMALL_TARGET:-false}" != true ]]; then
-    classification=preflight_rejected
   elif grep -F 'small_target_status=success' "$metrics_file" >/dev/null 2>&1; then
     classification=success
   else

@@ -138,6 +138,10 @@ jobs:
           fi
           git diff --check
 
+      - name: Unit-test preflight classification
+        shell: bash
+        run: bash tests/phase5-ci-preflight-classify.sh
+
       - name: Set up pinned depot_tools
         shell: bash
         env:
@@ -203,5 +207,6 @@ jobs:
         if: always()
         env:
           PREFLIGHT_SOURCE_OUTCOME: ${{ steps.source_deps.outcome }}
-          PREFLIGHT_PROBE_OUTCOME: ${{ steps.small_target.outcome || steps.graph.outcome }}
+          PREFLIGHT_GRAPH_OUTCOME: ${{ steps.graph.outcome }}
+          PREFLIGHT_SMALL_TARGET_OUTCOME: ${{ steps.small_target.outcome }}
         run: scripts/phase5-ci-preflight.sh --classify
