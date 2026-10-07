@@ -232,31 +232,37 @@ graph_only() {
   label="${SMALL_TARGET_LABEL:-//services/network:network_service_unittests}"
   ninja_target="${SMALL_TARGET_NINJA:-network_service_unittests}"
   inspection_budget="${GRAPH_INSPECTION_BUDGET_SECONDS:-300}"
-  inspect_target() {
-    gn desc "$out_dir" "$label" >/dev/null 2>&1
+  probe_target() {
+    # A GN desc lookup can traverse the complete generated graph.  The Ninja
+    # dry-run validates the executable target without adding that second,
+    # unbounded graph walk.
+    ninja -C "$out_dir" -n "$ninja_target" > "$diag_dir/small-target-dry-run.log" 2>&1
   }
-  if run_bounded "$inspection_budget" "$diag_dir/graph-inspection-timeout" inspect_target; then
+  if run_bounded "$inspection_budget" "$diag_dir/graph-inspection-timeout" probe_target; then
     emit small_target_available true
     emit small_target_label "$label"
     emit small_target_ninja "$ninja_target"
-    dry_run_target() {
-      ninja -C "$out_dir" -n "$ninja_target" > "$diag_dir/small-target-dry-run.log"
-    }
-    if run_bounded "$inspection_budget" "$diag_dir/graph-inspection-timeout" dry_run_target; then
-      emit graph_inspection_status success
-    elif [[ -f "$diag_dir/graph-inspection-timeout" ]]; then
-      emit graph_inspection_status timeout
-      return 124
-    else
-      fail 'small target dry-run failed'
-    fi
+    emit small_target_probe ninja-dry-run
+    emit graph_inspection_status success
   elif [[ -f "$diag_dir/graph-inspection-timeout" ]]; then
     emit graph_inspection_status timeout
     return 124
-  else
+  elif grep -Eiq 'unknown target|unknown target name' "$diag_dir/small-target-dry-run.log"; then
     emit small_target_available false
+    emit small_target_label "$label"
+    emit small_target_ninja "$ninja_target"
+    emit small_target_probe ninja-dry-run
     emit small_target_status not-found
     emit graph_inspection_status not-found
+    return 1
+  else
+    emit small_target_available unknown
+    emit small_target_label "$label"
+    emit small_target_ninja "$ninja_target"
+    emit small_target_probe ninja-dry-run
+    emit small_target_status probe-failure
+    emit graph_inspection_status probe-failure
+    return 1
   fi
 }
 
@@ -342,7 +348,11 @@ classify() {
   elif [[ -f "$diag_dir/small-target-timeout" || -f "$diag_dir/graph-inspection-timeout" ]]; then
     classification=timeout
   elif [[ "$graph_outcome" != success ]]; then
-    classification=environment_failure
+    if grep -F 'graph_inspection_status=not-found' "$metrics_file" >/dev/null 2>&1; then
+      classification=preflight_rejected
+    else
+      classification=environment_failure
+    fi
   elif [[ "${RUN_SMALL_TARGET:-false}" != true ]]; then
     # Graph-only preflight is an intentional successful mode. The small-target
     # step is skipped in this mode and must not turn a valid graph result into

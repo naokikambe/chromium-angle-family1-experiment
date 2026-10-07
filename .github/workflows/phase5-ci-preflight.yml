@@ -29,7 +29,7 @@ on:
         default: false
         type: boolean
       small_target_label:
-        description: GN label for the exploratory target
+        description: GN label recorded for the exploratory target (probe uses Ninja)
         required: true
         default: //services/network:network_service_unittests
         type: string
@@ -137,6 +137,11 @@ jobs:
           if grep -E 'autoninja[[:space:]]+-C[^[:space:]]*[[:space:]]+chrome' "$script" >/dev/null; then
             exit 1
           fi
+          if grep -F 'gn desc' "$script" >/dev/null; then
+            printf '%s\n' 'unbounded GN desc probe is forbidden' >&2
+            exit 1
+          fi
+          grep -F 'ninja -C "$out_dir" -n "$ninja_target"' "$script" >/dev/null
           git diff --check
 
       - name: Unit-test preflight classification
@@ -190,7 +195,7 @@ jobs:
         timeout-minutes: 55
         run: scripts/phase5-ci-preflight.sh --source-deps
 
-      - name: Generate graph and optionally inspect exploratory target
+      - name: Generate graph and probe exploratory target
         id: graph
         if: steps.source_deps.outcome == 'success'
         continue-on-error: true
