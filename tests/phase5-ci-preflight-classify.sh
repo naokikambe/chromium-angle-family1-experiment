@@ -24,6 +24,14 @@ if run_classify success failure skipped false > "$tmp_dir/graph-failure.out" 2>&
 fi
 grep -F 'classification=environment_failure' "$tmp_dir/graph-failure.out" >/dev/null
 
+touch "$tmp_dir/graph-inspection-timeout"
+if run_classify success failure skipped false > "$tmp_dir/graph-timeout.out" 2>&1; then
+  printf '%s\n' 'graph inspection timeout was incorrectly accepted' >&2
+  exit 1
+fi
+grep -F 'classification=timeout' "$tmp_dir/graph-timeout.out" >/dev/null
+rm -f "$tmp_dir/graph-inspection-timeout"
+
 printf '%s\n' 'fatal error: intentional classifier test' > "$tmp_dir/small-target.log"
 if run_classify success success failure true > "$tmp_dir/compiler-failure.out" 2>&1; then
   printf '%s\n' 'compiler failure was incorrectly accepted' >&2

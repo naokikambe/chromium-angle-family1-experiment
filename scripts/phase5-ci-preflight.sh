@@ -189,26 +189,74 @@ EOF
   emit patches_applied true
 }
 
+run_bounded() {
+  local budget_seconds="$1"
+  local timeout_marker="$2"
+  shift 2
+  rm -f "$timeout_marker"
+  "$@" &
+  local command_pid=$!
+  (
+    sleep "$budget_seconds"
+    if kill -0 "$command_pid" 2>/dev/null; then
+      : > "$timeout_marker"
+      kill -TERM "$command_pid" 2>/dev/null || true
+    fi
+  ) &
+  local watchdog_pid=$!
+  local rc
+  set +e
+  wait "$command_pid"
+  rc=$?
+  set -e
+  kill "$watchdog_pid" 2>/dev/null || true
+  wait "$watchdog_pid" 2>/dev/null || true
+  return "$rc"
+}
+
 graph_only() {
   [[ -d "$source_dir" ]] || fail 'source is not present'
   mkdir -p "$out_dir"
   gn_args_text > "$out_dir/args.gn"
-  local started ended label ninja_target
+  local started ended label ninja_target inspection_budget
   started=$(date +%s)
   (cd "$source_dir" && gn gen out/Phase5Preflight > "$diag_dir/gn-stdout.log" 2> "$diag_dir/gn-stderr.log")
   ended=$(date +%s)
   emit gn_duration_seconds "$((ended - started))"
   emit graph_target_count "$(ninja -C "$out_dir" -t targets all 2>/dev/null | wc -l | tr -d ' ')"
+  if [[ "${RUN_SMALL_TARGET:-false}" != true ]]; then
+    emit graph_inspection_status not-run
+    emit small_target_status not-run
+    return 0
+  fi
   label="${SMALL_TARGET_LABEL:-//services/network:network_service_unittests}"
   ninja_target="${SMALL_TARGET_NINJA:-network_service_unittests}"
-  if gn desc "$out_dir" "$label" >/dev/null 2>&1; then
+  inspection_budget="${GRAPH_INSPECTION_BUDGET_SECONDS:-300}"
+  inspect_target() {
+    gn desc "$out_dir" "$label" >/dev/null 2>&1
+  }
+  if run_bounded "$inspection_budget" "$diag_dir/graph-inspection-timeout" inspect_target; then
     emit small_target_available true
     emit small_target_label "$label"
     emit small_target_ninja "$ninja_target"
-    ninja -C "$out_dir" -n "$ninja_target" > "$diag_dir/small-target-dry-run.log"
+    dry_run_target() {
+      ninja -C "$out_dir" -n "$ninja_target" > "$diag_dir/small-target-dry-run.log"
+    }
+    if run_bounded "$inspection_budget" "$diag_dir/graph-inspection-timeout" dry_run_target; then
+      emit graph_inspection_status success
+    elif [[ -f "$diag_dir/graph-inspection-timeout" ]]; then
+      emit graph_inspection_status timeout
+      return 124
+    else
+      fail 'small target dry-run failed'
+    fi
+  elif [[ -f "$diag_dir/graph-inspection-timeout" ]]; then
+    emit graph_inspection_status timeout
+    return 124
   else
     emit small_target_available false
     emit small_target_status not-found
+    emit graph_inspection_status not-found
   fi
 }
 
@@ -291,7 +339,7 @@ classify() {
   local classification=unknown
   if [[ "$source_outcome" != success ]]; then
     classification=environment_failure
-  elif [[ -f "$diag_dir/small-target-timeout" ]]; then
+  elif [[ -f "$diag_dir/small-target-timeout" || -f "$diag_dir/graph-inspection-timeout" ]]; then
     classification=timeout
   elif [[ "$graph_outcome" != success ]]; then
     classification=environment_failure

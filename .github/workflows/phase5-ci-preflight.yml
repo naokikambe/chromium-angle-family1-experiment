@@ -98,6 +98,7 @@ jobs:
       FASTLOCAL_REQUESTED: unknown
       REMOTE_EXECUTION_CONFIGURED: false
       REMOTE_CACHE_CONFIGURED: false
+      GRAPH_INSPECTION_BUDGET_SECONDS: 300
 
     steps:
       - name: Check out preflight implementation
@@ -189,7 +190,7 @@ jobs:
         timeout-minutes: 55
         run: scripts/phase5-ci-preflight.sh --source-deps
 
-      - name: Generate graph and inspect exploratory target
+      - name: Generate graph and optionally inspect exploratory target
         id: graph
         if: steps.source_deps.outcome == 'success'
         continue-on-error: true
@@ -198,7 +199,7 @@ jobs:
 
       - name: Compile exploratory target only
         id: small_target
-        if: steps.graph.outcome == 'success'
+        if: ${{ inputs.run_small_target == true && steps.graph.outcome == 'success' }}
         continue-on-error: true
         timeout-minutes: 25
         run: scripts/phase5-ci-preflight.sh --small-target
