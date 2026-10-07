@@ -24,14 +24,14 @@ on:
         default: 1be36abf18ac58b94ff1421607be18152c0373a9f92b0aeeb14ad8e352a250c1
         type: string
       run_small_target:
-        description: Compile only the approved exploratory network unit target
+        description: Compile only the approved exploratory services unit target
         required: true
         default: false
         type: boolean
       small_target_label:
-        description: GN label recorded for the exploratory target (probe uses Ninja)
+        description: GN label for the exploratory services unit target (includes network tests)
         required: true
-        default: //services/network:network_service_unittests
+        default: //services:services_unittests
         type: string
       small_target_ninja:
         description: Ninja target override; auto resolves from the generated target list
@@ -93,6 +93,7 @@ jobs:
       RUN_SMALL_TARGET: ${{ inputs.run_small_target }}
       SMALL_TARGET_LABEL: ${{ inputs.small_target_label }}
       SMALL_TARGET_NINJA: ${{ inputs.small_target_ninja }}
+      SMALL_TARGET_MAX_TASKS: 12000
       SMALL_TARGET_BUDGET_SECONDS: 1200
       SISO_MODE_REQUESTED: unknown
       FASTLOCAL_REQUESTED: unknown

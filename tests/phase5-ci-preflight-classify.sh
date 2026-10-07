@@ -39,6 +39,13 @@ if run_classify success failure skipped true > "$tmp_dir/target-not-found.out" 2
 fi
 grep -F 'classification=preflight_rejected' "$tmp_dir/target-not-found.out" >/dev/null
 
+printf '%s\n' 'graph_inspection_status=too-large' > "$tmp_dir/preflight-metrics.txt"
+if run_classify success failure skipped true > "$tmp_dir/target-too-large.out" 2>&1; then
+  printf '%s\n' 'oversized exploratory target was incorrectly accepted' >&2
+  exit 1
+fi
+grep -F 'classification=preflight_rejected' "$tmp_dir/target-too-large.out" >/dev/null
+
 printf '%s\n' 'fatal error: intentional classifier test' > "$tmp_dir/small-target.log"
 if run_classify success success failure true > "$tmp_dir/compiler-failure.out" 2>&1; then
   printf '%s\n' 'compiler failure was incorrectly accepted' >&2

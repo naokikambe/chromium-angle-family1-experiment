@@ -251,7 +251,7 @@ resolve_small_target_from_list() {
 
 resolve_target_only() {
   local targets_file="${PREFLIGHT_NINJA_TARGETS_FILE:-$diag_dir/ninja-targets.txt}"
-  local label="${SMALL_TARGET_LABEL:-//services/network:network_service_unittests}"
+  local label="${SMALL_TARGET_LABEL:-//services:services_unittests}"
   local requested="${SMALL_TARGET_NINJA:-auto}"
   local resolved_info ninja_target resolution
   [[ -f "$targets_file" ]] || fail "target list is not present: $targets_file"
@@ -290,7 +290,7 @@ graph_only() {
     emit small_target_status not-run
     return 0
   fi
-  label="${SMALL_TARGET_LABEL:-//services/network:network_service_unittests}"
+  label="${SMALL_TARGET_LABEL:-//services:services_unittests}"
   requested="${SMALL_TARGET_NINJA:-auto}"
   inspection_budget="${GRAPH_INSPECTION_BUDGET_SECONDS:-300}"
   if ! resolved_info=$(resolve_small_target_from_list "$ninja_targets_file" "$label" "$requested"); then
@@ -305,9 +305,13 @@ graph_only() {
   fi
   IFS=$'\t' read -r ninja_target resolution <<< "$resolved_info"
   printf '%s\n' "$ninja_target" > "$diag_dir/resolved-small-target"
+  local max_tasks dry_run_task_count
+  max_tasks="${SMALL_TARGET_MAX_TASKS:-12000}"
+  [[ "$max_tasks" =~ ^[0-9]+$ ]] || fail 'invalid small target task cap'
   emit small_target_label "$label"
   emit small_target_ninja "$ninja_target"
   emit small_target_resolution "$resolution"
+  emit small_target_max_tasks "$max_tasks"
   probe_target() {
     # The target list is already generated for the graph count.  The bounded
     # dry-run validates the resolved executable target without another graph
@@ -315,6 +319,14 @@ graph_only() {
     ninja -C "$out_dir" -n "$ninja_target" > "$diag_dir/small-target-dry-run.log" 2>&1
   }
   if run_bounded "$inspection_budget" "$diag_dir/graph-inspection-timeout" probe_target; then
+    dry_run_task_count="$(awk 'NF { count++ } END { print count + 0 }' "$diag_dir/small-target-dry-run.log")"
+    emit small_target_dry_run_task_count "$dry_run_task_count"
+    if (( dry_run_task_count > max_tasks )); then
+      emit small_target_available false
+      emit small_target_status too-large
+      emit graph_inspection_status too-large
+      return 1
+    fi
     emit small_target_available true
     emit small_target_probe ninja-dry-run
     emit graph_inspection_status success
@@ -428,7 +440,7 @@ classify() {
   elif [[ -f "$diag_dir/small-target-timeout" || -f "$diag_dir/graph-inspection-timeout" ]]; then
     classification=timeout
   elif [[ "$graph_outcome" != success ]]; then
-    if grep -F 'graph_inspection_status=not-found' "$metrics_file" >/dev/null 2>&1; then
+    if grep -E 'graph_inspection_status=(not-found|too-large)' "$metrics_file" >/dev/null 2>&1; then
       classification=preflight_rejected
     else
       classification=environment_failure
