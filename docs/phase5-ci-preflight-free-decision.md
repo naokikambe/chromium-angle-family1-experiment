@@ -46,10 +46,11 @@ and localexec parallelism are recorded as unknown/not-run rather than inferred
 from the earlier full-build attempt. The Siso version probe also reported
 that the project `.sisoenv` was unavailable before the source sync.
 
-The cache key included the Chromium revision, resolved ANGLE revision and
-DEPS digest, normalized GN args digest, both patch digests, depot_tools
-revision, and Xcode/SDK identity. The run therefore does not establish a
-cache hit or a reusable Chromium `source`/`out` cache.
+The cache key included the runner OS/architecture, Chromium revision, resolved
+ANGLE revision and DEPS digest, normalized GN args digest, and both patch
+digests. The depot_tools revision and Xcode/SDK facts were recorded separately
+but were not components of this run's cache key. The run therefore does not
+establish a cache hit or a reusable Chromium `source`/`out` cache.
 
 ## Relationship to the cancelled full build
 
