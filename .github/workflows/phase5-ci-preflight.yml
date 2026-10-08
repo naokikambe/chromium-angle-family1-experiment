@@ -146,6 +146,7 @@ jobs:
           grep -F 'probe_small_target_gn_labels' "$workflow"
           grep -F 'PROBE_SMALL_TARGET_GN_LABELS' "$workflow"
           grep -F 'GN_TYPE_QUERY_BUDGET_SECONDS: 60' "$workflow"
+          grep -F 'PREFLIGHT_CACHE_HIT: ${{ steps.cache.outputs.cache-hit ||' "$workflow"
           forbidden=(
             "upload-""artifact"
             "download-""artifact"
@@ -166,6 +167,9 @@ jobs:
           grep -F 'gn desc "$out_dir" "$candidate_label" type' "$script" >/dev/null
           grep -F 'run_bounded "$type_query_budget" "$diag_dir/probe-target-type-$index-timeout" "$candidate_type_log" gn desc' "$script" >/dev/null
           grep -F 'run_bounded "$inspection_budget" "$diag_dir/probe-target-$index-timeout" "$candidate_log" ninja' "$script" >/dev/null
+          grep -F 'process.terminate()' "$script" >/dev/null
+          grep -F 'process.kill()' "$script" >/dev/null
+          grep -F 'dry_run_task_count="$plan_steps"' "$script" >/dev/null
           grep -F 'ninja-targets.txt' "$script" >/dev/null
           grep -F 'resolved-small-target' "$script" >/dev/null
           grep -F 'ninja -C "$out_dir" -n "$ninja_target"' "$script" >/dev/null
@@ -217,7 +221,7 @@ jobs:
       - name: Collect runner and cache facts
         shell: bash
         env:
-          PREFLIGHT_CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+          PREFLIGHT_CACHE_HIT: ${{ steps.cache.outputs.cache-hit || 'false' }}
           PREFLIGHT_CACHE_KEY: phase5-preflight-v1-${{ runner.os }}-${{ runner.arch }}-chromium-${{ inputs.chromium_revision }}-deps-${{ needs['resolve-inputs'].outputs.deps_sha }}-angle-${{ needs['resolve-inputs'].outputs.angle_revision }}-gn-93d807c331865f0eec2dd2e08acee5466397e9fd4f8fa7594f1fbab756631495-patch-${{ hashFiles('patches/phase5-chromium-url-loader-diagnostics.patch') }}-xcode-${{ hashFiles('patches/phase5-chromium-xcode16-compat.patch') }}
         run: scripts/phase5-ci-preflight.sh --inventory-only
 

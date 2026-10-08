@@ -202,8 +202,6 @@ run_bounded() {
   shift 3
   rm -f "$timeout_marker"
   python3 - "$budget_seconds" "$timeout_marker" "$log_file" "$@" <<'PY'
-import os
-import signal
 import subprocess
 import sys
 
@@ -219,26 +217,29 @@ with open(log_path, "w", encoding="utf-8") as log_file:
         command,
         stdout=log_file,
         stderr=subprocess.STDOUT,
-        start_new_session=True,
     )
     try:
         raise SystemExit(process.wait(timeout=budget))
     except subprocess.TimeoutExpired:
         with open(marker, "w", encoding="utf-8"):
             pass
+        # These bounded commands are direct GN/Ninja invocations. Signal the
+        # child PID; hosted macOS runners can deny process-group signaling.
         try:
-            os.killpg(process.pid, signal.SIGTERM)
+            process.terminate()
         except ProcessLookupError:
             pass
         try:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            pass
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        process.wait()
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                raise SystemExit("timed-out command could not be terminated")
         raise SystemExit(124)
 PY
 }
@@ -419,14 +420,16 @@ graph_only() {
         candidate_type_status=timeout
       fi
 
-      dry_run_task_count="$(awk 'NF { count++ } END { print count + 0 }' "$candidate_log")"
+      dry_run_output_line_count="$(awk 'NF { count++ } END { print count + 0 }' "$candidate_log")"
       candidate_type_info="$(summarize_ninja_plan "$candidate_log")"
       IFS=$'\t' read -r plan_kinds plan_steps compile_steps link_steps other_steps unclassified_lines no_work_lines <<< "$candidate_type_info"
+      dry_run_task_count="$plan_steps"
       emit "probe_candidate_${index}_target" "$candidate"
       emit "probe_candidate_${index}_gn_label" "$candidate_label"
       emit "probe_candidate_${index}_gn_type" "$candidate_type"
       emit "probe_candidate_${index}_type_status" "$candidate_type_status"
       emit "probe_candidate_${index}_dry_run_task_count" "$dry_run_task_count"
+      emit "probe_candidate_${index}_dry_run_output_line_count" "$dry_run_output_line_count"
       emit "probe_candidate_${index}_dry_run_step_kinds" "$plan_kinds"
       emit "probe_candidate_${index}_recognized_step_count" "$plan_steps"
       emit "probe_candidate_${index}_compile_step_count" "$compile_steps"
@@ -436,6 +439,8 @@ graph_only() {
       emit "probe_candidate_${index}_no_work_line_count" "$no_work_lines"
       if (( dry_run_task_count > max_tasks )); then
         emit "probe_candidate_${index}_status" too-large
+      elif (( dry_run_task_count == 0 && no_work_lines > 0 )); then
+        emit "probe_candidate_${index}_status" no-work
       else
         emit "probe_candidate_${index}_status" within-cap
       fi
