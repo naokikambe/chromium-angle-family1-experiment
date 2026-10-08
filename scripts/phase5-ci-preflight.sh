@@ -236,6 +236,39 @@ target_exists_in_list() {
     "$targets_file"
 }
 
+summarize_ninja_plan() {
+  awk '
+    NF {
+      line = $0
+      if (line ~ /^\[[0-9]+\/[0-9]+\] /) {
+        sub(/^\[[0-9]+\/[0-9]+\] /, "", line)
+        kind = line
+        sub(/[[:space:]].*$/, "", kind)
+        if (kind ~ /^(CC|CXX|OBJC|OBJCXX|ASM|SWIFT)$/) {
+          compile++
+        } else if (kind ~ /^(LINK|SOLINK|SOLINK_MODULE|LINKED_MODULE|CXX_DYLIB|LIBTOOL|AR|LIPO)$/) {
+          link++
+        } else {
+          other++
+        }
+        if (steps < 8) {
+          if (plan != "") plan = plan ","
+          plan = plan (steps + 1) ":" kind
+        }
+        steps++
+      } else if (tolower(line) ~ /no work to do/) {
+        no_work++
+      } else {
+        unclassified++
+      }
+    }
+    END {
+      if (plan == "") plan = "none"
+      printf "%s\t%d\t%d\t%d\t%d\t%d\t%d\n", plan, steps + 0, compile + 0, link + 0, other + 0, unclassified + 0, no_work + 0
+    }
+  ' "$1"
+}
+
 resolve_small_target_from_list() {
   local targets_file="$1"
   local label="$2"
@@ -308,18 +341,28 @@ graph_only() {
   max_tasks="${SMALL_TARGET_MAX_TASKS:-12000}"
   [[ "$max_tasks" =~ ^[0-9]+$ ]] || fail 'invalid small target task cap'
   if [[ "${PROBE_SMALL_TARGET:-false}" == true ]]; then
-    local requested_targets candidate index candidate_log
-    local -a candidates=()
+    local requested_targets requested_labels candidate index candidate_log candidate_label candidate_label_name
+    local candidate_type_log candidate_type_info candidate_type plan_kinds plan_steps compile_steps link_steps other_steps unclassified_lines no_work_lines
+    local -a candidates=() candidate_labels=()
     requested_targets="${PROBE_SMALL_TARGET_NINJAS:-}"
+    requested_labels="${PROBE_SMALL_TARGET_GN_LABELS:-}"
     [[ -n "$requested_targets" ]] || fail 'probe target list is empty'
+    [[ -n "$requested_labels" ]] || fail 'probe GN label list is empty'
     IFS=',' read -r -a candidates <<< "$requested_targets"
+    IFS=',' read -r -a candidate_labels <<< "$requested_labels"
     ((${#candidates[@]} > 0 && ${#candidates[@]} <= 8)) || fail 'probe target list must contain 1 to 8 targets'
+    ((${#candidate_labels[@]} == ${#candidates[@]})) || fail 'probe target and GN label counts differ'
     local seen_candidates=' '
     inspection_budget="${GRAPH_INSPECTION_BUDGET_SECONDS:-300}"
     index=0
     for candidate in "${candidates[@]}"; do
       candidate="$(printf '%s' "$candidate" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+      candidate_label="${candidate_labels[$((index))]}"
+      candidate_label="$(printf '%s' "$candidate_label" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
       [[ "$candidate" =~ ^[A-Za-z0-9_./:-]+$ ]] || fail "invalid probe target name: $candidate"
+      [[ "$candidate_label" =~ ^//[A-Za-z0-9_./-]+:[A-Za-z0-9_.-]+$ ]] || fail "invalid probe GN label: $candidate_label"
+      candidate_label_name="${candidate_label##*:}"
+      [[ "$candidate_label_name" == "$candidate" ]] || fail "probe GN label does not match Ninja target: $candidate_label"
       [[ "$seen_candidates" != *" $candidate "* ]] || fail "duplicate probe target: $candidate"
       seen_candidates+="$candidate "
       index=$((index + 1))
@@ -329,6 +372,26 @@ graph_only() {
         emit graph_inspection_status not-found
         return 1
       fi
+      candidate_type_log="$diag_dir/small-target-probe-type-$index.log"
+      probe_candidate_type() {
+        gn desc "$out_dir" "$candidate_label" type > "$candidate_type_log" 2>&1
+      }
+      if ! run_bounded "$inspection_budget" "$diag_dir/probe-target-type-$index-timeout" probe_candidate_type; then
+        if [[ -f "$diag_dir/probe-target-type-$index-timeout" ]]; then
+          emit "probe_candidate_${index}_type_status" timeout
+          emit graph_inspection_status timeout
+          return 124
+        fi
+        emit "probe_candidate_${index}_type_status" lookup-failure
+        emit graph_inspection_status probe-failure
+        return 1
+      fi
+      candidate_type="$(tr -d '\r\n' < "$candidate_type_log")"
+      [[ "$candidate_type" =~ ^[a-z_]+$ ]] || {
+        emit "probe_candidate_${index}_type_status" invalid-output
+        emit graph_inspection_status probe-failure
+        return 1
+      }
       candidate_log="$diag_dir/small-target-probe-$index.log"
       probe_candidate() {
         ninja -C "$out_dir" -n "$candidate" > "$candidate_log" 2>&1
@@ -344,8 +407,20 @@ graph_only() {
         return 1
       fi
       dry_run_task_count="$(awk 'NF { count++ } END { print count + 0 }' "$candidate_log")"
+      candidate_type_info="$(summarize_ninja_plan "$candidate_log")"
+      IFS=$'\t' read -r plan_kinds plan_steps compile_steps link_steps other_steps unclassified_lines no_work_lines <<< "$candidate_type_info"
       emit "probe_candidate_${index}_target" "$candidate"
+      emit "probe_candidate_${index}_gn_label" "$candidate_label"
+      emit "probe_candidate_${index}_gn_type" "$candidate_type"
+      emit "probe_candidate_${index}_type_status" success
       emit "probe_candidate_${index}_dry_run_task_count" "$dry_run_task_count"
+      emit "probe_candidate_${index}_dry_run_step_kinds" "$plan_kinds"
+      emit "probe_candidate_${index}_recognized_step_count" "$plan_steps"
+      emit "probe_candidate_${index}_compile_step_count" "$compile_steps"
+      emit "probe_candidate_${index}_link_step_count" "$link_steps"
+      emit "probe_candidate_${index}_other_step_count" "$other_steps"
+      emit "probe_candidate_${index}_unclassified_line_count" "$unclassified_lines"
+      emit "probe_candidate_${index}_no_work_line_count" "$no_work_lines"
       if (( dry_run_task_count > max_tasks )); then
         emit "probe_candidate_${index}_status" too-large
       else

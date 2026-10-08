@@ -38,6 +38,11 @@ on:
         required: true
         default: network_content_security_policy_fuzzer,content_sms_parser_fuzzer
         type: string
+      probe_small_target_gn_labels:
+        description: Comma-separated GN labels matching the probe targets in the same order
+        required: true
+        default: //services/network:network_content_security_policy_fuzzer,//content/browser:content_sms_parser_fuzzer
+        type: string
       small_target_label:
         description: GN label for the exploratory services unit target (includes network tests)
         required: true
@@ -103,6 +108,7 @@ jobs:
       RUN_SMALL_TARGET: ${{ inputs.run_small_target }}
       PROBE_SMALL_TARGET: ${{ inputs.probe_small_target }}
       PROBE_SMALL_TARGET_NINJAS: ${{ inputs.probe_small_target_ninjas }}
+      PROBE_SMALL_TARGET_GN_LABELS: ${{ inputs.probe_small_target_gn_labels }}
       SMALL_TARGET_LABEL: ${{ inputs.small_target_label }}
       SMALL_TARGET_NINJA: ${{ inputs.small_target_ninja }}
       SMALL_TARGET_MAX_TASKS: 12000
@@ -136,6 +142,8 @@ jobs:
           grep -F 'probe_small_target' "$workflow"
           grep -F 'PROBE_SMALL_TARGET' "$workflow"
           grep -F 'PROBE_SMALL_TARGET_NINJAS' "$workflow"
+          grep -F 'probe_small_target_gn_labels' "$workflow"
+          grep -F 'PROBE_SMALL_TARGET_GN_LABELS' "$workflow"
           forbidden=(
             "upload-""artifact"
             "download-""artifact"
@@ -153,10 +161,8 @@ jobs:
           if grep -E 'autoninja[[:space:]]+-C[^[:space:]]*[[:space:]]+chrome' "$script" >/dev/null; then
             exit 1
           fi
-          if grep -F 'gn desc' "$script" >/dev/null; then
-            printf '%s\n' 'unbounded GN desc probe is forbidden' >&2
-            exit 1
-          fi
+          grep -F 'gn desc "$out_dir" "$candidate_label" type' "$script" >/dev/null
+          grep -F 'run_bounded "$inspection_budget" "$diag_dir/probe-target-type-$index-timeout" probe_candidate_type' "$script" >/dev/null
           grep -F 'ninja-targets.txt' "$script" >/dev/null
           grep -F 'resolved-small-target' "$script" >/dev/null
           grep -F 'ninja -C "$out_dir" -n "$ninja_target"' "$script" >/dev/null
