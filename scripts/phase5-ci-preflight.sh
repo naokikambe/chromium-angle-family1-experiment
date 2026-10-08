@@ -118,6 +118,7 @@ inventory() {
   emit deps_present "$([[ -f "$source_dir/DEPS" ]] && printf true || printf false)"
   emit run_small_target "${RUN_SMALL_TARGET:-false}"
   emit probe_small_target "${PROBE_SMALL_TARGET:-false}"
+  emit probe_small_target_ninjas "${PROBE_SMALL_TARGET_NINJAS:-unset}"
   emit siso_mode_requested "${SISO_MODE_REQUESTED:-unknown}"
   emit siso_mode_effective "${SISO_MODE_EFFECTIVE:-not-run}"
   emit fastlocal_requested "${FASTLOCAL_REQUESTED:-unknown}"
@@ -201,13 +202,21 @@ run_bounded() {
   rm -f "$timeout_marker"
   "$@" &
   local command_pid=$!
-  (
-    sleep "$budget_seconds"
-    if kill -0 "$command_pid" 2>/dev/null; then
-      : > "$timeout_marker"
-      kill -TERM "$command_pid" 2>/dev/null || true
-    fi
-  ) &
+  python3 -c 'import os, signal, sys, time
+budget = float(sys.argv[1])
+pid = int(sys.argv[2])
+marker = sys.argv[3]
+time.sleep(budget)
+try:
+    os.kill(pid, 0)
+except ProcessLookupError:
+    sys.exit(0)
+with open(marker, "w", encoding="utf-8"):
+    pass
+try:
+    os.kill(pid, signal.SIGTERM)
+except ProcessLookupError:
+    pass' "$budget_seconds" "$command_pid" "$timeout_marker" >/dev/null 2>&1 &
   local watchdog_pid=$!
   local rc
   set +e
@@ -295,6 +304,61 @@ graph_only() {
     emit small_target_status not-run
     return 0
   fi
+  local max_tasks dry_run_task_count
+  max_tasks="${SMALL_TARGET_MAX_TASKS:-12000}"
+  [[ "$max_tasks" =~ ^[0-9]+$ ]] || fail 'invalid small target task cap'
+  if [[ "${PROBE_SMALL_TARGET:-false}" == true ]]; then
+    local requested_targets candidate index candidate_log
+    local -a candidates=()
+    requested_targets="${PROBE_SMALL_TARGET_NINJAS:-}"
+    [[ -n "$requested_targets" ]] || fail 'probe target list is empty'
+    IFS=',' read -r -a candidates <<< "$requested_targets"
+    ((${#candidates[@]} > 0 && ${#candidates[@]} <= 8)) || fail 'probe target list must contain 1 to 8 targets'
+    local seen_candidates=' '
+    inspection_budget="${GRAPH_INSPECTION_BUDGET_SECONDS:-300}"
+    index=0
+    for candidate in "${candidates[@]}"; do
+      candidate="$(printf '%s' "$candidate" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+      [[ "$candidate" =~ ^[A-Za-z0-9_./:-]+$ ]] || fail "invalid probe target name: $candidate"
+      [[ "$seen_candidates" != *" $candidate "* ]] || fail "duplicate probe target: $candidate"
+      seen_candidates+="$candidate "
+      index=$((index + 1))
+      if ! target_exists_in_list "$ninja_targets_file" "$candidate"; then
+        emit "probe_candidate_${index}_target" "$candidate"
+        emit "probe_candidate_${index}_status" not-found
+        emit graph_inspection_status not-found
+        return 1
+      fi
+      candidate_log="$diag_dir/small-target-probe-$index.log"
+      probe_candidate() {
+        ninja -C "$out_dir" -n "$candidate" > "$candidate_log" 2>&1
+      }
+      if ! run_bounded "$inspection_budget" "$diag_dir/probe-target-$index-timeout" probe_candidate; then
+        if [[ -f "$diag_dir/probe-target-$index-timeout" ]]; then
+          emit "probe_candidate_${index}_status" timeout
+          emit graph_inspection_status timeout
+          return 124
+        fi
+        emit "probe_candidate_${index}_status" probe-failure
+        emit graph_inspection_status probe-failure
+        return 1
+      fi
+      dry_run_task_count="$(awk 'NF { count++ } END { print count + 0 }' "$candidate_log")"
+      emit "probe_candidate_${index}_target" "$candidate"
+      emit "probe_candidate_${index}_dry_run_task_count" "$dry_run_task_count"
+      if (( dry_run_task_count > max_tasks )); then
+        emit "probe_candidate_${index}_status" too-large
+      else
+        emit "probe_candidate_${index}_status" within-cap
+      fi
+    done
+    emit small_target_probe_only true
+    emit small_target_probe_count "$index"
+    emit small_target_max_tasks "$max_tasks"
+    emit small_target_status probe-success
+    emit graph_inspection_status success
+    return 0
+  fi
   label="${SMALL_TARGET_LABEL:-//services:services_unittests}"
   requested="${SMALL_TARGET_NINJA:-auto}"
   inspection_budget="${GRAPH_INSPECTION_BUDGET_SECONDS:-300}"
@@ -310,9 +374,6 @@ graph_only() {
   fi
   IFS=$'\t' read -r ninja_target resolution <<< "$resolved_info"
   printf '%s\n' "$ninja_target" > "$diag_dir/resolved-small-target"
-  local max_tasks dry_run_task_count
-  max_tasks="${SMALL_TARGET_MAX_TASKS:-12000}"
-  [[ "$max_tasks" =~ ^[0-9]+$ ]] || fail 'invalid small target task cap'
   emit small_target_label "$label"
   emit small_target_ninja "$ninja_target"
   emit small_target_resolution "$resolution"
@@ -335,9 +396,6 @@ graph_only() {
     fi
     emit small_target_available true
     emit small_target_probe ninja-dry-run
-    if [[ "${PROBE_SMALL_TARGET:-false}" == true ]]; then
-      emit small_target_status probe-success
-    fi
     emit graph_inspection_status success
   elif [[ -f "$diag_dir/graph-inspection-timeout" ]]; then
     emit graph_inspection_status timeout

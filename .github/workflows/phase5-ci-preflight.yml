@@ -29,10 +29,15 @@ on:
         default: false
         type: boolean
       probe_small_target:
-        description: Dry-run one exploratory target and never compile it
+        description: Dry-run exploratory targets and never compile them
         required: true
         default: false
         type: boolean
+      probe_small_target_ninjas:
+        description: Comma-separated Ninja targets measured by probe-only mode
+        required: true
+        default: network_content_security_policy_fuzzer,content_sms_parser_fuzzer
+        type: string
       small_target_label:
         description: GN label for the exploratory services unit target (includes network tests)
         required: true
@@ -97,6 +102,7 @@ jobs:
       DEPOT_TOOLS_REVISION: 0306e4682b4ac35287c726fa35a983157a625902
       RUN_SMALL_TARGET: ${{ inputs.run_small_target }}
       PROBE_SMALL_TARGET: ${{ inputs.probe_small_target }}
+      PROBE_SMALL_TARGET_NINJAS: ${{ inputs.probe_small_target_ninjas }}
       SMALL_TARGET_LABEL: ${{ inputs.small_target_label }}
       SMALL_TARGET_NINJA: ${{ inputs.small_target_ninja }}
       SMALL_TARGET_MAX_TASKS: 12000
@@ -129,6 +135,7 @@ jobs:
           grep -F 'persist-credentials: false' "$workflow"
           grep -F 'probe_small_target' "$workflow"
           grep -F 'PROBE_SMALL_TARGET' "$workflow"
+          grep -F 'PROBE_SMALL_TARGET_NINJAS' "$workflow"
           forbidden=(
             "upload-""artifact"
             "download-""artifact"
@@ -162,6 +169,10 @@ jobs:
       - name: Unit-test exploratory target resolution
         shell: bash
         run: bash tests/phase5-ci-preflight-target-resolve.sh
+
+      - name: Unit-test probe-only target measurement
+        shell: bash
+        run: bash tests/phase5-ci-preflight-probe-only.sh
 
       - name: Set up pinned depot_tools
         shell: bash
