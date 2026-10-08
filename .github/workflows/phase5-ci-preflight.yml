@@ -146,7 +146,7 @@ jobs:
           grep -F 'probe_small_target_gn_labels' "$workflow"
           grep -F 'PROBE_SMALL_TARGET_GN_LABELS' "$workflow"
           grep -F 'GN_TYPE_QUERY_BUDGET_SECONDS: 60' "$workflow"
-          grep -F 'PREFLIGHT_CACHE_HIT: ${{ steps.cache.outputs.cache-hit ||' "$workflow"
+          grep -F "steps.cache.outputs.cache-hit || 'false'" "$workflow"
           forbidden=(
             "upload-""artifact"
             "download-""artifact"
