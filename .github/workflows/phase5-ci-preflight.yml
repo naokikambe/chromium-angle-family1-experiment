@@ -118,6 +118,7 @@ jobs:
       REMOTE_EXECUTION_CONFIGURED: false
       REMOTE_CACHE_CONFIGURED: false
       GRAPH_INSPECTION_BUDGET_SECONDS: 300
+      GN_TYPE_QUERY_BUDGET_SECONDS: 60
 
     steps:
       - name: Check out preflight implementation
@@ -144,6 +145,7 @@ jobs:
           grep -F 'PROBE_SMALL_TARGET_NINJAS' "$workflow"
           grep -F 'probe_small_target_gn_labels' "$workflow"
           grep -F 'PROBE_SMALL_TARGET_GN_LABELS' "$workflow"
+          grep -F 'GN_TYPE_QUERY_BUDGET_SECONDS: 60' "$workflow"
           forbidden=(
             "upload-""artifact"
             "download-""artifact"
@@ -162,7 +164,8 @@ jobs:
             exit 1
           fi
           grep -F 'gn desc "$out_dir" "$candidate_label" type' "$script" >/dev/null
-          grep -F 'run_bounded "$inspection_budget" "$diag_dir/probe-target-type-$index-timeout" probe_candidate_type' "$script" >/dev/null
+          grep -F 'run_bounded "$type_query_budget" "$diag_dir/probe-target-type-$index-timeout" "$candidate_type_log" gn desc' "$script" >/dev/null
+          grep -F 'run_bounded "$inspection_budget" "$diag_dir/probe-target-$index-timeout" "$candidate_log" ninja' "$script" >/dev/null
           grep -F 'ninja-targets.txt' "$script" >/dev/null
           grep -F 'resolved-small-target' "$script" >/dev/null
           grep -F 'ninja -C "$out_dir" -n "$ninja_target"' "$script" >/dev/null

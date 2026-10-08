@@ -198,34 +198,49 @@ EOF
 run_bounded() {
   local budget_seconds="$1"
   local timeout_marker="$2"
-  shift 2
+  local log_file="$3"
+  shift 3
   rm -f "$timeout_marker"
-  "$@" &
-  local command_pid=$!
-  python3 -c 'import os, signal, sys, time
+  python3 - "$budget_seconds" "$timeout_marker" "$log_file" "$@" <<'PY'
+import os
+import signal
+import subprocess
+import sys
+
 budget = float(sys.argv[1])
-pid = int(sys.argv[2])
-marker = sys.argv[3]
-time.sleep(budget)
-try:
-    os.kill(pid, 0)
-except ProcessLookupError:
-    sys.exit(0)
-with open(marker, "w", encoding="utf-8"):
-    pass
-try:
-    os.kill(pid, signal.SIGTERM)
-except ProcessLookupError:
-    pass' "$budget_seconds" "$command_pid" "$timeout_marker" >/dev/null 2>&1 &
-  local watchdog_pid=$!
-  local rc
-  set +e
-  wait "$command_pid"
-  rc=$?
-  set -e
-  kill "$watchdog_pid" 2>/dev/null || true
-  wait "$watchdog_pid" 2>/dev/null || true
-  return "$rc"
+marker = sys.argv[2]
+log_path = sys.argv[3]
+command = sys.argv[4:]
+if not command:
+    raise SystemExit("run_bounded requires a command")
+
+with open(log_path, "w", encoding="utf-8") as log_file:
+    process = subprocess.Popen(
+        command,
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+    try:
+        raise SystemExit(process.wait(timeout=budget))
+    except subprocess.TimeoutExpired:
+        with open(marker, "w", encoding="utf-8"):
+            pass
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
+        raise SystemExit(124)
+PY
 }
 
 target_exists_in_list() {
@@ -342,7 +357,8 @@ graph_only() {
   [[ "$max_tasks" =~ ^[0-9]+$ ]] || fail 'invalid small target task cap'
   if [[ "${PROBE_SMALL_TARGET:-false}" == true ]]; then
     local requested_targets requested_labels candidate index candidate_log candidate_label candidate_label_name
-    local candidate_type_log candidate_type_info candidate_type plan_kinds plan_steps compile_steps link_steps other_steps unclassified_lines no_work_lines
+    local candidate_type_log candidate_type_info candidate_type candidate_type_status type_query_budget
+    local plan_kinds plan_steps compile_steps link_steps other_steps unclassified_lines no_work_lines
     local -a candidates=() candidate_labels=()
     requested_targets="${PROBE_SMALL_TARGET_NINJAS:-}"
     requested_labels="${PROBE_SMALL_TARGET_GN_LABELS:-}"
@@ -354,6 +370,7 @@ graph_only() {
     ((${#candidate_labels[@]} == ${#candidates[@]})) || fail 'probe target and GN label counts differ'
     local seen_candidates=' '
     inspection_budget="${GRAPH_INSPECTION_BUDGET_SECONDS:-300}"
+    type_query_budget="${GN_TYPE_QUERY_BUDGET_SECONDS:-60}"
     index=0
     for candidate in "${candidates[@]}"; do
       candidate="$(printf '%s' "$candidate" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
@@ -372,31 +389,8 @@ graph_only() {
         emit graph_inspection_status not-found
         return 1
       fi
-      candidate_type_log="$diag_dir/small-target-probe-type-$index.log"
-      probe_candidate_type() {
-        gn desc "$out_dir" "$candidate_label" type > "$candidate_type_log" 2>&1
-      }
-      if ! run_bounded "$inspection_budget" "$diag_dir/probe-target-type-$index-timeout" probe_candidate_type; then
-        if [[ -f "$diag_dir/probe-target-type-$index-timeout" ]]; then
-          emit "probe_candidate_${index}_type_status" timeout
-          emit graph_inspection_status timeout
-          return 124
-        fi
-        emit "probe_candidate_${index}_type_status" lookup-failure
-        emit graph_inspection_status probe-failure
-        return 1
-      fi
-      candidate_type="$(tr -d '\r\n' < "$candidate_type_log")"
-      [[ "$candidate_type" =~ ^[a-z_]+$ ]] || {
-        emit "probe_candidate_${index}_type_status" invalid-output
-        emit graph_inspection_status probe-failure
-        return 1
-      }
       candidate_log="$diag_dir/small-target-probe-$index.log"
-      probe_candidate() {
-        ninja -C "$out_dir" -n "$candidate" > "$candidate_log" 2>&1
-      }
-      if ! run_bounded "$inspection_budget" "$diag_dir/probe-target-$index-timeout" probe_candidate; then
+      if ! run_bounded "$inspection_budget" "$diag_dir/probe-target-$index-timeout" "$candidate_log" ninja -C "$out_dir" -n "$candidate"; then
         if [[ -f "$diag_dir/probe-target-$index-timeout" ]]; then
           emit "probe_candidate_${index}_status" timeout
           emit graph_inspection_status timeout
@@ -406,13 +400,32 @@ graph_only() {
         emit graph_inspection_status probe-failure
         return 1
       fi
+
+      # GN's type lookup walks the generated graph and can be slow on Chromium.
+      # It is supplemental metadata: capture it after the useful Ninja dry-run,
+      # bound it tightly, and keep the task-count result if the lookup stalls.
+      candidate_type_log="$diag_dir/small-target-probe-type-$index.log"
+      candidate_type=unknown
+      candidate_type_status=lookup-failure
+      if run_bounded "$type_query_budget" "$diag_dir/probe-target-type-$index-timeout" "$candidate_type_log" gn desc "$out_dir" "$candidate_label" type; then
+        candidate_type="$(tr -d '\r\n' < "$candidate_type_log")"
+        if [[ "$candidate_type" =~ ^[a-z_]+$ ]]; then
+          candidate_type_status=success
+        else
+          candidate_type=unknown
+          candidate_type_status=invalid-output
+        fi
+      elif [[ -f "$diag_dir/probe-target-type-$index-timeout" ]]; then
+        candidate_type_status=timeout
+      fi
+
       dry_run_task_count="$(awk 'NF { count++ } END { print count + 0 }' "$candidate_log")"
       candidate_type_info="$(summarize_ninja_plan "$candidate_log")"
       IFS=$'\t' read -r plan_kinds plan_steps compile_steps link_steps other_steps unclassified_lines no_work_lines <<< "$candidate_type_info"
       emit "probe_candidate_${index}_target" "$candidate"
       emit "probe_candidate_${index}_gn_label" "$candidate_label"
       emit "probe_candidate_${index}_gn_type" "$candidate_type"
-      emit "probe_candidate_${index}_type_status" success
+      emit "probe_candidate_${index}_type_status" "$candidate_type_status"
       emit "probe_candidate_${index}_dry_run_task_count" "$dry_run_task_count"
       emit "probe_candidate_${index}_dry_run_step_kinds" "$plan_kinds"
       emit "probe_candidate_${index}_recognized_step_count" "$plan_steps"
@@ -454,13 +467,9 @@ graph_only() {
   emit small_target_resolution "$resolution"
   emit small_target_max_tasks "$max_tasks"
   emit small_target_probe_only "${PROBE_SMALL_TARGET:-false}"
-  probe_target() {
-    # The target list is already generated for the graph count.  The bounded
-    # dry-run validates the resolved executable target without another graph
-    # description walk.
-    ninja -C "$out_dir" -n "$ninja_target" > "$diag_dir/small-target-dry-run.log" 2>&1
-  }
-  if run_bounded "$inspection_budget" "$diag_dir/graph-inspection-timeout" probe_target; then
+  # The target list is already generated for the graph count. The bounded
+  # dry-run validates the resolved executable target without another graph walk.
+  if run_bounded "$inspection_budget" "$diag_dir/graph-inspection-timeout" "$diag_dir/small-target-dry-run.log" ninja -C "$out_dir" -n "$ninja_target"; then
     dry_run_task_count="$(awk 'NF { count++ } END { print count + 0 }' "$diag_dir/small-target-dry-run.log")"
     emit small_target_dry_run_task_count "$dry_run_task_count"
     if (( dry_run_task_count > max_tasks )); then
@@ -583,7 +592,8 @@ classify() {
   local classification=unknown
   if [[ "$source_outcome" != success ]]; then
     classification=environment_failure
-  elif [[ -f "$diag_dir/small-target-timeout" || -f "$diag_dir/graph-inspection-timeout" ]]; then
+  elif [[ -f "$diag_dir/small-target-timeout" || -f "$diag_dir/graph-inspection-timeout" ]] ||
+    grep -Eq '^(graph_inspection_status|small_target_status)=timeout$' "$metrics_file"; then
     classification=timeout
   elif [[ "$graph_outcome" != success ]]; then
     if grep -E 'graph_inspection_status=(not-found|too-large)' "$metrics_file" >/dev/null 2>&1; then
