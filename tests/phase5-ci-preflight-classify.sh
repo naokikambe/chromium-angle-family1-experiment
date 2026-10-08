@@ -12,11 +12,32 @@ run_classify() {
     PREFLIGHT_GRAPH_OUTCOME="$2" \
     PREFLIGHT_SMALL_TARGET_OUTCOME="$3" \
     RUN_SMALL_TARGET="$4" \
+    PROBE_SMALL_TARGET="${5:-false}" \
     bash "$script" --classify
 }
 
 graph_only_output=$(run_classify success success skipped false)
 grep -F 'classification=success' <<< "$graph_only_output" >/dev/null
+
+printf '%s\n' 'small_target_status=probe-success' > "$tmp_dir/preflight-metrics.txt"
+probe_only_output=$(run_classify success success skipped false true)
+grep -F 'classification=success' <<< "$probe_only_output" >/dev/null
+rm -f "$tmp_dir/preflight-metrics.txt"
+
+if run_classify success success skipped false true > "$tmp_dir/probe-missing-status.out" 2>&1; then
+  printf '%s\n' 'probe without probe-success status was incorrectly accepted' >&2
+  exit 1
+fi
+grep -F 'classification=preflight_rejected' "$tmp_dir/probe-missing-status.out" >/dev/null
+
+if RUN_SMALL_TARGET=true \
+  PROBE_SMALL_TARGET=true \
+  PREFLIGHT_DIAG_DIR="$tmp_dir/mutually-exclusive" \
+  bash "$script" --validate-inputs > "$tmp_dir/mutually-exclusive.out" 2>&1; then
+  printf '%s\n' 'compile and probe modes were incorrectly accepted together' >&2
+  exit 1
+fi
+grep -F 'mutually exclusive' "$tmp_dir/mutually-exclusive.out" >/dev/null
 
 if run_classify success failure skipped false > "$tmp_dir/graph-failure.out" 2>&1; then
   printf '%s\n' 'graph failure was incorrectly accepted' >&2

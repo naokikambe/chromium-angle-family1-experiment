@@ -116,6 +116,8 @@ inventory() {
   emit cache_hit "${PREFLIGHT_CACHE_HIT:-not-run}"
   emit source_present "$([[ -d "$source_dir" ]] && printf true || printf false)"
   emit deps_present "$([[ -f "$source_dir/DEPS" ]] && printf true || printf false)"
+  emit run_small_target "${RUN_SMALL_TARGET:-false}"
+  emit probe_small_target "${PROBE_SMALL_TARGET:-false}"
   emit siso_mode_requested "${SISO_MODE_REQUESTED:-unknown}"
   emit siso_mode_effective "${SISO_MODE_EFFECTIVE:-not-run}"
   emit fastlocal_requested "${FASTLOCAL_REQUESTED:-unknown}"
@@ -126,6 +128,9 @@ inventory() {
 }
 
 validate_inputs() {
+  if [[ "${RUN_SMALL_TARGET:-false}" == true && "${PROBE_SMALL_TARGET:-false}" == true ]]; then
+    fail 'run_small_target and probe_small_target are mutually exclusive'
+  fi
   [[ "${CHROMIUM_REVISION:-}" =~ ^[0-9a-f]{40}$ ]] || fail 'invalid Chromium revision'
   [[ "${ANGLE_REVISION:-}" =~ ^[0-9a-f]{40}$ ]] || fail 'invalid ANGLE revision'
   [[ "${PREFLIGHT_TARGET_REF_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || fail 'invalid target ref'
@@ -285,7 +290,7 @@ graph_only() {
   ninja_targets_file="$diag_dir/ninja-targets.txt"
   (cd "$source_dir" && ninja -C "$out_dir" -t targets all > "$ninja_targets_file" 2> "$diag_dir/ninja-targets-stderr.log")
   emit graph_target_count "$(wc -l < "$ninja_targets_file" | tr -d ' ')"
-  if [[ "${RUN_SMALL_TARGET:-false}" != true ]]; then
+  if [[ "${RUN_SMALL_TARGET:-false}" != true && "${PROBE_SMALL_TARGET:-false}" != true ]]; then
     emit graph_inspection_status not-run
     emit small_target_status not-run
     return 0
@@ -312,6 +317,7 @@ graph_only() {
   emit small_target_ninja "$ninja_target"
   emit small_target_resolution "$resolution"
   emit small_target_max_tasks "$max_tasks"
+  emit small_target_probe_only "${PROBE_SMALL_TARGET:-false}"
   probe_target() {
     # The target list is already generated for the graph count.  The bounded
     # dry-run validates the resolved executable target without another graph
@@ -329,6 +335,9 @@ graph_only() {
     fi
     emit small_target_available true
     emit small_target_probe ninja-dry-run
+    if [[ "${PROBE_SMALL_TARGET:-false}" == true ]]; then
+      emit small_target_status probe-success
+    fi
     emit graph_inspection_status success
   elif [[ -f "$diag_dir/graph-inspection-timeout" ]]; then
     emit graph_inspection_status timeout
@@ -372,6 +381,10 @@ sample_progress() {
 
 small_target() {
   [[ "${RUN_SMALL_TARGET:-false}" == true ]] || { emit small_target_status not-run; return 0; }
+  if [[ "${PROBE_SMALL_TARGET:-false}" == true ]]; then
+    emit small_target_status probe-only
+    return 1
+  fi
   [[ -f "$diag_dir/small-target-dry-run.log" ]] || { emit small_target_status preflight-rejected; return 1; }
   command -v autoninja >/dev/null 2>&1 || fail 'autoninja unavailable'
   : > "$progress_file"
@@ -446,10 +459,15 @@ classify() {
       classification=environment_failure
     fi
   elif [[ "${RUN_SMALL_TARGET:-false}" != true ]]; then
-    # Graph-only preflight is an intentional successful mode. The small-target
-    # step is skipped in this mode and must not turn a valid graph result into
-    # an environment failure.
-    classification=success
+    # Graph-only and probe-only preflights are intentional successful modes.
+    # The compile step is skipped in both modes and must not turn a valid graph
+    # result into an environment failure.
+    if [[ "${PROBE_SMALL_TARGET:-false}" == true ]] &&
+      ! grep -F 'small_target_status=probe-success' "$metrics_file" >/dev/null 2>&1; then
+      classification=preflight_rejected
+    else
+      classification=success
+    fi
   elif [[ "$small_target_outcome" != success ]]; then
     if grep -E '(^|[[:space:]])(FAILED:|fatal error:|error:)' "$build_log" >/dev/null 2>&1; then
       classification=compiler_failure

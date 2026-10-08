@@ -28,6 +28,11 @@ on:
         required: true
         default: false
         type: boolean
+      probe_small_target:
+        description: Dry-run one exploratory target and never compile it
+        required: true
+        default: false
+        type: boolean
       small_target_label:
         description: GN label for the exploratory services unit target (includes network tests)
         required: true
@@ -91,6 +96,7 @@ jobs:
       GN_ARGS_SHA256: 93d807c331865f0eec2dd2e08acee5466397e9fd4f8fa7594f1fbab756631495
       DEPOT_TOOLS_REVISION: 0306e4682b4ac35287c726fa35a983157a625902
       RUN_SMALL_TARGET: ${{ inputs.run_small_target }}
+      PROBE_SMALL_TARGET: ${{ inputs.probe_small_target }}
       SMALL_TARGET_LABEL: ${{ inputs.small_target_label }}
       SMALL_TARGET_NINJA: ${{ inputs.small_target_ninja }}
       SMALL_TARGET_MAX_TASKS: 12000
@@ -121,6 +127,8 @@ jobs:
           grep -F 'actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684' "$workflow"
           grep -F 'contents: read' "$workflow"
           grep -F 'persist-credentials: false' "$workflow"
+          grep -F 'probe_small_target' "$workflow"
+          grep -F 'PROBE_SMALL_TARGET' "$workflow"
           forbidden=(
             "upload-""artifact"
             "download-""artifact"
@@ -211,7 +219,7 @@ jobs:
 
       - name: Compile exploratory target only
         id: small_target
-        if: ${{ inputs.run_small_target == true && steps.graph.outcome == 'success' }}
+        if: ${{ inputs.run_small_target == true && inputs.probe_small_target != true && steps.graph.outcome == 'success' }}
         continue-on-error: true
         timeout-minutes: 25
         run: scripts/phase5-ci-preflight.sh --small-target
