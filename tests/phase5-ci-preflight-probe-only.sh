@@ -22,6 +22,7 @@ elif [[ "$1" == desc && "$4" == type ]]; then
   case "$3" in
     //services/network:network_content_security_policy_fuzzer) printf '%s\n' executable ;;
     //content/browser:content_sms_parser_fuzzer) printf '%s\n' group ;;
+    //url:url_unittests) printf '%s\n' executable ;;
     *) exit 2 ;;
   esac
 else
@@ -35,7 +36,13 @@ if [[ -n "${FAKE_TRACE_LOG:-}" ]]; then
   printf 'ninja:%s\n' "$*" >> "$FAKE_TRACE_LOG"
 fi
 if [[ "$*" == *"-t targets all"* ]]; then
-  printf '%s\n' 'network_content_security_policy_fuzzer: phony' 'content_sms_parser_fuzzer: phony'
+  printf '%s\n' 'network_content_security_policy_fuzzer: phony' 'content_sms_parser_fuzzer: phony' 'url_unittests: phony'
+elif [[ "$*" == *"-t query network_content_security_policy_fuzzer"* ]]; then
+  printf '%s\n' 'network_content_security_policy_fuzzer:' '  input: phony' '    obj/services/network/network_content_security_policy_fuzzer.stamp' '  outputs:' '    all'
+elif [[ "$*" == *"-t query content_sms_parser_fuzzer"* ]]; then
+  printf '%s\n' 'content_sms_parser_fuzzer:' '  input: phony' '    obj/content/browser/content_sms_parser_fuzzer.stamp' '  outputs:' '    all'
+elif [[ "$*" == *"-t query url_unittests"* ]]; then
+  printf '%s\n' 'url_unittests:' '  input: phony' '    obj/url/url_unittests.stamp' '  outputs:' '    all'
 elif [[ "$*" == *"-n network_content_security_policy_fuzzer"* ]]; then
   if [[ "${FAKE_NINJA_DRY_RUN_MODE:-}" == slow ]]; then
     exec sleep 5
@@ -52,6 +59,14 @@ elif [[ "$*" == *"-n content_sms_parser_fuzzer"* ]]; then
     exit 0
   fi
   printf '%s\n' '[1/5] CXX obj/one.o' '[2/5] CXX obj/two.o' '[3/5] LINK obj/test' '[4/5] STAMP obj/a.stamp' '[5/5] STAMP obj/b.stamp'
+elif [[ "$*" == *"-n url_unittests"* ]]; then
+  if [[ "${FAKE_NINJA_DRY_RUN_MODE:-}" == slow ]]; then
+    exec sleep 5
+  elif [[ "${FAKE_NINJA_DRY_RUN_MODE:-}" == no-work ]]; then
+    printf '%s\n' 'ninja: Entering directory' 'ninja: no work to do.'
+    exit 0
+  fi
+  printf '%s\n' '[1/2] CXX obj/url/url_unittests.o' '[2/2] LINK url_unittests'
 else
   printf 'unexpected ninja invocation: %s\n' "$*" >&2
   exit 2
@@ -63,7 +78,29 @@ set -euo pipefail
 : > "$PREFLIGHT_DIAG_DIR/autoninja-was-run"
 exit 99
 EOF
-chmod +x "$tmp_dir/bin/gn" "$tmp_dir/bin/ninja" "$tmp_dir/bin/autoninja"
+cat > "$tmp_dir/bin/siso" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$1" == --version ]] || exit 2
+[[ -f build/config/siso/.sisoenv ]] || { printf '%s\n' 'project .sisoenv missing' >&2; exit 3; }
+printf '%s\n' 'siso test-version-1.2.3'
+EOF
+chmod +x "$tmp_dir/bin/gn" "$tmp_dir/bin/ninja" "$tmp_dir/bin/autoninja" "$tmp_dir/bin/siso"
+
+mkdir -p "$tmp_dir/source/src/build/config/siso"
+touch "$tmp_dir/source/src/build/config/siso/.sisoenv"
+post_sync_facts_output=$(
+  PATH="$tmp_dir/bin:$PATH" \
+  PREFLIGHT_DIAG_DIR="$tmp_dir/post-sync-diag" \
+  CHROMIUM_ROOT="$tmp_dir/source" \
+  SISO_MODE_REQUESTED=not-run \
+  FASTLOCAL_REQUESTED=not-run \
+  bash "$script" --post-sync-facts
+)
+grep -F 'siso_project_env_present_after_sync=true' <<< "$post_sync_facts_output" >/dev/null
+grep -F 'siso_version_after_sync=siso test-version-1.2.3' <<< "$post_sync_facts_output" >/dev/null
+grep -F 'siso_version_after_sync_status=success' <<< "$post_sync_facts_output" >/dev/null
+grep -F 'siso_mode_effective=not-run' <<< "$post_sync_facts_output" >/dev/null
 
 probe_output=$(
   PATH="$tmp_dir/bin:$PATH" \
@@ -71,8 +108,8 @@ probe_output=$(
   CHROMIUM_ROOT="$tmp_dir/source" \
   RUN_SMALL_TARGET=false \
   PROBE_SMALL_TARGET=true \
-  PROBE_SMALL_TARGET_NINJAS=network_content_security_policy_fuzzer,content_sms_parser_fuzzer \
-  PROBE_SMALL_TARGET_GN_LABELS=//services/network:network_content_security_policy_fuzzer,//content/browser:content_sms_parser_fuzzer \
+  PROBE_SMALL_TARGET_NINJAS=network_content_security_policy_fuzzer,content_sms_parser_fuzzer,url_unittests \
+  PROBE_SMALL_TARGET_GN_LABELS=//services/network:network_content_security_policy_fuzzer,//content/browser:content_sms_parser_fuzzer,//url:url_unittests \
   SMALL_TARGET_MAX_TASKS=4 \
   FAKE_TRACE_LOG="$tmp_dir/normal-trace.log" \
   bash "$script" --graph-only
@@ -90,6 +127,10 @@ grep -F 'probe_candidate_2_gn_type=group' <<< "$probe_output" >/dev/null
 grep -F 'probe_candidate_2_compile_step_count=2' <<< "$probe_output" >/dev/null
 grep -F 'probe_candidate_2_link_step_count=1' <<< "$probe_output" >/dev/null
 grep -F 'probe_candidate_2_status=too-large' <<< "$probe_output" >/dev/null
+grep -F 'probe_candidate_3_dry_run_task_count=2' <<< "$probe_output" >/dev/null
+grep -F 'probe_candidate_3_gn_type=executable' <<< "$probe_output" >/dev/null
+grep -F 'probe_candidate_3_status=within-cap' <<< "$probe_output" >/dev/null
+grep -F 'small_target_probe_measurement=task-counted' <<< "$probe_output" >/dev/null
 grep -F 'small_target_status=probe-success' <<< "$probe_output" >/dev/null
 test ! -e "$tmp_dir/diag/autoninja-was-run"
 first_dry_run_line=$(grep -n -F 'ninja:-C ' "$tmp_dir/normal-trace.log" | grep -F -- '-n network_content_security_policy_fuzzer' | head -n 1 | cut -d: -f1)
@@ -102,9 +143,10 @@ no_work_output=$(
   CHROMIUM_ROOT="$tmp_dir/source" \
   RUN_SMALL_TARGET=false \
   PROBE_SMALL_TARGET=true \
-  PROBE_SMALL_TARGET_NINJAS=network_content_security_policy_fuzzer,content_sms_parser_fuzzer \
-  PROBE_SMALL_TARGET_GN_LABELS=//services/network:network_content_security_policy_fuzzer,//content/browser:content_sms_parser_fuzzer \
+  PROBE_SMALL_TARGET_NINJAS=network_content_security_policy_fuzzer,content_sms_parser_fuzzer,url_unittests \
+  PROBE_SMALL_TARGET_GN_LABELS=//services/network:network_content_security_policy_fuzzer,//content/browser:content_sms_parser_fuzzer,//url:url_unittests \
   SMALL_TARGET_MAX_TASKS=4 \
+  NINJA_QUERY_BUDGET_SECONDS=1 \
   FAKE_NINJA_DRY_RUN_MODE=no-work \
   bash "$script" --graph-only
 )
@@ -112,8 +154,13 @@ grep -F 'probe_candidate_1_dry_run_task_count=0' <<< "$no_work_output" >/dev/nul
 grep -F 'probe_candidate_1_dry_run_output_line_count=2' <<< "$no_work_output" >/dev/null
 grep -F 'probe_candidate_1_no_work_line_count=1' <<< "$no_work_output" >/dev/null
 grep -F 'probe_candidate_1_status=no-work' <<< "$no_work_output" >/dev/null
+grep -F 'probe_candidate_1_dry_run_excerpt=ninja: Entering directory ninja: no work to do.' <<< "$no_work_output" >/dev/null
+grep -F 'probe_candidate_1_ninja_query_status=success' <<< "$no_work_output" >/dev/null
+grep -F 'probe_candidate_1_ninja_query_excerpt=network_content_security_policy_fuzzer: input: phony obj/services/network/network_content_security_policy_fuzzer.stamp outputs: all' <<< "$no_work_output" >/dev/null
 grep -F 'probe_candidate_2_dry_run_task_count=0' <<< "$no_work_output" >/dev/null
 grep -F 'probe_candidate_2_status=no-work' <<< "$no_work_output" >/dev/null
+grep -F 'probe_candidate_3_status=no-work' <<< "$no_work_output" >/dev/null
+grep -F 'small_target_probe_measurement=no-work' <<< "$no_work_output" >/dev/null
 grep -F 'graph_inspection_status=success' <<< "$no_work_output" >/dev/null
 
 slow_type_output=$(
@@ -122,8 +169,8 @@ slow_type_output=$(
   CHROMIUM_ROOT="$tmp_dir/source" \
   RUN_SMALL_TARGET=false \
   PROBE_SMALL_TARGET=true \
-  PROBE_SMALL_TARGET_NINJAS=network_content_security_policy_fuzzer,content_sms_parser_fuzzer \
-  PROBE_SMALL_TARGET_GN_LABELS=//services/network:network_content_security_policy_fuzzer,//content/browser:content_sms_parser_fuzzer \
+  PROBE_SMALL_TARGET_NINJAS=network_content_security_policy_fuzzer,content_sms_parser_fuzzer,url_unittests \
+  PROBE_SMALL_TARGET_GN_LABELS=//services/network:network_content_security_policy_fuzzer,//content/browser:content_sms_parser_fuzzer,//url:url_unittests \
   SMALL_TARGET_MAX_TASKS=4 \
   GN_TYPE_QUERY_BUDGET_SECONDS=1 \
   FAKE_GN_DESC_MODE=slow \
@@ -151,8 +198,8 @@ if PATH="$tmp_dir/bin:$PATH" \
   CHROMIUM_ROOT="$tmp_dir/source" \
   RUN_SMALL_TARGET=false \
   PROBE_SMALL_TARGET=true \
-  PROBE_SMALL_TARGET_NINJAS=network_content_security_policy_fuzzer,content_sms_parser_fuzzer \
-  PROBE_SMALL_TARGET_GN_LABELS=//services/network:network_content_security_policy_fuzzer,//content/browser:content_sms_parser_fuzzer \
+  PROBE_SMALL_TARGET_NINJAS=network_content_security_policy_fuzzer,content_sms_parser_fuzzer,url_unittests \
+  PROBE_SMALL_TARGET_GN_LABELS=//services/network:network_content_security_policy_fuzzer,//content/browser:content_sms_parser_fuzzer,//url:url_unittests \
   SMALL_TARGET_MAX_TASKS=4 \
   GRAPH_INSPECTION_BUDGET_SECONDS=1 \
   FAKE_NINJA_DRY_RUN_MODE=slow \

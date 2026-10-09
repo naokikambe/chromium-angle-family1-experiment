@@ -101,11 +101,7 @@ inventory() {
   emit autoninja_path "$(command_path autoninja)"
   emit gn_path "$(command_path gn)"
   emit siso_path "$(command_path siso)"
-  if command -v siso >/dev/null 2>&1; then
-    emit siso_version "$(siso --version 2>&1 | head -n 1 || printf unavailable)"
-  else
-    emit siso_version unavailable
-  fi
+  emit siso_version_pre_sync not-run-before-source-sync
   emit chromium_revision "${CHROMIUM_REVISION:-unknown}"
   emit angle_revision_input "${ANGLE_REVISION:-unknown}"
   emit deps_file_sha256 "${DEPS_FILE_SHA256:-not-yet-fetched}"
@@ -193,6 +189,41 @@ EOF
   expected=$(printf '%s\n' base/process/launch_mac.cc content/browser/storage_partition_impl.cc services/network/url_loader.cc services/network/url_loader_factory.cc skia/ext/skia_utils_mac.mm)
   [[ "$(git -C "$source_dir" status --short | sed 's/^.. //' | LC_ALL=C sort)" == "$expected" ]] || fail 'unexpected temporary source changes'
   emit patches_applied true
+}
+
+post_sync_facts() {
+  [[ -d "$source_dir" ]] || fail 'source is not present for post-sync facts'
+  local siso_env siso_path version_log version_marker version_line rc
+  siso_env="$source_dir/build/config/siso/.sisoenv"
+  if [[ -f "$siso_env" ]]; then
+    emit siso_project_env_present_after_sync true
+  else
+    emit siso_project_env_present_after_sync false
+  fi
+  siso_path="$(command_path siso)"
+  emit siso_path_after_sync "$siso_path"
+  version_log="$diag_dir/siso-version-after-sync.log"
+  version_marker="$diag_dir/siso-version-after-sync-timeout"
+  if [[ "$siso_path" == missing ]]; then
+    emit siso_version_after_sync unavailable
+    emit siso_version_after_sync_status missing
+  elif (cd "$source_dir" && run_bounded "${SISO_VERSION_BUDGET_SECONDS:-10}" "$version_marker" "$version_log" siso --version); then
+    version_line="$(head -n 1 "$version_log" | tr '\r\n' ' ' | cut -c 1-240)"
+    emit siso_version_after_sync "${version_line:-empty}"
+    emit siso_version_after_sync_status success
+  else
+    rc=$?
+    if [[ -f "$version_marker" ]]; then
+      emit siso_version_after_sync_status timeout
+    else
+      emit siso_version_after_sync_status "command-failed-$rc"
+    fi
+    version_line="$(head -n 1 "$version_log" 2>/dev/null | tr '\r\n' ' ' | cut -c 1-240)"
+    emit siso_version_after_sync_output "${version_line:-empty}"
+  fi
+  emit siso_mode_effective not-run
+  emit fastlocal_effective not-run
+  emit localexec_parallelism not-run
 }
 
 run_bounded() {
@@ -359,6 +390,7 @@ graph_only() {
   if [[ "${PROBE_SMALL_TARGET:-false}" == true ]]; then
     local requested_targets requested_labels candidate index candidate_log candidate_label candidate_label_name
     local candidate_type_log candidate_type_info candidate_type candidate_type_status type_query_budget
+    local candidate_query_log candidate_query_excerpt candidate_dry_run_excerpt query_budget no_work_candidates
     local plan_kinds plan_steps compile_steps link_steps other_steps unclassified_lines no_work_lines
     local -a candidates=() candidate_labels=()
     requested_targets="${PROBE_SMALL_TARGET_NINJAS:-}"
@@ -372,6 +404,9 @@ graph_only() {
     local seen_candidates=' '
     inspection_budget="${GRAPH_INSPECTION_BUDGET_SECONDS:-300}"
     type_query_budget="${GN_TYPE_QUERY_BUDGET_SECONDS:-60}"
+    query_budget="${NINJA_QUERY_BUDGET_SECONDS:-20}"
+    [[ "$query_budget" =~ ^[0-9]+$ ]] || fail 'invalid Ninja query budget'
+    no_work_candidates=0
     index=0
     for candidate in "${candidates[@]}"; do
       candidate="$(printf '%s' "$candidate" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
@@ -430,6 +465,8 @@ graph_only() {
       emit "probe_candidate_${index}_type_status" "$candidate_type_status"
       emit "probe_candidate_${index}_dry_run_task_count" "$dry_run_task_count"
       emit "probe_candidate_${index}_dry_run_output_line_count" "$dry_run_output_line_count"
+      candidate_dry_run_excerpt="$(head -n 4 "$candidate_log" | tr '\r\n' ' ' | cut -c 1-300)"
+      emit "probe_candidate_${index}_dry_run_excerpt" "${candidate_dry_run_excerpt:-empty}"
       emit "probe_candidate_${index}_dry_run_step_kinds" "$plan_kinds"
       emit "probe_candidate_${index}_recognized_step_count" "$plan_steps"
       emit "probe_candidate_${index}_compile_step_count" "$compile_steps"
@@ -441,6 +478,19 @@ graph_only() {
         emit "probe_candidate_${index}_status" too-large
       elif (( dry_run_task_count == 0 && no_work_lines > 0 )); then
         emit "probe_candidate_${index}_status" no-work
+        no_work_candidates=$((no_work_candidates + 1))
+        candidate_query_log="$diag_dir/small-target-probe-query-$index.log"
+        if run_bounded "$query_budget" "$diag_dir/probe-target-query-$index-timeout" "$candidate_query_log" ninja -C "$out_dir" -t query "$candidate"; then
+          candidate_query_excerpt="$(head -n 8 "$candidate_query_log" | tr '\r\n' ' ' | cut -c 1-400)"
+          emit "probe_candidate_${index}_ninja_query_status" success
+          emit "probe_candidate_${index}_ninja_query_excerpt" "${candidate_query_excerpt:-empty}"
+        elif [[ -f "$diag_dir/probe-target-query-$index-timeout" ]]; then
+          emit "probe_candidate_${index}_ninja_query_status" timeout
+        else
+          emit "probe_candidate_${index}_ninja_query_status" failure
+          candidate_query_excerpt="$(head -n 4 "$candidate_query_log" 2>/dev/null | tr '\r\n' ' ' | cut -c 1-300)"
+          emit "probe_candidate_${index}_ninja_query_excerpt" "${candidate_query_excerpt:-empty}"
+        fi
       else
         emit "probe_candidate_${index}_status" within-cap
       fi
@@ -448,6 +498,13 @@ graph_only() {
     emit small_target_probe_only true
     emit small_target_probe_count "$index"
     emit small_target_max_tasks "$max_tasks"
+    if (( no_work_candidates == index )); then
+      emit small_target_probe_measurement no-work
+    elif (( no_work_candidates > 0 )); then
+      emit small_target_probe_measurement mixed
+    else
+      emit small_target_probe_measurement task-counted
+    fi
     emit small_target_status probe-success
     emit graph_inspection_status success
     return 0
@@ -651,6 +708,7 @@ case "$mode" in
   --inventory-only) inventory ;;
   --validate-inputs) validate_inputs ;;
   --source-deps) source_deps ;;
+  --post-sync-facts) post_sync_facts ;;
   --resolve-target) resolve_target_only ;;
   --graph-only) graph_only ;;
   --small-target) small_target ;;

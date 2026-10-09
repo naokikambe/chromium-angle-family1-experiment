@@ -36,12 +36,12 @@ on:
       probe_small_target_ninjas:
         description: Comma-separated Ninja targets measured by probe-only mode
         required: true
-        default: network_content_security_policy_fuzzer,content_sms_parser_fuzzer
+        default: network_content_security_policy_fuzzer,content_sms_parser_fuzzer,url_unittests
         type: string
       probe_small_target_gn_labels:
         description: Comma-separated GN labels matching the probe targets in the same order
         required: true
-        default: //services/network:network_content_security_policy_fuzzer,//content/browser:content_sms_parser_fuzzer
+        default: //services/network:network_content_security_policy_fuzzer,//content/browser:content_sms_parser_fuzzer,//url:url_unittests
         type: string
       small_target_label:
         description: GN label for the exploratory services unit target (includes network tests)
@@ -113,12 +113,13 @@ jobs:
       SMALL_TARGET_NINJA: ${{ inputs.small_target_ninja }}
       SMALL_TARGET_MAX_TASKS: 12000
       SMALL_TARGET_BUDGET_SECONDS: 1200
-      SISO_MODE_REQUESTED: unknown
-      FASTLOCAL_REQUESTED: unknown
+      SISO_MODE_REQUESTED: not-run
+      FASTLOCAL_REQUESTED: not-run
       REMOTE_EXECUTION_CONFIGURED: false
       REMOTE_CACHE_CONFIGURED: false
       GRAPH_INSPECTION_BUDGET_SECONDS: 300
-      GN_TYPE_QUERY_BUDGET_SECONDS: 60
+      GN_TYPE_QUERY_BUDGET_SECONDS: 15
+      NINJA_QUERY_BUDGET_SECONDS: 20
 
     steps:
       - name: Check out preflight implementation
@@ -145,7 +146,8 @@ jobs:
           grep -F 'PROBE_SMALL_TARGET_NINJAS' "$workflow"
           grep -F 'probe_small_target_gn_labels' "$workflow"
           grep -F 'PROBE_SMALL_TARGET_GN_LABELS' "$workflow"
-          grep -F 'GN_TYPE_QUERY_BUDGET_SECONDS: 60' "$workflow"
+          grep -F 'GN_TYPE_QUERY_BUDGET_SECONDS: 15' "$workflow"
+          grep -F 'NINJA_QUERY_BUDGET_SECONDS: 20' "$workflow"
           grep -F "steps.cache.outputs.cache-hit || 'false'" "$workflow"
           forbidden=(
             "upload-""artifact"
@@ -169,6 +171,9 @@ jobs:
           grep -F 'run_bounded "$inspection_budget" "$diag_dir/probe-target-$index-timeout" "$candidate_log" ninja' "$script" >/dev/null
           grep -F 'process.terminate()' "$script" >/dev/null
           grep -F 'process.kill()' "$script" >/dev/null
+          grep -F 'siso --version' "$script" >/dev/null
+          grep -F 'small_target_probe_measurement' "$script" >/dev/null
+          grep -F 'ninja -C "$out_dir" -t query "$candidate"' "$script" >/dev/null
           grep -F 'dry_run_task_count="$plan_steps"' "$script" >/dev/null
           grep -F 'ninja-targets.txt' "$script" >/dev/null
           grep -F 'resolved-small-target' "$script" >/dev/null
@@ -233,6 +238,13 @@ jobs:
         continue-on-error: true
         timeout-minutes: 55
         run: scripts/phase5-ci-preflight.sh --source-deps
+
+      - name: Collect post-sync Siso facts
+        id: post_sync_facts
+        if: steps.source_deps.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 1
+        run: scripts/phase5-ci-preflight.sh --post-sync-facts
 
       - name: Generate graph and probe exploratory target
         id: graph
