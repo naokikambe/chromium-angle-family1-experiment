@@ -385,7 +385,7 @@ graph_only() {
     return 0
   fi
   local max_tasks dry_run_task_count
-  max_tasks="${SMALL_TARGET_MAX_TASKS:-12000}"
+  max_tasks="${SMALL_TARGET_MAX_TASKS:-2000}"
   [[ "$max_tasks" =~ ^[0-9]+$ ]] || fail 'invalid small target task cap'
   if [[ "${PROBE_SMALL_TARGET:-false}" == true ]]; then
     local requested_targets requested_labels candidate index candidate_log candidate_label candidate_label_name
@@ -561,28 +561,6 @@ graph_only() {
   fi
 }
 
-sample_progress() {
-  local now elapsed p completed total remaining rate estimate
-  now=$(date +%s)
-  elapsed=$((now - ${BUILD_START_SECONDS:-now}))
-  p=$(grep -Eo '\[[0-9]+/[0-9]+\]' "$build_log" | tail -n 1 || true)
-  completed=$(printf '%s' "$p" | sed -nE 's/^\[([0-9]+)\/([0-9]+)\]$/\1/p')
-  total=$(printf '%s' "$p" | sed -nE 's/^\[([0-9]+)\/([0-9]+)\]$/\2/p')
-  completed="${completed:-unknown}"
-  total="${total:-unknown}"
-  if [[ "$completed" =~ ^[0-9]+$ && "$total" =~ ^[0-9]+$ && "$elapsed" -gt 0 ]]; then
-    remaining=$((total - completed))
-    rate=$(awk -v c="$completed" -v e="$elapsed" 'BEGIN { printf "%.4f", c / e }')
-    estimate=$(awk -v r="$remaining" -v q="$rate" 'BEGIN { if (q > 0) printf "%d", r / q; else print "unknown" }')
-  else
-    remaining=unknown
-    rate=unknown
-    estimate=unknown
-  fi
-  printf 'sample_utc=%s elapsed_seconds=%s tasks_completed=%s tasks_total=%s tasks_remaining=%s completed_per_second=%s estimated_remaining_seconds=%s\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$elapsed" "$completed" "$total" "$remaining" "$rate" "$estimate" >> "$progress_file"
-}
-
 small_target() {
   [[ "${RUN_SMALL_TARGET:-false}" == true ]] || { emit small_target_status not-run; return 0; }
   if [[ "${PROBE_SMALL_TARGET:-false}" == true ]]; then
@@ -591,11 +569,11 @@ small_target() {
   fi
   [[ -f "$diag_dir/small-target-dry-run.log" ]] || { emit small_target_status preflight-rejected; return 1; }
   command -v autoninja >/dev/null 2>&1 || fail 'autoninja unavailable'
+  command -v python3 >/dev/null 2>&1 || fail 'python3 unavailable for bounded build supervision'
   : > "$progress_file"
   : > "$build_log"
-  BUILD_START_SECONDS=$(date +%s)
-  export BUILD_START_SECONDS
-  local build_pid monitor_pid watchdog_pid rc ninja_target
+  rm -f "$diag_dir/small-target-timeout"
+  local rc ninja_target supervisor_script
   if [[ -f "$diag_dir/resolved-small-target" ]]; then
     IFS= read -r ninja_target < "$diag_dir/resolved-small-target"
   else
@@ -606,30 +584,19 @@ small_target() {
     return 1
   }
   emit small_target_ninja "$ninja_target"
-  (cd "$source_dir" && autoninja -C out/Phase5Preflight "$ninja_target" > "$build_log" 2>&1) &
-  build_pid=$!
-  (
-    while kill -0 "$build_pid" 2>/dev/null; do
-      sample_progress
-      sleep 60
-    done
-  ) &
-  monitor_pid=$!
-  (
-    sleep "${SMALL_TARGET_BUDGET_SECONDS:-1200}"
-    if kill -0 "$build_pid" 2>/dev/null; then
-      : > "$diag_dir/small-target-timeout"
-      kill -TERM "$build_pid" 2>/dev/null || true
-    fi
-  ) &
-  watchdog_pid=$!
-  set +e
-  wait "$build_pid"
-  rc=$?
-  set -e
-  kill "$monitor_pid" "$watchdog_pid" 2>/dev/null || true
-  wait "$monitor_pid" "$watchdog_pid" 2>/dev/null || true
-  sample_progress || true
+  supervisor_script="$workspace/scripts/phase5-ci-preflight-build-supervisor.py"
+  [[ -f "$supervisor_script" ]] || fail 'bounded build supervisor script missing'
+  if python3 "$supervisor_script" \
+    --cwd "$source_dir" \
+    --target "$ninja_target" \
+    --build-log "$build_log" \
+    --progress-log "$progress_file" \
+    --timeout-marker "$diag_dir/small-target-timeout" \
+    --budget-seconds "${SMALL_TARGET_BUDGET_SECONDS:-1200}"; then
+    rc=0
+  else
+    rc=$?
+  fi
   if [[ -f "$diag_dir/small-target-timeout" ]]; then
     emit small_target_status timeout
     return 124

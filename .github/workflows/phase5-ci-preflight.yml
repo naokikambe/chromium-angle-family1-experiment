@@ -111,7 +111,7 @@ jobs:
       PROBE_SMALL_TARGET_GN_LABELS: ${{ inputs.probe_small_target_gn_labels }}
       SMALL_TARGET_LABEL: ${{ inputs.small_target_label }}
       SMALL_TARGET_NINJA: ${{ inputs.small_target_ninja }}
-      SMALL_TARGET_MAX_TASKS: 12000
+      SMALL_TARGET_MAX_TASKS: 2000
       SMALL_TARGET_BUDGET_SECONDS: 1200
       SISO_MODE_REQUESTED: not-run
       FASTLOCAL_REQUESTED: not-run
@@ -135,7 +135,16 @@ jobs:
           set -euo pipefail
           workflow=.github/workflows/phase5-ci-preflight.yml
           script=scripts/phase5-ci-preflight.sh
+          build_supervisor=scripts/phase5-ci-preflight-build-supervisor.py
           bash -n "$script"
+          test -f "$build_supervisor"
+          python3 - "$build_supervisor" <<'PY'
+          import ast
+          import pathlib
+          import sys
+
+          ast.parse(pathlib.Path(sys.argv[1]).read_text(), filename=sys.argv[1])
+          PY
           grep -F 'runs-on: macos-15-intel' "$workflow"
           grep -F 'timeout-minutes: 120' "$workflow"
           grep -F 'actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684' "$workflow"
@@ -148,6 +157,7 @@ jobs:
           grep -F 'PROBE_SMALL_TARGET_GN_LABELS' "$workflow"
           grep -F 'GN_TYPE_QUERY_BUDGET_SECONDS: 15' "$workflow"
           grep -F 'NINJA_QUERY_BUDGET_SECONDS: 20' "$workflow"
+          grep -F 'SMALL_TARGET_MAX_TASKS: 2000' "$workflow"
           grep -F "steps.cache.outputs.cache-hit || 'false'" "$workflow"
           forbidden=(
             "upload-""artifact"
@@ -178,6 +188,11 @@ jobs:
           grep -F 'ninja-targets.txt' "$script" >/dev/null
           grep -F 'resolved-small-target' "$script" >/dev/null
           grep -F 'ninja -C "$out_dir" -n "$ninja_target"' "$script" >/dev/null
+          grep -F 'phase5-ci-preflight-build-supervisor.py' "$script" >/dev/null
+          grep -F 'start_new_session=True' "$build_supervisor" >/dev/null
+          grep -F 'os.killpg' "$build_supervisor" >/dev/null
+          grep -F 'small_target_progress ' "$build_supervisor" >/dev/null
+          grep -F 'small_target_build_log_tail_begin' "$build_supervisor" >/dev/null
           git diff --check
 
       - name: Unit-test preflight classification
