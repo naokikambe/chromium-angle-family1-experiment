@@ -52,6 +52,39 @@ digests. The depot_tools revision and Xcode/SDK facts were recorded separately
 but were not components of this run's cache key. The run therefore does not
 establish a cache hit or a reusable Chromium `source`/`out` cache.
 
+## Probe-only revalidation (2026-10-09)
+
+Run [37872947759](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37872947759)
+completed on workflow commit `a6522316b16fbf27daadb66ebe26b4e05c270216`.
+Its source/deps step took 1,361 seconds and GN generation took 33 seconds.
+Both requested fuzzer targets produced a Ninja dry-run count of zero and
+`ninja: no work to do`; their `gn desc` type queries timed out. The workflow
+classification was `success`, but those target measurements were not useful
+for estimating build actions.
+
+Run [37883694891](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37883694891)
+completed on workflow commit `8b58ce4ea6df234f92e210deb267adadde63b860`.
+`run_small_target=false`; the compile step was skipped. Source/deps took 2,529
+seconds, the job took 1 hour 6 minutes 6 seconds, GN generation took 60 seconds,
+and the graph contained 301,111 targets. Cache was missed. All three GN type
+queries timed out at 15 seconds. The added post-sync probe found
+`build/config/siso/.sisoenv` and recorded Siso `v1.5.30`. Siso execution mode,
+fastlocal, and localexec parallelism remained `not-run`, because this run did
+not invoke a build.
+
+| Probe target | Dry-run actions | Result | Additional observation |
+| --- | ---: | --- | --- |
+| `network_content_security_policy_fuzzer` | 0 | `no-work` | `ninja -t query` timed out at 20 seconds |
+| `content_sms_parser_fuzzer` | 0 | `no-work` | `ninja -t query` timed out at 20 seconds |
+| `url_unittests` | 4,631 | `within-cap` | Under the 12,000-action exploratory cap |
+
+The target-query timeout did not explain why the two fuzzer targets had no
+work; their dry-run output confirmed only `ninja: no work to do`. The
+`url_unittests` dry-run supplied an actionable task estimate, and the overall
+probe metric was `mixed`. The final workflow classification was `success`,
+which records successful source/deps and graph inspection; it is not compile
+evidence. No exploratory target was compiled.
+
 ## Relationship to the cancelled full build
 
 Run [37464208418](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37464208418)
