@@ -91,7 +91,12 @@ def _read_latest_progress(build_log: Path) -> tuple[str, str]:
 
 
 def _sample_progress(
-    build_log: Path, progress_log: Path, started: float, *, final: bool = False
+    build_log: Path,
+    progress_log: Path,
+    started: float,
+    *,
+    final: bool = False,
+    completion_status: str | None = None,
 ) -> None:
     elapsed = max(0, int(time.monotonic() - started))
     completed, total = _read_latest_progress(build_log)
@@ -110,12 +115,17 @@ def _sample_progress(
         rate = "unknown"
         estimate = "unknown"
 
+    progress_source = "last-ninja-marker" if completed.isdigit() else "unavailable"
     sample = (
         f"sample_utc={datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')} "
-        f"elapsed_seconds={elapsed} tasks_completed={completed} tasks_total={total} "
-        f"tasks_remaining={remaining} completed_per_second={rate} "
-        f"estimated_remaining_seconds={estimate}"
+        f"elapsed_seconds={elapsed} last_observed_ninja_tasks_completed={completed} "
+        f"last_observed_ninja_tasks_total={total} "
+        f"last_observed_ninja_tasks_remaining={remaining} "
+        f"observed_ninja_tasks_per_second={rate} "
+        f"observed_ninja_eta_seconds={estimate} progress_source={progress_source}"
     )
+    if completion_status is not None:
+        sample += f" build_completion_status={completion_status}"
     with progress_log.open("a", encoding="utf-8") as stream:
         stream.write(sample + "\n")
     suffix = " final=true" if final else ""
@@ -193,7 +203,13 @@ def _main() -> int:
                 signum = _termination_signal
                 print(f"small_target_supervisor_signal={signum}", flush=True)
                 cleanup_ok = _stop_process_group(process)
-                _sample_progress(args.build_log, args.progress_log, started, final=True)
+                _sample_progress(
+                    args.build_log,
+                    args.progress_log,
+                    started,
+                    final=True,
+                    completion_status="interrupted",
+                )
                 _print_build_log_tail(args.build_log)
                 return 128 + signum if cleanup_ok else 125
 
@@ -207,7 +223,13 @@ def _main() -> int:
                     flush=True,
                 )
                 cleanup_ok = _stop_process_group(process)
-                _sample_progress(args.build_log, args.progress_log, started, final=True)
+                _sample_progress(
+                    args.build_log,
+                    args.progress_log,
+                    started,
+                    final=True,
+                    completion_status="timeout",
+                )
                 _print_build_log_tail(args.build_log)
                 if not cleanup_ok:
                     print("small_target_process_group_cleanup=failed", flush=True)
@@ -221,10 +243,19 @@ def _main() -> int:
 
         return_code = process.wait()
         cleanup_ok = _stop_process_group(process)
-        _sample_progress(args.build_log, args.progress_log, started, final=True)
+        if not cleanup_ok:
+            completion_status = "cleanup-failure"
+        else:
+            completion_status = "success" if return_code == 0 else "failure"
+        _sample_progress(
+            args.build_log,
+            args.progress_log,
+            started,
+            final=True,
+            completion_status=completion_status,
+        )
         print(f"small_target_build_exit={return_code}", flush=True)
-        if return_code != 0 or not cleanup_ok:
-            _print_build_log_tail(args.build_log)
+        _print_build_log_tail(args.build_log)
         if not cleanup_ok:
             print("small_target_process_group_cleanup=failed", flush=True)
             return 125

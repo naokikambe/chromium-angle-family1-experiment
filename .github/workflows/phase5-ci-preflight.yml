@@ -193,6 +193,8 @@ jobs:
           grep -F 'os.killpg' "$build_supervisor" >/dev/null
           grep -F 'small_target_progress ' "$build_supervisor" >/dev/null
           grep -F 'small_target_build_log_tail_begin' "$build_supervisor" >/dev/null
+          grep -F 'last_observed_ninja_tasks_completed=' "$build_supervisor" >/dev/null
+          grep -F 'build_completion_status=' "$build_supervisor" >/dev/null
           git diff --check
 
       - name: Unit-test preflight classification
@@ -206,6 +208,10 @@ jobs:
       - name: Unit-test probe-only target measurement
         shell: bash
         run: bash tests/phase5-ci-preflight-probe-only.sh
+
+      - name: Unit-test bounded build supervisor output
+        shell: bash
+        run: bash tests/phase5-ci-preflight-build-supervisor.sh
 
       - name: Set up pinned depot_tools
         shell: bash
