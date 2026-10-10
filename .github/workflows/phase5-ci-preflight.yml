@@ -186,7 +186,7 @@ jobs:
           grep -F 'process.kill()' "$script" >/dev/null
           grep -F 'siso --version' "$script" >/dev/null
           grep -F 'small_target_probe_measurement' "$script" >/dev/null
-          grep -F 'ninja -C "$out_dir" -t query "$candidate"' "$script" >/dev/null
+          grep -F 'ninja -C "$out_dir" -t query "$candidate_ninja_target"' "$script" >/dev/null
           grep -F 'dry_run_task_count="$plan_steps"' "$script" >/dev/null
           grep -F 'ninja-targets.txt' "$script" >/dev/null
           grep -F 'resolved-small-target' "$script" >/dev/null
