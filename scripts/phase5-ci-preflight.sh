@@ -389,6 +389,7 @@ graph_only() {
   [[ "$max_tasks" =~ ^[0-9]+$ ]] || fail 'invalid small target task cap'
   if [[ "${PROBE_SMALL_TARGET:-false}" == true ]]; then
     local requested_targets requested_labels candidate index candidate_log candidate_label candidate_label_name
+    local candidate_label_path candidate_label_dir candidate_ninja_target candidate_target_resolution candidate_related_targets
     local candidate_type_log candidate_type_info candidate_type candidate_type_status type_query_budget
     local candidate_query_log candidate_query_excerpt candidate_dry_run_excerpt query_budget no_work_candidates
     local plan_kinds plan_steps compile_steps link_steps other_steps unclassified_lines no_work_lines
@@ -419,14 +420,40 @@ graph_only() {
       [[ "$seen_candidates" != *" $candidate "* ]] || fail "duplicate probe target: $candidate"
       seen_candidates+="$candidate "
       index=$((index + 1))
-      if ! target_exists_in_list "$ninja_targets_file" "$candidate"; then
+      if target_exists_in_list "$ninja_targets_file" "$candidate"; then
+        candidate_ninja_target="$candidate"
+        candidate_target_resolution=exact-name
+      elif resolved_info=$(resolve_small_target_from_list "$ninja_targets_file" "$candidate_label" auto); then
+        IFS=$'\t' read -r candidate_ninja_target candidate_target_resolution <<< "$resolved_info"
+      else
+        candidate_label_path="${candidate_label#//}"
+        candidate_label_dir="${candidate_label_path%%:*}"
+        candidate_related_targets="$(awk -v label_dir="$candidate_label_dir" -v label_name="$candidate_label_name" '
+          {
+            field = $1
+            sub(/:$/, "", field)
+            if (field == label_name || field == label_dir || index(field, label_dir "/") == 1 || index(field, label_dir ":") == 1) {
+              print field
+              count++
+              if (count >= 12) exit
+            }
+          }
+        ' "$ninja_targets_file" | paste -sd, -)"
         emit "probe_candidate_${index}_target" "$candidate"
+        emit "probe_candidate_${index}_gn_label" "$candidate_label"
+        emit "probe_candidate_${index}_ninja_target" not-found
+        emit "probe_candidate_${index}_ninja_target_resolution" not-found
+        emit "probe_candidate_${index}_related_targets" "${candidate_related_targets:-none}"
         emit "probe_candidate_${index}_status" not-found
         emit graph_inspection_status not-found
         return 1
       fi
+      emit "probe_candidate_${index}_target" "$candidate"
+      emit "probe_candidate_${index}_gn_label" "$candidate_label"
+      emit "probe_candidate_${index}_ninja_target" "$candidate_ninja_target"
+      emit "probe_candidate_${index}_ninja_target_resolution" "$candidate_target_resolution"
       candidate_log="$diag_dir/small-target-probe-$index.log"
-      if ! run_bounded "$inspection_budget" "$diag_dir/probe-target-$index-timeout" "$candidate_log" ninja -C "$out_dir" -n "$candidate"; then
+      if ! run_bounded "$inspection_budget" "$diag_dir/probe-target-$index-timeout" "$candidate_log" ninja -C "$out_dir" -n "$candidate_ninja_target"; then
         if [[ -f "$diag_dir/probe-target-$index-timeout" ]]; then
           emit "probe_candidate_${index}_status" timeout
           emit graph_inspection_status timeout
@@ -459,8 +486,6 @@ graph_only() {
       candidate_type_info="$(summarize_ninja_plan "$candidate_log")"
       IFS=$'\t' read -r plan_kinds plan_steps compile_steps link_steps other_steps unclassified_lines no_work_lines <<< "$candidate_type_info"
       dry_run_task_count="$plan_steps"
-      emit "probe_candidate_${index}_target" "$candidate"
-      emit "probe_candidate_${index}_gn_label" "$candidate_label"
       emit "probe_candidate_${index}_gn_type" "$candidate_type"
       emit "probe_candidate_${index}_type_status" "$candidate_type_status"
       emit "probe_candidate_${index}_dry_run_task_count" "$dry_run_task_count"
@@ -480,7 +505,7 @@ graph_only() {
         emit "probe_candidate_${index}_status" no-work
         no_work_candidates=$((no_work_candidates + 1))
         candidate_query_log="$diag_dir/small-target-probe-query-$index.log"
-        if run_bounded "$query_budget" "$diag_dir/probe-target-query-$index-timeout" "$candidate_query_log" ninja -C "$out_dir" -t query "$candidate"; then
+        if run_bounded "$query_budget" "$diag_dir/probe-target-query-$index-timeout" "$candidate_query_log" ninja -C "$out_dir" -t query "$candidate_ninja_target"; then
           candidate_query_excerpt="$(head -n 8 "$candidate_query_log" | tr '\r\n' ' ' | cut -c 1-400)"
           emit "probe_candidate_${index}_ninja_query_status" success
           emit "probe_candidate_${index}_ninja_query_excerpt" "${candidate_query_excerpt:-empty}"

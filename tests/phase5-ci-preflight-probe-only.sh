@@ -23,6 +23,7 @@ elif [[ "$1" == desc && "$4" == type ]]; then
     //services/network:network_content_security_policy_fuzzer) printf '%s\n' executable ;;
     //content/browser:content_sms_parser_fuzzer) printf '%s\n' group ;;
     //url:url_unittests) printf '%s\n' executable ;;
+    //ui/gfx/geometry:geometry) printf '%s\n' shared_library ;;
     *) exit 2 ;;
   esac
 else
@@ -36,7 +37,7 @@ if [[ -n "${FAKE_TRACE_LOG:-}" ]]; then
   printf 'ninja:%s\n' "$*" >> "$FAKE_TRACE_LOG"
 fi
 if [[ "$*" == *"-t targets all"* ]]; then
-  printf '%s\n' 'network_content_security_policy_fuzzer: phony' 'content_sms_parser_fuzzer: phony' 'url_unittests: phony'
+  printf '%s\n' 'network_content_security_policy_fuzzer: phony' 'content_sms_parser_fuzzer: phony' 'url_unittests: phony' 'ui/gfx/geometry/geometry: phony' 'ui/gfx/geometry:geometry_skia: phony'
 elif [[ "$*" == *"-t query network_content_security_policy_fuzzer"* ]]; then
   printf '%s\n' 'network_content_security_policy_fuzzer:' '  input: phony' '    obj/services/network/network_content_security_policy_fuzzer.stamp' '  outputs:' '    all'
 elif [[ "$*" == *"-t query content_sms_parser_fuzzer"* ]]; then
@@ -67,6 +68,8 @@ elif [[ "$*" == *"-n url_unittests"* ]]; then
     exit 0
   fi
   printf '%s\n' '[1/2] CXX obj/url/url_unittests.o' '[2/2] LINK url_unittests'
+elif [[ "$*" == *"-n ui/gfx/geometry/geometry"* ]]; then
+  printf '%s\n' '[1/2] CXX obj/ui/gfx/geometry/rect.o' '[2/2] SOLINK libgeometry.dylib'
 else
   printf 'unexpected ninja invocation: %s\n' "$*" >&2
   exit 2
@@ -136,6 +139,26 @@ test ! -e "$tmp_dir/diag/autoninja-was-run"
 first_dry_run_line=$(grep -n -F 'ninja:-C ' "$tmp_dir/normal-trace.log" | grep -F -- '-n network_content_security_policy_fuzzer' | head -n 1 | cut -d: -f1)
 first_type_query_line=$(grep -n -F 'gn:desc ' "$tmp_dir/normal-trace.log" | head -n 1 | cut -d: -f1)
 test "$first_dry_run_line" -lt "$first_type_query_line"
+
+geometry_probe_output=$(
+  PATH="$tmp_dir/bin:$PATH" \
+  PREFLIGHT_DIAG_DIR="$tmp_dir/geometry-diag" \
+  CHROMIUM_ROOT="$tmp_dir/source" \
+  RUN_SMALL_TARGET=false \
+  PROBE_SMALL_TARGET=true \
+  PROBE_SMALL_TARGET_NINJAS=geometry \
+  PROBE_SMALL_TARGET_GN_LABELS=//ui/gfx/geometry:geometry \
+  SMALL_TARGET_MAX_TASKS=4 \
+  FAKE_TRACE_LOG="$tmp_dir/geometry-trace.log" \
+  bash "$script" --graph-only
+)
+grep -F 'probe_candidate_1_target=geometry' <<< "$geometry_probe_output" >/dev/null
+grep -F 'probe_candidate_1_ninja_target=ui/gfx/geometry/geometry' <<< "$geometry_probe_output" >/dev/null
+grep -F 'probe_candidate_1_ninja_target_resolution=label-derived' <<< "$geometry_probe_output" >/dev/null
+grep -F 'probe_candidate_1_dry_run_task_count=2' <<< "$geometry_probe_output" >/dev/null
+grep -F 'probe_candidate_1_status=within-cap' <<< "$geometry_probe_output" >/dev/null
+grep -F 'ninja:-C ' "$tmp_dir/geometry-trace.log" | grep -F -- '-n ui/gfx/geometry/geometry' >/dev/null
+test ! -e "$tmp_dir/geometry-diag/autoninja-was-run"
 
 no_work_output=$(
   PATH="$tmp_dir/bin:$PATH" \
@@ -224,12 +247,13 @@ if PATH="$tmp_dir/bin:$PATH" \
   RUN_SMALL_TARGET=false \
   PROBE_SMALL_TARGET=true \
   PROBE_SMALL_TARGET_NINJAS=missing_target \
-  PROBE_SMALL_TARGET_GN_LABELS=//missing:missing_target \
+  PROBE_SMALL_TARGET_GN_LABELS=//ui/gfx/geometry:missing_target \
   bash "$script" --graph-only > "$tmp_dir/missing-target.out" 2>&1; then
   printf '%s\n' 'missing probe target was incorrectly accepted' >&2
   exit 1
 fi
 grep -F 'probe_candidate_1_status=not-found' "$tmp_dir/missing-target.out" >/dev/null
+grep -F 'probe_candidate_1_related_targets=ui/gfx/geometry/geometry,ui/gfx/geometry:geometry_skia' "$tmp_dir/missing-target.out" >/dev/null
 grep -F 'graph_inspection_status=not-found' "$tmp_dir/missing-target.out" >/dev/null
 
 if PATH="$tmp_dir/bin:$PATH" \

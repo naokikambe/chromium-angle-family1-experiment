@@ -178,6 +178,9 @@ jobs:
           fi
           grep -F 'gn desc "$out_dir" "$candidate_label" type' "$script" >/dev/null
           grep -F 'run_bounded "$type_query_budget" "$diag_dir/probe-target-type-$index-timeout" "$candidate_type_log" gn desc' "$script" >/dev/null
+          grep -F 'resolve_small_target_from_list "$ninja_targets_file" "$candidate_label" auto' "$script" >/dev/null
+          grep -F 'probe_candidate_${index}_ninja_target_resolution' "$script" >/dev/null
+          grep -F 'probe_candidate_${index}_related_targets' "$script" >/dev/null
           grep -F 'run_bounded "$inspection_budget" "$diag_dir/probe-target-$index-timeout" "$candidate_log" ninja' "$script" >/dev/null
           grep -F 'process.terminate()' "$script" >/dev/null
           grep -F 'process.kill()' "$script" >/dev/null
