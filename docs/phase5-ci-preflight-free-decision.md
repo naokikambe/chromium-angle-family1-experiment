@@ -252,3 +252,45 @@ fail with the original network error after the retry budget. Re-dispatch only
 after that workflow change is reviewed; keep probe-only mode and the same
 2,000-action cap. No Chromium full build, artifact operation, or repository
 push was part of this run.
+
+Run [38116285147](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/38116285147)
+repeated the probe-only measurement after the bounded depot_tools fetch retry
+was added in workflow commit `9965e3cd7706bb4a63a095caca185b62eb7c6762`.
+It used the same target ref, Chromium and ANGLE revisions, and URLLoader
+diagnostic patch SHA-256 listed above. The run concluded `success`; the
+resolver job took 4 seconds and the macOS Intel job took 44m14s, from
+05:54:15 to 06:38:29 UTC on 2026-10-11. The compile step was skipped.
+
+The runner was macOS 15.7.9 on X64 with 4 CPUs and 14 GiB of memory, using
+Xcode 16.4 (build 16F6) and macOS SDK 15.5. The Actions cache missed, and
+source and DEPS were absent before sync. The cache key included the Chromium
+revision, DEPS SHA-256, ANGLE revision, GN args SHA-256, and the URLLoader and
+Xcode compatibility patch hashes. Exact source/dependency sync measured
+1,586 seconds (26m26s).
+After sync, Siso v1.5.30 and the project environment were present. Siso mode
+and fastlocal were `not-run`; remote execution and remote cache were not
+configured. No compile throughput or localexec parallelism was measured.
+
+GN generation measured 48 seconds and produced a graph of 301,111 targets.
+Each candidate resolved to the exact Ninja name and its dry-run plan was
+counted without executing compiler or linker commands:
+
+| Executable candidate | GN label | Dry-run actions | Compile | Link | GN type lookup | Probe result |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| `brotli` | `//third_party/brotli:brotli` | 106 | 100 | 6 | 15-second timeout | `within-cap` |
+| `opus_compare` | `//third_party/opus:opus_compare` | 221 | 217 | 4 | 15-second timeout | `within-cap` |
+| `opus_demo` | `//third_party/opus:opus_demo` | 221 | 217 | 4 | 15-second timeout | `within-cap` |
+
+All candidates were below the 2,000-action cap. The supplemental GN type
+lookups timed out and returned `unknown`; this did not affect Ninja task
+counting. The workflow recorded `small_target_status=probe-success` and
+`classification=success`. The pinned depot_tools step succeeded, and the logs
+show no transient DNS error or retry event, so this run does not exercise the
+new retry branch. These results are exploratory measurements only; they do
+not establish a successful compile, full Chromium build, or same-revision
+runtime evidence.
+
+Suggested next approval: compile only `brotli`, the smallest measured target
+(106 dry-run actions), in the bounded small-target mode with the same pinned
+inputs, 2,000-action limit, and 1,200-second compile budget. This would be a
+separate workflow dispatch; no executable was compiled in run 38116285147.
