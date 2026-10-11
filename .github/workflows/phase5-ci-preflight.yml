@@ -224,7 +224,27 @@ jobs:
           set -euo pipefail
           git init "$DEPOT_TOOLS_ROOT"
           git -C "$DEPOT_TOOLS_ROOT" remote add origin https://chromium.googlesource.com/chromium/tools/depot_tools.git
-          git -C "$DEPOT_TOOLS_ROOT" fetch --depth=1 origin "$DEPOT_TOOLS_REVISION"
+          fetch_attempt=1
+          fetch_attempt_limit=3
+          fetch_log="$RUNNER_TEMP/phase5-depot-tools-fetch.log"
+          while true; do
+            if git -C "$DEPOT_TOOLS_ROOT" fetch --depth=1 origin "$DEPOT_TOOLS_REVISION" >"$fetch_log" 2>&1; then
+              cat "$fetch_log"
+              break
+            else
+              fetch_status=$?
+              cat "$fetch_log"
+            fi
+            if (( fetch_attempt >= fetch_attempt_limit )) ||
+              ! grep -Eiq 'Could not resolve host|Could not resolve proxy|Temporary failure in name resolution|Name or service not known|Failed to connect|Connection timed out|Connection reset by peer|Operation timed out|returned error: 5[0-9][0-9]' "$fetch_log"; then
+              exit "$fetch_status"
+            fi
+            retry_delay_seconds=$((10 * fetch_attempt))
+            printf 'Transient network error fetching pinned depot_tools (attempt %d/%d); retrying in %ds.\n' \
+              "$fetch_attempt" "$fetch_attempt_limit" "$retry_delay_seconds"
+            sleep "$retry_delay_seconds"
+            fetch_attempt=$((fetch_attempt + 1))
+          done
           git -C "$DEPOT_TOOLS_ROOT" checkout --detach FETCH_HEAD
           test "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)" = "$DEPOT_TOOLS_REVISION"
           printf '%s\n' "$DEPOT_TOOLS_ROOT" >> "$GITHUB_PATH"
