@@ -355,3 +355,40 @@ This establishes that the pinned `opus_compare` executable target compiles on
 the configured macOS Intel runner within the bounded experiment. It is not a
 full Chromium build or same-revision runtime/U0/U1 evidence. `opus_demo` was
 measured as a candidate but was not compiled by this run.
+
+## Bounded opus_demo compile (2026-10-11)
+
+Run [38136434885](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/38136434885)
+used workflow commit `66b0662aa66adf2d9080afc26ad32075999b4ede` and the same
+pinned target, Chromium, ANGLE, and URLLoader patch inputs as the preceding
+`opus_compare` run. The resolved DEPS SHA-256 was
+`dc1d7007e7d992729d3d34b79c2443971cd07029c5599856a16ddecd445c532d`. It ran
+with `run_small_target=true`, `probe_small_target=false`, and label
+`//third_party/opus:opus_demo`; the 2,000-action cap and 1,200-second compile
+budget were enforced. The overall run concluded `success`; the macOS Intel
+job took 35m25s, from 11:40:49 to 12:16:14 UTC. All workflow steps succeeded.
+
+The runner was macOS 15.7.9 on X64 (`x86_64`) with 4 CPUs and 14 GiB of
+memory, using Xcode 16.4 (build 16F6) and SDK 15.5. The Actions cache missed,
+and source and DEPS were absent before sync. Source/dependency sync took
+1,407 seconds (23m27s). Siso v1.5.30 was present after sync. Siso mode,
+fastlocal, and configured localexec parallelism were recorded as `not-run`;
+the compile used `localexec/4`. Remote execution and remote cache were not
+configured.
+
+GN generation took 88 seconds and produced 301,111 targets. The target
+resolved to Ninja name `opus_demo`; the graph-stage dry-run metric was 222
+nonempty lines, including Ninja's directory banner. Siso completed 221 local
+steps, with 0 remote steps, 0 cache hits, and 6 skipped steps. It reported
+`Build Succeeded: 221 steps` in 2m06.63s. The compile exit code was 0,
+`small_target_status=success`, and final classification was `success`.
+
+The progress supervisor initially reported 10 of 223 Ninja tasks complete
+after 60 seconds and estimated 1,278 seconds remaining, slightly above the
+1,200-second budget. At 121 seconds it reported 201 of 223 complete; the build
+finished successfully after 129 seconds. The early ETA was not predictive for
+this run.
+
+This establishes that the pinned `opus_demo` executable target compiles on
+the configured macOS Intel runner within the bounded experiment. It is not a
+full Chromium build or same-revision runtime/U0/U1 evidence.
