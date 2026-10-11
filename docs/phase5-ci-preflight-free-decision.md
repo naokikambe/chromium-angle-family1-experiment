@@ -321,3 +321,37 @@ This establishes that the pinned `brotli` executable target compiles on the
 configured macOS Intel runner within the bounded experiment. It is not a full
 Chromium build or same-revision runtime/U0/U1 evidence. No other candidate
 was compiled by run 38124435732.
+
+## Bounded opus_compare compile (2026-10-11)
+
+Run [38130048430](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/38130048430)
+used workflow commit `ece02fd13c5dcd093dddbfc92efbdfbd82a5d583`, the same
+pinned target, Chromium (`b510e9d7cd3a2fbd78d0ddc42234103206c5f78d`), ANGLE
+(`e12217f3e133cb1029b050d893b1806d141483be`), and URLLoader patch inputs.
+The resolved DEPS SHA-256 was
+`dc1d7007e7d992729d3d34b79c2443971cd07029c5599856a16ddecd445c532d`.
+With `run_small_target=true`, `probe_small_target=false`, and label
+`//third_party/opus:opus_compare`, the 2,000-action cap and 1,200-second
+compile budget were enforced. The overall run concluded `success`; the macOS
+Intel job took 35m25s, from 09:54:50 to 10:30:15 UTC. All workflow steps
+succeeded.
+
+The runner was macOS 15.7.9 on X64 (`x86_64`) with 4 CPUs and 14 GiB of
+memory, using Xcode 16.4 (build 16F6) and SDK 15.5. The Actions cache missed,
+and source and DEPS were absent before sync. Source/dependency sync took
+1,535 seconds (25m35s). Siso v1.5.30 was present after sync. Siso mode,
+fastlocal, and configured localexec parallelism were recorded as `not-run`;
+the actual compile used `localexec/4`. Remote execution and remote cache
+were not configured.
+
+GN generation took 97 seconds and produced 301,111 targets. The target
+resolved to Ninja name `opus_compare`; the graph-stage dry-run metric was 222
+nonempty lines, including Ninja's directory banner. Siso completed 221 local
+steps, with 0 remote steps, 0 cache hits, and 6 skipped steps. It reported
+`Build Succeeded: 221 steps` in 1m21.49s. The compile exit code was 0,
+`small_target_status=success`, and final classification was `success`.
+
+This establishes that the pinned `opus_compare` executable target compiles on
+the configured macOS Intel runner within the bounded experiment. It is not a
+full Chromium build or same-revision runtime/U0/U1 evidence. `opus_demo` was
+measured as a candidate but was not compiled by this run.
