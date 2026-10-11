@@ -290,7 +290,34 @@ new retry branch. These results are exploratory measurements only; they do
 not establish a successful compile, full Chromium build, or same-revision
 runtime evidence.
 
-Suggested next approval: compile only `brotli`, the smallest measured target
-(106 dry-run actions), in the bounded small-target mode with the same pinned
-inputs, 2,000-action limit, and 1,200-second compile budget. This would be a
-separate workflow dispatch; no executable was compiled in run 38116285147.
+The proposed `brotli` follow-up was approved and run as a separate bounded
+compile:
+
+## Bounded brotli compile (2026-10-11)
+
+Run [38124435732](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/38124435732)
+used workflow commit `ca998834294daade83fba4a0c4718f4d04498b64`, the same
+pinned target, Chromium, ANGLE, and patch inputs, `run_small_target=true`,
+`probe_small_target=false`, and label `//third_party/brotli:brotli`. The
+2,000-action cap and 1,200-second compile budget were in force. The run
+concluded `success`; the macOS Intel job took 30m43s, from 08:20:21 to
+08:51:04 UTC. Every workflow step succeeded.
+
+The runner was macOS 15.7.9 on X64 with 4 CPUs and 14 GiB of memory, using
+Xcode 16.4 (build 16F6) and SDK 15.5. The Actions cache missed; source and
+DEPS were absent before sync. Source/dependency sync took 1,358 seconds
+(22m38s). Siso v1.5.30 was present. Siso mode and fastlocal metadata remained
+`not-run`, localexec parallelism was not measured, and remote execution and
+remote cache were not configured.
+
+GN generation took 41 seconds and produced 301,111 targets. The target
+resolved to Ninja name `brotli`; the graph-stage dry-run metric was 107
+nonempty lines, including Ninja's directory banner. Siso then completed 106
+local steps, with 0 remote steps and 0 cache hits (`skip:4`). It reported
+`Build Succeeded: 106 steps` in 55.46 seconds. The compile exit code was 0,
+`small_target_status=success`, and final classification was `success`.
+
+This establishes that the pinned `brotli` executable target compiles on the
+configured macOS Intel runner within the bounded experiment. It is not a full
+Chromium build or same-revision runtime/U0/U1 evidence. No other candidate
+was compiled by run 38124435732.
