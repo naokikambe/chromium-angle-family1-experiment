@@ -92,13 +92,16 @@ Chromium Safe Storageへのアクセス拒否や、非同期暗号化providerの
 
 `persistent_cookie_runner.py`は受入試験専用の新しいprofileを一つ作り、同じstock appを二度起動します。最初の起動ではfixtureが非機密のsynthetic cookieを設定し、通常終了後にSQLiteをread-onlyで調べて、cookieの平文欄が空で暗号化欄に値があり、有効期限が未来であることだけを記録します。二回目は同じprofileを使い、fixtureへの再送信とページのHTTP・DOM・JS・fetch・canvas・2D描画を確認します。cookie値・Keychain秘密値は記録しません。
 
+このrunnerのCDP `Page.navigate` timeoutは`--navigation-timeout`（5〜120秒、既定60秒）で指定し、seedとrestartの両phaseに同じ値を使います。値はcontextとphase結果に記録され、timeoutは当該phaseの失敗です。timeoutを理由に追加起動やretryは行わず、正常に完了したseedの後だけ予定されたrestartを行います。これはpage targetを待つ`--startup-timeout`や、navigation後にDOM／JS／fetch状態を待つ`--page-wait-seconds`とは別です。このrunnerのstartup defaultは45秒で、`probe.py`のstartup default 12秒とは異なります。いずれの待機値も人の操作や観測がその長さ続く保証にはなりません。
+
 実機のGUIログインユーザーから実行します。stockのGPU既定値を使い、`--disable-gpu`も`--use-mock-keychain`も追加しません。実行前に必要なKeychain操作を明示的に承認してください。最初の起動で一致するSafe Storage promptが現れた場合、承認済みの一度だけ **Allow** を選びます。**Always Allow**は選びません。正常終了後の再起動でpromptが再び現れたら応答せず記録します。これは継続利用条件を満たさない結果です。
 
 ```bash
 python3 persistent_cookie_runner.py \
   --app "$stock_app" \
   --out "$task_dir/normal-keychain-cookie-restart" \
-  --startup-timeout 45 --page-wait-seconds 60 --observe-seconds 20
+  --startup-timeout 45 --navigation-timeout 60 \
+  --page-wait-seconds 60 --observe-seconds 20
 ```
 
 結果は`PERSISTENT_COOKIE_PASS`または`PERSISTENT_COOKIE_FAIL`です。GUI確認は各phaseを表示している間にオーナーが行い、trial ID・phase・nonceへ対応付けて別途記録します。raw NetLogとverbose network loggingはcookie headerを保存し得るため、このrunnerでは使わず、request URL/statusだけを含む安全なCDP要約とfixture eventを保存します。このrunnerのfocused testはfixtureと暗号化metadataの判定だけを検査し、MacのKeychain・Chromium・GPU動作は検証しません。
@@ -116,7 +119,8 @@ python3 persistent_cookie_runner.py \
   --browser-arg=--use-angle=metal \
   --browser-arg=--use-dynamic-angle \
   --browser-arg=--disable-angle-features=requireGpuFamily2 \
-  --startup-timeout 45 --page-wait-seconds 60 --observe-seconds 20
+  --startup-timeout 45 --navigation-timeout 60 \
+  --page-wait-seconds 60 --observe-seconds 20
 ```
 
 この引数集合以外の`--browser-arg`、一部だけの指定、重複指定は拒否され、出力directoryやprofileの作成とbrowser起動より前に終了します。環境に同じopt-in変数が予期しない値で設定されている場合も拒否します。`context.json`と各`launch.json`には実際のargvと、このopt-in変数だけを記録します。stock試験では`--browser-arg`と`--metal-family1-experiment`を省略し、従来どおりの起動引数と通常GPU設定を使います。両モードとも独立した新しい`--out`を指定し、実験の成功は実機確認前には主張しません。SwiftShaderやnull backendへの切替は許可されません。

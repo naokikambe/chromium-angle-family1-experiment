@@ -183,8 +183,14 @@ def browser_launch_configuration(executable, profile, browser_arguments=(), meta
             "runtime_environment": {FAMILY1_OPT_IN_ENV: metal_family1_opt_in}}
 
 
+def validate_navigation_timeout(value):
+    if not 5 <= value <= 120:
+        raise ValueError("navigation-timeout must be 5..120 seconds")
+
+
 def launch_phase(executable, profile, out, server, phase, startup_timeout,
-                 observe_seconds=0, page_wait_seconds=60, launch_config=None):
+                 observe_seconds=0, page_wait_seconds=60, launch_config=None,
+                 navigation_timeout=60):
     out.mkdir(mode=0o700)
     path = "seed.html" if phase == "seed" else "check.html"
     url = f"http://127.0.0.1:{server.server_port}/{server.nonce}/{path}"
@@ -193,6 +199,7 @@ def launch_phase(executable, profile, out, server, phase, startup_timeout,
     metal_family1_opt_in = launch_config["runtime_environment"][FAMILY1_OPT_IN_ENV]
     probe.write_json(out / "launch.json", launch_config)
     result = {"phase": phase, "url": url, "started_at": timestamp(), "pid": None,
+              "navigation_timeout_seconds": navigation_timeout,
               "navigated": False, "http_document_200": False, "document_ok": False,
               "js_ok": False, "fetch_ok": False, "canvas_ok": False,
               "visual_patch_ok": False, "cookie_ok": False, "errors": []}
@@ -210,7 +217,7 @@ def launch_phase(executable, profile, out, server, phase, startup_timeout,
             cdp = probe.CDP(target["webSocketDebuggerUrl"], events)
             for method in ("Page.enable", "Network.enable", "Runtime.enable"):
                 cdp.call(method)
-            cdp.call("Page.navigate", {"url": url}, timeout=8)
+            cdp.call("Page.navigate", {"url": url}, timeout=navigation_timeout)
             result["navigated"] = True
             deadline = time.monotonic() + page_wait_seconds
             snapshot = {}
@@ -277,6 +284,8 @@ def launch_phase(executable, profile, out, server, phase, startup_timeout,
 
 
 def run(args):
+    navigation_timeout = getattr(args, "navigation_timeout", 60)
+    validate_navigation_timeout(navigation_timeout)
     browser_arguments, metal_family1_opt_in = validated_runtime_options(
         args.browser_arg, args.metal_family1_experiment)
     context = probe.mac_context()
@@ -295,6 +304,7 @@ def run(args):
                       "bundle_identifier": info.get("CFBundleIdentifier"),
                       "version": info.get("CFBundleShortVersionString"), "nonce": nonce,
                       "profile": str(profile), "browser_arguments": list(browser_arguments),
+                      "navigation_timeout_seconds": navigation_timeout,
                       "browser_argv": launch_config["argv"],
                       "runtime_environment": launch_config["runtime_environment"],
         "cookie_name": cookie_name, "cookie_value_logged": False, "raw_netlog_enabled": False}
@@ -306,7 +316,7 @@ def run(args):
         print("If the exact matching Safe Storage prompt appears, answer only after separate owner authorization for this prompt; otherwise leave it unanswered. Never choose Always Allow.", flush=True)
         first = launch_phase(executable, profile, output / "launch-1-seed", server, "seed",
                              args.startup_timeout, args.observe_seconds, args.page_wait_seconds,
-                             launch_config)
+                             launch_config, navigation_timeout)
         with server.events_lock:
             first_events = list(server.events)
         expected_seed = any(e["path"] == f"/{nonce}/seed.html" and e["status"] == 200 for e in first_events)
@@ -321,7 +331,7 @@ def run(args):
             print("If another Safe Storage prompt appears, do not answer it; record failed continuity.", flush=True)
             second = launch_phase(executable, profile, output / "launch-2-restart", server, "check",
                                   args.startup_timeout, args.observe_seconds, args.page_wait_seconds,
-                                  launch_config)
+                                  launch_config, navigation_timeout)
             with server.events_lock:
                 events = list(server.events)
             check_event = next((e for e in events if e["path"] == f"/{nonce}/check.html"), None)
@@ -354,6 +364,8 @@ def main():
     parser.add_argument("--app", required=True)
     parser.add_argument("--out", required=True, help="New evidence directory; existing directories are refused")
     parser.add_argument("--startup-timeout", type=int, default=45)
+    parser.add_argument("--navigation-timeout", type=int, default=60,
+                        help="CDP Page.navigate timeout for both launches (5..120 seconds)")
     parser.add_argument("--page-wait-seconds", type=int, default=60,
                         help="Wait for page, JS, and fetch callbacks (5..120 seconds)")
     parser.add_argument("--observe-seconds", type=int, default=0,
@@ -365,6 +377,8 @@ def main():
     args = parser.parse_args()
     if not 5 <= args.startup_timeout <= 60:
         parser.error("startup-timeout must be 5..60 seconds")
+    if not 5 <= args.navigation_timeout <= 120:
+        parser.error("navigation-timeout must be 5..120 seconds")
     if not 5 <= args.page_wait_seconds <= 120:
         parser.error("page-wait-seconds must be 5..120 seconds")
     if not 0 <= args.observe_seconds <= 60:

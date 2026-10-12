@@ -343,8 +343,9 @@ class PersistentCookieTests(unittest.TestCase):
                 return server
 
             def fake_launch(executable, profile, out, active_server, phase,
-                            startup_timeout, observe_seconds, page_wait_seconds, launch_config):
-                launch_records.append((phase, launch_config, list(launch_config["argv"])))
+                            startup_timeout, observe_seconds, page_wait_seconds, launch_config,
+                            navigation_timeout):
+                launch_records.append((phase, launch_config, list(launch_config["argv"]), navigation_timeout))
                 if phase == "seed":
                     active_server.events.append({"path": f"/{active_server.nonce}/seed.html", "status": 200})
                 else:
@@ -352,7 +353,8 @@ class PersistentCookieTests(unittest.TestCase):
                         {"path": f"/{active_server.nonce}/check.html", "cookie_present": True},
                         {"path": f"/{active_server.nonce}/echo.json", "cookie_present": True},
                     ])
-                return {"returncode": 0, "http_document_200": True, "document_ok": True,
+                return {"returncode": 0, "navigation_timeout_seconds": navigation_timeout,
+                        "http_document_200": True, "document_ok": True,
                         "js_ok": True, "fetch_ok": True, "canvas_ok": True,
                         "visual_patch_ok": True, "cookie_ok": True}
 
@@ -363,7 +365,7 @@ class PersistentCookieTests(unittest.TestCase):
                     "CFBundleShortVersionString": "test-version"}
             args = SimpleNamespace(
                 app="/synthetic/Chromium.app", out=str(output), startup_timeout=45,
-                observe_seconds=0, page_wait_seconds=60,
+                observe_seconds=0, page_wait_seconds=60, navigation_timeout=37,
                 browser_arg=list(reversed(persistence.FAMILY1_BROWSER_ARGUMENTS)),
                 metal_family1_experiment=True,
             )
@@ -386,6 +388,7 @@ class PersistentCookieTests(unittest.TestCase):
             self.assertTrue(output.is_dir())
             self.assertTrue((output / "profile").is_dir())
             self.assertEqual([record[0] for record in launch_records], ["seed", "check"])
+            self.assertEqual([record[3] for record in launch_records], [37, 37])
             self.assertIs(launch_records[0][1], launch_records[1][1])
             self.assertEqual(launch_records[0][2], launch_records[1][2])
             self.assertEqual(launch_records[0][2][-5:-1],
@@ -394,6 +397,9 @@ class PersistentCookieTests(unittest.TestCase):
             self.assertEqual(context_records["context.json"]["runtime_environment"], {
                 persistence.FAMILY1_OPT_IN_ENV: "1",
             })
+            self.assertEqual(context_records["context.json"]["navigation_timeout_seconds"], 37)
+            self.assertEqual(context_records["result.json"]["phase1"]["navigation_timeout_seconds"], 37)
+            self.assertEqual(context_records["result.json"]["phase2"]["navigation_timeout_seconds"], 37)
             self.assertEqual(launch_records[0][1]["runtime_environment"], {
                 persistence.FAMILY1_OPT_IN_ENV: "1",
             })
@@ -410,6 +416,19 @@ class PersistentCookieTests(unittest.TestCase):
                 mac_context.assert_not_called()
                 popen.assert_not_called()
             self.assertFalse(output.exists())
+
+        for invalid_timeout in (4, 121):
+            with tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / "must-not-be-created"
+                args = SimpleNamespace(browser_arg=[], metal_family1_experiment=False,
+                                       navigation_timeout=invalid_timeout, out=str(output))
+                with patch.object(persistence.probe, "mac_context") as mac_context, \
+                        patch.object(persistence.probe, "app_executable") as app_executable:
+                    with self.assertRaisesRegex(ValueError, "navigation-timeout must be 5..120"):
+                        persistence.run(args)
+                    mac_context.assert_not_called()
+                    app_executable.assert_not_called()
+                self.assertFalse(output.exists())
 
         with patch.dict(persistence.os.environ,
                         {persistence.FAMILY1_OPT_IN_ENV: "unexpected"}):
