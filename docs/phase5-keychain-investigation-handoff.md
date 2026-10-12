@@ -1,13 +1,15 @@
 Mac実機で進めているChromiumのページ描画不可問題の調査を続行してください。今回の完了条件は、根本原因を実機の証拠と対照実験で特定することです。直近の報告で絞り込んだKeychain経路を優先し、原因の証明に必要な検証を実行してください。
 
+現在の判断・結果別の分岐・通常Keychainでの復旧案は[再計画](phase5-page-recovery-replan.md)を参照してください。今回の委任作業は原因特定までとし、復旧・Keychain環境整備・ANGLE／KOOVは結果に応じた後続工程です。
+
 ## 開始地点
 
-リポジトリは `naokikambe/chromium-angle-family1-experiment`。実機側の変更は `page-recovery-device-20261012` の `cc49dd9`、続行用の資料は、その変更を取り込んだ `phase5-page-recovery` ブランチにあります。既存checkoutのHEAD・dirty状態・AGENTS.mdを確認し、既存作業を保持して最新版の資料を取得してください。
+リポジトリは `naokikambe/chromium-angle-family1-experiment`。実機側の変更は `page-recovery-device-20261012` の `383310b`、続行用の資料は、その変更を取り込んだ `phase5-page-recovery` ブランチにあります。既存checkoutのHEAD・dirty状態・AGENTS.mdを確認し、既存作業を保持して最新版の資料を取得してください。
 
 ```bash
 git fetch origin refs/heads/phase5-page-recovery:refs/remotes/origin/phase5-page-recovery
 git log -3 --oneline origin/phase5-page-recovery
-git merge-base --is-ancestor cc49dd9 origin/phase5-page-recovery
+git merge-base --is-ancestor 383310b origin/phase5-page-recovery
 ```
 
 fast-forwardできる場合は取り込み、別の変更がある場合は保持した別worktreeで作業してください。試験のHEADを記録します。関連資料は[実行計画](phase5-page-recovery-plan.md)、[キットREADME](../scripts/page-recovery/README.md)、[当初の完了条件](phase5-page-recovery-handoff.md)です。
@@ -45,7 +47,7 @@ fast-forwardできる場合は取り込み、別の変更がある場合は保�
 
    「API返却／待機 → 初期化callback → cookie callback → HTTP stream → server受信 → DOM・JS・描画」を対応付け、直接観測とソースからの推定を区別してください。拒否後も停止する、ダイアログがない、応答が反映されない場合は、前提を見直して追加の停止位置を調べます。
 
-   現行`probe.py`は`--observe-seconds`の待機前にdocumentと画像を採取します。待機中の応答後のページを、応答前の`result.json`や画像で判定しないでください。応答時刻を記録し、必要な診断変更や追加CDP観測で応答後のdocument・画像・callback／network状態を改めて採取します。既存結果を保持し、採取時点を明記してください。
+   `383310b`の`probe.py`は待機後に`post-observation/`へ別のdocument・画像・networkイベント差分を採取します。応答時刻を別途記録し、この採取とserver／NetLogを対応付けてください。イベント配列の採取時刻は実際の応答・イベント発生時刻とは区別します。通常の`result.json`には待機前のdocument値と試行全体のserver受信が含まれるため、classificationやexit codeだけで応答後の復旧を判定しません。必要な追加観測を行い、既存結果と採取時点を保持してください。
 
 5. **10月5日の記録を照合する。** 手掛かりは `phase5-s0s1-after-ci-37314180383-20261005-b`。既存資料とユーザー回答から所在を確認し、入力hash・署名来歴・起動条件・停止段階・Keychain関連記録を照合してください。必要な記録がない場合は、現在の測定だけで当時の原因を証明したことにせず、照合できた点と欠ける証拠を明示します。
 

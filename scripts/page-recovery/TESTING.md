@@ -24,9 +24,11 @@ not chmod source files.
 
 ## Post-observation samples
 
-When `--observe-seconds` is enabled, the probe keeps its original pre-wait
-`result.json` and writes a timestamped second sample under
-`post-observation/`. This includes document/runtime values, a separate
+When `--observe-seconds` is enabled, the probe retains its pre-wait document
+and runtime values in the legacy `result.json` and writes a timestamped second
+sample under `post-observation/`. The legacy server-receipt field covers the
+whole run, so its classification is not an acceptance result for the post-wait
+state. The second sample includes document/runtime values, a separate
 screenshot and visual patch when available, network response/failure evidence,
 and per-step capture errors. `network_events_snapshot_at` records when the
 client snapshots the network-event array; it is not an individual event's
@@ -35,8 +37,8 @@ not a precise human-response timestamp. `network_events` contains only the
 delta newly appended to the CDP event list after the wait began, and
 `http_document_200_event_during_wait` is true only for a document HTTP 200 in
 that delta. An empty delta or false value does not imply the full run lacked a
-pre-wait HTTP 200. A post-wait capture failure remains diagnostic data and
-does not alter the pre-wait classification.
+pre-wait HTTP 200. Post-wait samples remain diagnostic data and do not replace
+the document/runtime values used by the legacy classification.
 
 The focused unit tests use a fake CDP client to check separate output,
 timestamped evidence, the network-event delta, and continued capture after a
@@ -44,3 +46,14 @@ CDP error.
 They do not simulate GUI input or establish that an approval prompt was
 answered. GUI confirmation, ordinary-Keychain behavior, and product acceptance
 remain separate acceptance conditions.
+
+## Replan verification (2026-10-12)
+
+- The revised plan separates current-copy cause identification, ordinary-Keychain
+  stock recovery, and subsequent ANGLE/KOOV validation.
+- Checked 32 local Markdown links and 11 shell blocks in the six updated
+  entry-point/plan documents; staged whitespace checks also passed.
+- No executable code changed in this documentation update. The two focused
+  post-observation tests at `383310b` passed the previous independent cloud review.
+- Normal-Keychain recovery and account/access-policy proposals are planned work,
+  not new device findings or authorization to modify existing Keychain items.

@@ -1,5 +1,7 @@
 # ページ表示復旧・実機実行キット
 
+現在の施策と工程別の判定は[再計画](../../docs/phase5-page-recovery-replan.md)を参照する。Keychain承認応答後の復旧を調べる際は、post-observationのdocument・画像とserver／NetLogを対応付ける。通常のresult.jsonには待機前のdocument値と試行全体のserver受信が含まれ、classificationだけでは応答後の状態を判定できない。
+
 既存の初回署名済みstock Chromiumの停止位置を確認し、署名部品の設定差が見つかった場合に、新規コピーでその修正を試すためのキット。Python 3.10以上、MacのGUIログインユーザーのTerminal、Apple Development証明書を使用する。
 
 `probe.py`は既存アプリを変更しない。新規の一時profileで起動し、テスト後はその起動に属するブラウザだけを終了する。`sign_once.py`は完全未署名の原本から新しいコピーを作る試験用署名アダプターで、Chromium公式の全パッケージング・notarization処理を代替するものではない。参照するHelper別flags／entitlementは下記の固定ソースに基づく。

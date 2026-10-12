@@ -6,16 +6,19 @@
 
 Phase 5のページ表示復旧へ計画を立て直した。目標は、公式未署名のビルド済みChromiumへ独自ANGLEを組み込み、Apple Developmentで初回署名した実機アプリでHTTPページとKOOVを表示すること。
 
+現在は[Keychain経路を中心にした再計画](phase5-page-recovery-replan.md)を適用する。現行S0の原因特定を締め、その結果に応じて通常Keychainでの正常アクセス、独立したKeychain環境、継続利用条件を検証する。10月5日の適用範囲の調査は並行し、現在の検証を止める条件にはしない。
+
 今回の実機調査は、ページ描画不可の根本原因を実行時の証拠と原因条件だけを変えた対照実験で特定するまでを完了条件とする。従来の「再署名が原因」を維持する結論には、具体的な故障の仕組みを示す追加証拠が必須であり、既存結果の再掲では完了としない。初回署名でも失敗した事実を説明し、既存根拠と追加証拠を比較して報告する。ANGLE移植・KOOV全体の確認は原因特定後の後続工程とする。
 
 | 項目 | 状態 | 証拠と限界 |
 | --- | --- | --- |
 | 過去の実機ANGLE／Metal／EGL／WebGL1最小描画 | 成功記録あり | 固定コミットの[実機観測記録](https://github.com/naokikambe/chromium-angle-family1-experiment/blob/cc781c1063261ffbe227939ff607ecefb51f6b2b/docs/phase5-real-device-observation.md)。新キットによる実行結果ではない |
 | 未署名のビルド済みChromiumのHTTPページ | CI成功記録あり | snapshot 1689422を使用したU0/U1。実機の初回署名後結果とは環境・入力版が異なる |
-| HTTP停止の原因調査 | 継続中 | Chromium Safe Storage authorizationや非同期crypto callback waitなどの候補を、process/runtime、read-only metadata、network timelineの対応で検証する。署名との相関だけでは原因としない。現時点でroot causeやproduct acceptanceは宣言しない |
+| HTTP停止の原因調査 | 現行S0のKeychain承認待ちが強く支持される | 担当者報告では通常→mock→通常と同一試行のruntime／network対応がある。拒否応答後・実GUIは未確認。callbackの中間経路にはソースからの推定が含まれ、調査完了は未宣言 |
 | 通信診断ログ入りChromiumの全体ビルド | 未完成 | run 37464208418は時間切れ。小規模対象の成功で完成済みとは扱わない |
 | ページ復旧キット | portable test suiteとsymlink root alias fix | `scripts/page-recovery/`。symlink regression covers internal aliases and rejects external or broken links. Platform behavior, GUI confirmation, and product acceptance require separate validation |
-| 次の作業 | Keychain経路の原因検証 | 通常→mock→通常の対照、独立した3試験の実GUI確認、承認応答前後のcallback／HTTP timeline、10月5日の証跡との照合。通常Keychainでの製品受入は後続工程 |
+| 次の作業 | 拒否応答後と実GUIで因果を確認 | 既存対照を再利用し、応答前後のAPI／callback／HTTP、独立した3試験の実GUIを確認。383310bのpost-observation採取を使用する |
+| 復旧の後続工程 | 通常Keychainの継続利用条件を検証 | 正常アクセス、同じ署名済みappと独立login Keychainの比較、対象appに限定した信頼条件または利用分離の方針を選択。環境作成・権限変更は現在の原因調査とは別の実行範囲 |
 | KOOVの画面・基本操作・機器連携 | 未確認 | ページ表示復旧、独自ANGLE、WebGL1の確認後に進める |
 
 実行順序は[具体施策・実行計画](phase5-page-recovery-plan.md)、コマンドは[キットREADME](../scripts/page-recovery/README.md)、次のエージェントへの指示は[引き継ぎプロンプト](phase5-page-recovery-handoff.md)に記録した。過去の整理と現在までの経緯は[経過資料](phase5-page-recovery-history.md)を参照。

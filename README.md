@@ -17,7 +17,8 @@ new causal evidence beyond the previous observations, including an explanation
 of failures after first signing. ANGLE integration and full KOOV validation are
 subsequent work.
 
-- [Execution plan](docs/phase5-page-recovery-plan.md)
+- [Revised execution plan and findings](docs/phase5-page-recovery-replan.md)
+- [Initial execution plan](docs/phase5-page-recovery-plan.md)
 - [Copyable handoff for the physical Mac](docs/phase5-page-recovery-handoff.md)
 - [Continue the Keychain investigation](docs/phase5-keychain-investigation-handoff.md)
 - [Experiment history](docs/phase5-page-recovery-history.md)
@@ -28,10 +29,12 @@ target MacBookAir6,1. The handoff includes clone/fetch instructions, GUI-user an
 Keychain checks, and the order of the device experiments. Browser bundles and
 previous evidence are inputs on the Mac; they are not included in this repository.
 
-The branch includes the device-side symlink fix from `cc49dd9`. For continuing
-the investigation, use the Keychain handoff and the latest local device report.
-It specifies authorization-response observations, repeated provider comparisons,
-GUI checks, and the evidence required to establish the cause.
+The branch includes the device-side symlink fix from `cc49dd9` and the
+post-observation capture from `383310b`. Use the revised plan, Keychain handoff,
+and latest local device report. The next decision is whether a real authorization
+response releases the HTTP wait. Subsequent recovery trials use ordinary Keychain
+access and, where needed, an isolated login Keychain before considering browser
+code changes.
 
 From the repository root, verify the portable kit with:
 
