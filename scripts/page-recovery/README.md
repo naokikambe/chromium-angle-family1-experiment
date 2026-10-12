@@ -6,7 +6,7 @@
 
 ## 入力を設定する
 
-リポジトリの`scripts/page-recovery/`ディレクトリへ移動してから、次の変数を実際の保存場所に設定する。既存S0は「ANGLE追加なしで初回署名した失敗コピー」。署名用原本は既存S0と別の、完全未署名のChromium.app。
+リポジトリの`scripts/page-recovery/`ディレクトリへ移動してから、次の変数を実際の保存場所に設定する。比較用stock appと署名用原本は別のcopyを使い、原本は完全未署名のChromium.appとする。
 
 ```bash
 cd scripts/page-recovery
@@ -18,13 +18,13 @@ cd scripts/page-recovery
 kit_dir="$PWD"
 task_dir="$HOME/Desktop/chromium-page-recovery-$(date +%Y%m%d-%H%M%S)"
 mkdir -m 700 "$task_dir"
-old_stock_app="/実際の保存場所/S0/Chromium.app"
+old_stock_app="/実際の保存場所/stock-copy/Chromium.app"
 unsigned_app="/実際の保存場所/chrome-mac/Chromium.app"
 revisions_file="/実際の保存場所/REVISIONS"
 identity_sha1="Apple Development証明書の40桁SHA1"
 ```
 
-パスはMacの保存場所に置き換える。既存S0、未署名原本、REVISIONS、署名証明書の対応付けが必要である。
+パスは対象環境の保存場所に置き換える。比較用stock app、未署名原本、REVISIONS、署名identityの対応付けが必要である。
 
 ## 1. 元の失敗を取得する
 
@@ -70,9 +70,21 @@ HTTP 200や画像ファイルの存在だけでは合格にしない。試験ご
 
 stderrには`process_requirement=2`などのログを追加する。`ProcessIsSignedAndFulfillsRequirement`、`HasSameTeamIdentifier`、Mach port rendezvous、Mojo切断などを確認する。署名検証の警告があるだけでHTTP停止の原因とはしない。参照版ではMach port peer validationは既定ON、enforcementは既定OFFであり、検証失敗が通信を実際に止めた証拠が必要である。
 
+### KeychainのSafe Storage待ちを診断する
+
+Chromium Safe Storageへのアクセス拒否や、非同期暗号化providerのcallback待ちは、HTTP navigationが開始しない場合に調べる候補である。診断では各runに新しいprofileを使い、app、browser arguments、fixtureを揃えて一度に一つの条件だけを変える。必要なら`--use-mock-keychain`を対照条件として使い、通常Keychainとの差を比較する。GPU設定など別条件も比較する場合は、どの条件を固定し、どれを変更したかを記録する。
+
+同フラグだけの対照でHTTP fixtureの結果が変わった場合、Keychain provider経路が関係する可能性を示す。ただし、それ単独では特定の過去trialの原因や製品受入を証明しない。判断を強めるには、同じ時刻・processに結び付くruntime wait、Keychain/securityd authorization、read-only trusted-app metadata、request timelineを対応付ける。SecretsやKeychain item contentsを取得せず、ACLを変更しない。Chromiumの`KeychainKeyProvider`はKeychain workerの完了までOSCryptAsync initialization callbackを待ち、cookie callbacksが完了する前にURL requestがHTTP transactionを遅らせる可能性がある。
+
+署名policyの比較は同一snapshotから作った新しいcopyで行い、nested signing plan、role flags、entitlements、verification resultを確認する。初回署名と後の再署名の記録は分ける。helper rolesの設定が合っていても、それだけでSafe Storage authorizationやHTTP停止を説明しない。signing correlationだけから因果を断定しない。
+
+`--use-mock-keychain`は診断用に限り、通常動作やproduct fixとして扱わない。Ordinary-Keychain acceptanceには通常GUIでの人間確認と、独立した3つのfresh profilesによる成功が必要である。Archived historical evidenceとの対応も確認する。過去trialの原因を未照合のまま一般化しない。
+
+固定ソースの追跡箇所は[Keychain key provider](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/components/os_crypt/async/browser/keychain_key_provider.mm)、[macOS Keychain password handling](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/components/os_crypt/common/keychain_password_mac.mm)、および[URL request job](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/net/url_request/url_request_http_job.cc)である。固定コードは調査の手掛かりであり、特定環境の実行時原因を単独で証明するものではない。
+
 ## 3. 署名設定の修正を、新規コピーで試す
 
-この試験は、旧S0のinventory／receiptで公式のHelper別設定との差が見つかった場合、または旧署名処理の対象を復元できず基準コピーが必要な場合に実施する。
+この試験は、保存済みinventory／receiptで公式のHelper別設定との差が見つかった場合、または以前の署名処理対象を復元できず基準copyが必要な場合に実施する。
 
 `sign_once.py`は次の設定を明示する。
 
@@ -124,7 +136,7 @@ python3 "$kit_dir/probe.py" probe --app "$task_dir/stock-role-policy/Chromium.ap
 
 ## 検証と出典
 
-クラウド側で標準ライブラリのテスト10件を実行。HTTP未受信と応答後失敗の区別、空白画像の誤合格防止、fixtureのcase識別、署名対象の重複防止、Chromium Helper別policy、凍結後変更の拒否、bundle外へのsymlink拒否などを確認した。プロセス起動〜CDP〜証跡保存の結合確認にはmock_browserを使い、Mac上のcodesign・本物のChromium・GUIは未検証。
+The portable suite checks HTTP failure classification, image validation, fixture isolation, signing policy, frozen-file detection, and bundle symlink handling. The symlink regression accepts internal links when the bundle root is reached through an aliased parent, while continuing to reject external and broken links. The mock browser exercises the CDP lifecycle but does not validate Chromium rendering or establish Keychain behavior. Use the GUI and fresh-profile acceptance criteria above for product acceptance.
 
 ```bash
 python3 -m unittest -v test_kit.py

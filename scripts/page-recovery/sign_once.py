@@ -61,12 +61,13 @@ def unsigned(app, out):
 
 
 def validate_links(app):
+    app_root = Path(app).resolve(strict=True)
     for root, dirs, files in os.walk(app, followlinks=False):
         for name in dirs + files:
             path = Path(root) / name
             if path.is_symlink():
                 resolved = path.resolve(strict=True)
-                if not resolved.is_relative_to(app):
+                if not resolved.is_relative_to(app_root):
                     raise RuntimeError("Bundle symlink points outside the source: " + str(path))
         dirs[:] = [d for d in dirs if not (Path(root) / d).is_symlink()]
 

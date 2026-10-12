@@ -12,17 +12,17 @@ Phase 5のページ表示復旧へ計画を立て直した。目標は、公式�
 | --- | --- | --- |
 | 過去の実機ANGLE／Metal／EGL／WebGL1最小描画 | 成功記録あり | 固定コミットの[実機観測記録](https://github.com/naokikambe/chromium-angle-family1-experiment/blob/cc781c1063261ffbe227939ff607ecefb51f6b2b/docs/phase5-real-device-observation.md)。新キットによる実行結果ではない |
 | 未署名のビルド済みChromiumのHTTPページ | CI成功記録あり | snapshot 1689422を使用したU0/U1。実機の初回署名後結果とは環境・入力版が異なる |
-| ANGLE追加なし／ありの初回署名済みChromium | 起動成功、HTTP document前で停止 | 10月4〜5日の実機S0/S1記録。署名に関連する条件は候補だが、単一の直接原因は未特定 |
+| HTTP停止の原因調査 | 継続中 | Chromium Safe Storage authorizationや非同期crypto callback waitなどの候補を、process/runtime、read-only metadata、network timelineの対応で検証する。署名との相関だけでは原因としない。現時点でroot causeやproduct acceptanceは宣言しない |
 | 通信診断ログ入りChromiumの全体ビルド | 未完成 | run 37464208418は時間切れ。小規模対象の成功で完成済みとは扱わない |
-| ページ復旧キット | 作成・portable検証10件成功 | `scripts/page-recovery/`。CDP結合確認はmock使用。Macのcodesign・本物のChromium・GUIでは未検証 |
-| 次の実機作業 | GitHubから実機へ取得して開始 | `phase5-page-recovery`ブランチをMacBookAir6,1へ取得。GUIユーザー・既存S0・完全未署名原本・REVISIONS・有効なApple Development identityを対応付け、ANGLE追加前のページ表示を基準化する |
+| ページ復旧キット | portable test suiteとsymlink root alias fix | `scripts/page-recovery/`。symlink regression covers internal aliases and rejects external or broken links. Platform behavior, GUI confirmation, and product acceptance require separate validation |
+| 次の作業 | 原因調査と受入確認 | GUI owner confirmation、独立した通常設定・fresh profileでの3回確認、Oct 5 archived evidenceとの照合を完了する。mock-keychainは診断対照に限り、通常Keychain product acceptanceには使わない |
 | KOOVの画面・基本操作・機器連携 | 未確認 | ページ表示復旧、独自ANGLE、WebGL1の確認後に進める |
 
 実行順序は[具体施策・実行計画](phase5-page-recovery-plan.md)、コマンドは[キットREADME](../scripts/page-recovery/README.md)、次のエージェントへの指示は[引き継ぎプロンプト](phase5-page-recovery-handoff.md)に記録した。過去の整理と現在までの経緯は[経過資料](phase5-page-recovery-history.md)を参照。
 
 一部の旧`WEBGL_SMOKE=pass`はテストページの読み込みだけを必須条件にしていた。context／draw、HTTP本文、画像、実GUIを別々に判定する。`RUNTIME_DEVICE_READY=false`はCI成果物の境界であり、過去に実機試験がなかったことを意味しない。
 
-クラウドで作成したキット・計画・記録は、GitHubの`phase5-page-recovery`ブランチから実機へ引き継ぐ。初期追加コミットは`fa2f3f7`。その後のプロンプト更新を含むブランチ先頭を取得し、試験時のHEADを記録する。実機署名・起動は実行待ちで、この準備作業ではCI dispatch／cancelを行っていない。小規模候補の追加探索は打ち切る方針とし、実行中の別作業については次の担当者が最新状態を確認する。
+ページ表示の原因調査は継続中。GUI owner confirmation、Oct 5 archived evidenceとの照合、ordinary-Keychain product acceptance、ANGLE/KOOVは保留。mock-keychainのdiagnostic resultはproduct recoveryやcause acceptanceを意味しない。小規模候補の追加探索は打ち切る方針とし、別作業の最新状態はその担当者が確認する。
 
 ## 2026-09-20時点のbaseline記録
 

@@ -1,19 +1,23 @@
 # Verification record
 
-- Platform: Linux cloud environment.
-- Command from repository root: `python3 -m unittest discover -s scripts/page-recovery -p 'test_kit.py' -v`
-- Result: 10 tests passed.
-- Compilation: probe.py, sign_once.py, cdp_transport.py passed py_compile.
-- CDP lifecycle was tested against mock_browser.py; this is not a Chromium rendering result.
-- macOS codesign, a real Chromium executable, and GUI display remain untested.
-- Downloaded entitlement sources and license are pinned in reference/provenance.json.
-- Repository integration: local Markdown links and pinned reference SHA-256 digests verified.
-- The mock browser is tracked executable; verification does not chmod source files.
-- Physical-Mac handoff update: checked 12 local Markdown links and shell-block
-  syntax in the four updated entry-point documents. No executable code changed;
-  the existing portable test result above remains the latest code verification.
-- Root-cause completion update: checked 13 local Markdown links and 4 shell
-  blocks in the four updated entry-point documents. Reviewed the completion
-  criteria, required new evidence for re-signing, and separation of cause
-  identification from subsequent ANGLE/KOOV work. Documentation changes only;
-  no new device experiment or root-cause finding is claimed.
+The portable suite uses the Python standard library:
+
+```bash
+python3 -m unittest -v test_kit.py
+```
+
+Coverage includes fixture classification, image validation, mock-browser CDP
+lifecycle, signing-plan policy, frozen-file checks, and bundle symlink handling.
+The symlink regression verifies that internal links remain valid when the bundle
+root is reached through an aliased parent, while external and broken links are
+rejected. `sign_once.py` canonicalizes the bundle root before checking resolved
+link targets.
+
+The mock browser exercises the probe lifecycle; it is not evidence of Chromium
+rendering. GUI confirmation, ordinary-Keychain behavior, and product acceptance
+are separate from these portable unit checks. Do not use the diagnostic
+`--use-mock-keychain` result as product acceptance.
+
+Reference files and their SHA-256 digests are recorded in
+`reference/provenance.json`. The mock browser is tracked executable; tests do
+not chmod source files.

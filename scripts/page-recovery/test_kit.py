@@ -151,6 +151,18 @@ class SigningTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 sign_once.validate_links(app)
 
+    def test_internal_link_is_allowed_when_app_root_uses_a_symlink_alias(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            real_parent = root / "real"
+            real_parent.mkdir()
+            app = self.fake_app(real_parent)
+            (app / "Contents/LinkToMain").symlink_to("MacOS/Chromium")
+            alias_parent = root / "alias"
+            alias_parent.symlink_to(real_parent, target_is_directory=True)
+
+            sign_once.validate_links(alias_parent / app.name)
+
     def test_broken_bundle_links_are_not_signed(self):
         with tempfile.TemporaryDirectory() as directory:
             app = self.fake_app(Path(directory))
