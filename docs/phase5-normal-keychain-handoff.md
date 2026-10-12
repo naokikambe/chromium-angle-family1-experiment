@@ -59,6 +59,16 @@ Allow Onceは現在のアクセスへの応答であり、後続の別プロセ�
 
    `scripts/page-recovery/persistent_cookie_runner.py`は、一つの新規profileでsynthetic persistent cookieを設定し、正常終了、SQLiteの暗号化metadata確認、同じprofileでの再起動とcookie再送信を測る実装です。cookie値は記録しません。最初の起動に必要な一回のAllowが明示承認されている場合だけ応答し、再起動後にpromptが再び出たら追加の同意を推定せず未受入として記録します。runnerは通常GPUを使い、Keychain ACL、Always Allow、既存profileは変更しません。
 
+### 同じ見た目のpromptを別のauthorization境界として診断する
+
+同じプロセス内で見た目が同じKeychain promptが続けて現れても、一つの承認が繰り返されたとは限りません。Apple公開Securityソースの例では、`SecurityServerAcl::validate`が通常のACL検証を実行してから、その外側でpartition検証を行います。Decrypt authorization（action 24）の後、client partitionが登録リストにない場合は、partitionを追加する検証（`CSSM_ACL_AUTHORIZATION_PARTITION_ID`、action 65538）へ進む構造です。どちらもKeychain promptを表示し得るため、同一PIDと同じprompt外観だけでは、どの境界で止まったか判定できません。[`acls.cpp`の`validate`、`validatePartition`、`extendPartition`](https://github.com/apple-oss-distributions/Security/blob/main/securityd/src/acls.cpp)
+
+同じ公開ソースの`KeychainPromptAclSubject::validateExplicitly`では、ACL／partition更新callbackはremember応答があり、かつ検証状態が条件を満たす場合にだけ呼び出されます。通常のAllow応答そのものを、恒久ACL追加やpartition追加と同一視しないでください。[`acl_keychain.cpp`の`validateExplicitly`](https://github.com/apple-oss-distributions/Security/blob/main/securityd/src/acl_keychain.cpp) これらは公開ソース上の仕組みを示す参照であり、対象OSが同じ実装・経路を使うという証明ではありません。
+
+診断では同一PIDについて、prompt前後のpermission event、action値、partition情報、API返却を一つの時系列へ対応付けます。action 24の試行に対するAllowが観測されてもAPI成功とは限りません。次にaction 65538相当のpromptが現れた場合は、未応答・回答済み・観測不能を分けて記録し、誤ったパスワードだったと推定しません。最初の応答から二つ目への応答、Always Allow、ACLまたはpartitionの編集への同意は推定せず、それぞれの対象と変更について別の明示的なオーナー承認を得ます。
+
+観測時間にも上限があります。CDP navigationが短いtimeoutで終了し、その後runnerが`Browser.close`を呼ぶと、ページ要求と観測がそこで打ち切られることがあります。準備した観測待ち時間は、runnerがその終了経路へ入った場合の実測時間を保証しません。アプリ終了時のwatchdogによるexitは正常終了ではなく、鍵やcookieの成功も証明しません。観測中にserver HTTP eventがなかった場合に言えるのは、その観測範囲で記録されなかったことだけです。
+
 ## 結果別に次へ進む
 
 | 結果 | 同じ委任内で行うこと |
