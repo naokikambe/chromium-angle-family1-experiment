@@ -13,14 +13,14 @@ Phase 5のページ表示復旧へ計画を立て直した。目標は、公式�
 | ANGLE追加なし／ありの初回署名済みChromium | 起動成功、HTTP document前で停止 | 10月4〜5日の実機S0/S1記録。署名に関連する条件は候補だが、単一の直接原因は未特定 |
 | 通信診断ログ入りChromiumの全体ビルド | 未完成 | run 37464208418は時間切れ。小規模対象の成功で完成済みとは扱わない |
 | ページ復旧キット | 作成・portable検証10件成功 | `scripts/page-recovery/`。CDP結合確認はmock使用。Macのcodesign・本物のChromium・GUIでは未検証 |
-| 次の実機作業 | 入力の所在確認から開始 | 既存S0・完全未署名原本・REVISIONS・有効なApple Development identityを対応付け、ANGLE追加前のページ表示を基準化する |
+| 次の実機作業 | GitHubから実機へ取得して開始 | `phase5-page-recovery`ブランチをMacBookAir6,1へ取得。GUIユーザー・既存S0・完全未署名原本・REVISIONS・有効なApple Development identityを対応付け、ANGLE追加前のページ表示を基準化する |
 | KOOVの画面・基本操作・機器連携 | 未確認 | ページ表示復旧、独自ANGLE、WebGL1の確認後に進める |
 
 実行順序は[具体施策・実行計画](phase5-page-recovery-plan.md)、コマンドは[キットREADME](../scripts/page-recovery/README.md)、次のエージェントへの指示は[引き継ぎプロンプト](phase5-page-recovery-handoff.md)に記録した。過去の整理と現在までの経緯は[経過資料](phase5-page-recovery-history.md)を参照。
 
 一部の旧`WEBGL_SMOKE=pass`はテストページの読み込みだけを必須条件にしていた。context／draw、HTTP本文、画像、実GUIを別々に判定する。`RUNTIME_DEVICE_READY=false`はCI成果物の境界であり、過去に実機試験がなかったことを意味しない。
 
-今回のコミットはキット・計画・記録の準備で、実機署名や起動、CI dispatch／cancel、リモートpushは実施していない。小規模候補の追加探索は打ち切る方針とし、実行中の別作業については次の担当者が最新状態を確認する。
+クラウドで作成したキット・計画・記録は、GitHubの`phase5-page-recovery`ブランチから実機へ引き継ぐ。初期追加コミットは`fa2f3f7`。その後のプロンプト更新を含むブランチ先頭を取得し、試験時のHEADを記録する。実機署名・起動は実行待ちで、この準備作業ではCI dispatch／cancelを行っていない。小規模候補の追加探索は打ち切る方針とし、実行中の別作業については次の担当者が最新状態を確認する。
 
 ## 2026-09-20時点のbaseline記録
 

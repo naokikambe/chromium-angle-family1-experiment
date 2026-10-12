@@ -12,6 +12,8 @@
 
 ## 実行手段
 
+クラウド上の準備からMacBookAir6,1実機での作業へ移る。GitHubの`naokikambe/chromium-angle-family1-experiment`、`phase5-page-recovery`ブランチを実機へclone、または既存checkoutでfetchして別worktreeへ展開する。取得コマンドとGUIユーザー・Keychainの開始確認は[実機向け引き継ぎプロンプト](phase5-page-recovery-handoff.md)に記載した。実験用app・過去ログ・証明書は実機の保存物を使用する。
+
 リポジトリの [`scripts/page-recovery/`](../scripts/page-recovery/README.md) をMacで使用する。Python 3.10以上と、MacのGUIログインユーザーのTerminalを使用する。追加Pythonパッケージは不要。
 
 - `probe.py inventory`：本体・全Mach-Oの署名者、Team ID、署名要件、entitlement、flags、hashを記録する。

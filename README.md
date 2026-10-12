@@ -10,9 +10,14 @@ is unresolved. The new recovery kit passes portable checks; its macOS signing
 and browser execution have not been validated.
 
 - [Execution plan](docs/phase5-page-recovery-plan.md)
-- [Copyable agent handoff](docs/phase5-page-recovery-handoff.md)
+- [Copyable handoff for the physical Mac](docs/phase5-page-recovery-handoff.md)
 - [Experiment history](docs/phase5-page-recovery-history.md)
 - [Recovery kit and commands](scripts/page-recovery/README.md)
+
+For the next stage, obtain the `phase5-page-recovery` branch from GitHub on the
+target MacBookAir6,1. The handoff includes clone/fetch instructions, GUI-user and
+Keychain checks, and the order of the device experiments. Browser bundles and
+previous evidence are inputs on the Mac; they are not included in this repository.
 
 From the repository root, verify the portable kit with:
 

@@ -9,3 +9,6 @@
 - Downloaded entitlement sources and license are pinned in reference/provenance.json.
 - Repository integration: local Markdown links and pinned reference SHA-256 digests verified.
 - The mock browser is tracked executable; verification does not chmod source files.
+- Physical-Mac handoff update: checked 12 local Markdown links and shell-block
+  syntax in the four updated entry-point documents. No executable code changed;
+  the existing portable test result above remains the latest code verification.
