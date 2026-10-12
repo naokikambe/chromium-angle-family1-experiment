@@ -392,3 +392,52 @@ this run.
 This establishes that the pinned `opus_demo` executable target compiles on
 the configured macOS Intel runner within the bounded experiment. It is not a
 full Chromium build or same-revision runtime/U0/U1 evidence.
+
+## sqlite, libvpx, and BoringSSL candidate batch (2026-10-11)
+
+The exact executable labels were verified in the pinned Chromium BUILD.gn
+files: `//third_party/sqlite:sqlite_shell` in
+`third_party/sqlite/BUILD.gn`,
+`//third_party/libvpx:decode_encode_profile_test` in
+`third_party/libvpx/BUILD.gn`, and `//third_party/boringssl:bssl_bench` in
+`third_party/boringssl/BUILD.gn`.
+
+Probe run [38180664558](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/38180664558)
+used workflow commit `8df3e449d2dff8ca4532bbb44a56dbfc5d86b28b`, target ref
+`a3bb53b3e0f9e58aff547b26811643a967cdf5fa`, Chromium revision
+`b510e9d7cd3a2fbd78d0ddc42234103206c5f78d`, ANGLE revision
+`e12217f3e133cb1029b050d893b1806d141483be`, and diagnostic patch SHA-256
+`1be36abf18ac58b94ff1421607be18152c0373a9f92b0aeeb14ad8e352a250c1`. It
+ran with `run_small_target=false`, `probe_small_target=true`, and the 2,000
+task cap. Source/dependency sync took 1,248 seconds (20m48s); graph
+generation and all three probes completed successfully. The run concluded
+`success`, and the compile step was skipped as requested.
+
+| Ninja target | GN label | Dry-run tasks | Compile steps | Link steps | Result |
+| --- | --- | ---: | ---: | ---: | --- |
+| `sqlite_shell` | `//third_party/sqlite:sqlite_shell` | 2,921 | 2,514 | 113 | `too-large`, skipped |
+| `decode_encode_profile_test` | `//third_party/libvpx:decode_encode_profile_test` | 2,751 | 2,356 | 109 | `too-large`, skipped |
+| `bssl_bench` | `//third_party/boringssl:bssl_bench` | 550 | 545 | 5 | `within-cap` |
+
+The supplemental GN type query timed out at its 15-second budget for each
+candidate and returned `unknown`; each Ninja dry-run count completed, and the
+workflow recorded `graph_inspection_status=success`,
+`small_target_status=probe-success`, and `classification=success`. The GN
+type lookup timeout did not prevent task counting or candidate
+classification.
+
+The bounded compile was run separately as
+[38182705630](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/38182705630)
+with label `//third_party/boringssl:bssl_bench`,
+`run_small_target=true`, `probe_small_target=false`, the same pinned inputs,
+the 2,000 task cap, and a 1,200-second compile budget. Source/dependency sync
+took 1,704 seconds (28m24s). Its compile-run dry-run counted 551 tasks, still
+within the cap. The compile exited 0 and the supervisor recorded
+`build_completion_status=success` after 446 seconds (7m26s); final target
+status and workflow classification were both `success`. The overall run
+concluded `success` at 23:45:53 UTC.
+
+These results show that the pinned `bssl_bench` executable target compiled
+within the bounded experiment. The two over-cap candidates were skipped
+individually; this is not a full Chromium build or same-revision runtime/U0/U1
+evidence.
