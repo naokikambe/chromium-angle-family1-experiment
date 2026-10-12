@@ -57,3 +57,13 @@ remain separate acceptance conditions.
   post-observation tests at `383310b` passed the previous independent cloud review.
 - Normal-Keychain recovery and account/access-policy proposals are planned work,
   not new device findings or authorization to modify existing Keychain items.
+
+## Public-source review (2026-10-12)
+
+- Mapped Apple API, ACL, code-identity, and Keychain-implementation documentation
+  to the pinned Chromium source. The source note distinguishes documented
+  behavior, code-derived expectations, and device evidence still required.
+- Added the item-location/search-list check because another login user does not
+  isolate a shared System keychain item.
+- Checked 18 local Markdown links and 2 shell blocks in four updated entry-point
+  and evidence documents. This update changes documentation only.

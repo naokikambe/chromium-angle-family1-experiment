@@ -2,6 +2,8 @@ Mac実機で進めているChromiumのページ描画不可問題の調査を続
 
 現在の判断・結果別の分岐・通常Keychainでの復旧案は[再計画](phase5-page-recovery-replan.md)を参照してください。今回の委任作業は原因特定までとし、復旧・Keychain環境整備・ANGLE／KOOVは結果に応じた後続工程です。
 
+[公開資料の調査記録](phase5-keychain-public-evidence.md)も確認し、対象itemの実所属Keychain・検索順・使用するアクセス制御方式を秘密値を読まずに対応付けてください。別ユーザーでもSystem Keychainは共通なので、独立loginの比較を完全なKeychain分離だと仮定しません。
+
 ## 開始地点
 
 リポジトリは `naokikambe/chromium-angle-family1-experiment`。実機側の変更は `page-recovery-device-20261012` の `383310b`、続行用の資料は、その変更を取り込んだ `phase5-page-recovery` ブランチにあります。既存checkoutのHEAD・dirty状態・AGENTS.mdを確認し、既存作業を保持して最新版の資料を取得してください。

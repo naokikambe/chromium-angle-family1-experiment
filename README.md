@@ -18,6 +18,7 @@ of failures after first signing. ANGLE integration and full KOOV validation are
 subsequent work.
 
 - [Revised execution plan and findings](docs/phase5-page-recovery-replan.md)
+- [Public sources supporting the Keychain plan](docs/phase5-keychain-public-evidence.md)
 - [Initial execution plan](docs/phase5-page-recovery-plan.md)
 - [Copyable handoff for the physical Mac](docs/phase5-page-recovery-handoff.md)
 - [Continue the Keychain investigation](docs/phase5-keychain-investigation-handoff.md)
