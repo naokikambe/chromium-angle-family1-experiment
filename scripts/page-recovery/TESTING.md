@@ -90,6 +90,18 @@ remain separate acceptance conditions.
 - The target Mac run still requires explicit owner authorization and real GUI
   confirmation; unit coverage is not normal-Keychain acceptance.
 
+## Stock preflight follow-up review (2026-10-12)
+
+- Fast-forwarded to `2e70227` and independently passed its three focused
+  persistence tests and Python syntax checks in the cloud.
+- Updated the handoff to distinguish owner-reported Allow, unobserved API return,
+  and a separate unanswered trial. Allow Once does not grant later-process trust.
+- Added read-only signature/certificate/search-scope diagnosis before acceptance;
+  trust errors do not establish file tampering or a re-signing cause.
+- Checked 19 local Markdown links in the three updated plan/status documents;
+  whitespace checks passed. No new device trials, Keychain approvals, or trust
+  configuration changes were performed by this documentation update.
+
 ## Bundled investigation handoff review (2026-10-12)
 
 - Added an investigation-wide delegation boundary, operation conditions,

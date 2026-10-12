@@ -18,6 +18,7 @@ Phase 5のページ表示復旧へ計画を立て直した。目標は、公式�
 | 通信診断ログ入りChromiumの全体ビルド | 未完成 | run 37464208418は時間切れ。小規模対象の成功で完成済みとは扱わない |
 | ページ復旧キット | portable test suiteとsymlink root alias fix | `scripts/page-recovery/`。symlink regression covers internal aliases and rejects external or broken links. Platform behavior, GUI confirmation, and product acceptance require separate validation |
 | 次の作業 | 通常Keychainでのstock復旧 | 正常な鍵取得、通常GPUでの独立profile3件と実GUI、同じ検証profileの再起動・暗号化cookie利用を一括で検証する。必要な許可操作と環境変更は既存同意から推定しない |
+| stock受入の現在の阻害要因 | Allow試行のAPI境界と署名信頼を未確認 | 担当者報告では同じAllow試行の返却stackは未取得。別の未応答試行のstackは転用しない。署名検証の信頼エラーとidentity検索0件を読み取り専用で切り分け、追加Allowの既存回答を確認する |
 | 復旧の後続工程 | 通常Keychainの継続利用条件を検証 | 正常アクセス、同じ署名済みappと独立login Keychainの比較、対象appに限定した信頼条件または利用分離の方針を選択。環境作成・権限変更は現在の原因調査とは別の実行範囲 |
 | KOOVの画面・基本操作・機器連携 | 未確認 | ページ表示復旧、独自ANGLE、WebGL1の確認後に進める |
 
