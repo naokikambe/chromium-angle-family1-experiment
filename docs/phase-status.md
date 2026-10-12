@@ -17,7 +17,7 @@ Phase 5のページ表示復旧へ計画を立て直した。目標は、公式�
 | HTTP停止の原因調査 | 現行S0のKeychain承認待ちが強く支持される | 担当者報告では通常→mock→通常と同一試行のruntime／network対応がある。拒否応答後・実GUIは未確認。callbackの中間経路にはソースからの推定が含まれ、調査完了は未宣言 |
 | 通信診断ログ入りChromiumの全体ビルド | 未完成 | run 37464208418は時間切れ。小規模対象の成功で完成済みとは扱わない |
 | ページ復旧キット | portable test suiteとsymlink root alias fix | `scripts/page-recovery/`。symlink regression covers internal aliases and rejects external or broken links. Platform behavior, GUI confirmation, and product acceptance require separate validation |
-| 次の作業 | 拒否応答後と実GUIで因果を確認 | 既存対照を再利用し、応答前後のAPI／callback／HTTP、独立した3試験の実GUIを確認。383310bのpost-observation採取を使用する |
+| 次の作業 | 起動前の準備を解決し、拒否応答後と実GUIで因果を確認 | loopback失敗と自動審査拒否の具体的理由を切り分ける。既存の同意回答を確認し、GPU無効化を固定した対照で応答前後のAPI／callback／HTTPと独立した3試験の実GUIを確認。383310bのpost-observation採取を使用する。通常GPUの動作は別検証 |
 | 復旧の後続工程 | 通常Keychainの継続利用条件を検証 | 正常アクセス、同じ署名済みappと独立login Keychainの比較、対象appに限定した信頼条件または利用分離の方針を選択。環境作成・権限変更は現在の原因調査とは別の実行範囲 |
 | KOOVの画面・基本操作・機器連携 | 未確認 | ページ表示復旧、独自ANGLE、WebGL1の確認後に進める |
 

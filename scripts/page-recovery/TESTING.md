@@ -67,3 +67,13 @@ remain separate acceptance conditions.
   isolate a shared System keychain item.
 - Checked 18 local Markdown links and 2 shell blocks in four updated entry-point
   and evidence documents. This update changes documentation only.
+
+## Restart handoff review (2026-10-12)
+
+- Distinguished loopback preparation failure, prelaunch approval-review denial,
+  unanswered Keychain prompts, and an actual owner denial response.
+- Kept the existing GPU-disabled condition constant for Keychain comparisons;
+  normal GPU operation requires a separate comparison.
+- Checked 17 local Markdown links and 1 bash block in the three updated handoff,
+  plan, and status documents; whitespace checks passed.
+- Documentation only: no new device results, permission grants, or code changes.
