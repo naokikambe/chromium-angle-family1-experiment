@@ -21,3 +21,14 @@ are separate from these portable unit checks. Do not use the diagnostic
 Reference files and their SHA-256 digests are recorded in
 `reference/provenance.json`. The mock browser is tracked executable; tests do
 not chmod source files.
+
+## Continuation handoff verification (2026-10-12)
+
+- The `cc49dd9` portable suite was independently checked in the cloud: 11 tests
+  passed. This is a script verification result, not device rendering evidence.
+- The continuation update changes documentation only. Checked 23 local Markdown
+  links and 14 shell blocks in six documents, and reviewed the authorization
+  response observations and root-cause completion criteria.
+- The handoff notes that `probe.py` captures document/image evidence before its
+  GUI observation delay; response-after-delay experiments need fresh observations.
+- Device-specific measurements remain in the local investigation report.

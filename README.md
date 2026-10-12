@@ -6,8 +6,9 @@ display in an Apple Development-signed Chromium copy.
 Current work: Phase 5 page recovery. Historical device experiments reached
 Metal/EGL initialization and minimal WebGL1 drawing, but signed stock and
 ANGLE-added Chromium copies failed HTTP document navigation. The direct cause
-is unresolved. The new recovery kit passes portable checks; its macOS signing
-and browser execution have not been validated.
+is unresolved. The recovery kit provides portable checks. Device runtime
+findings and unresolved acceptance checks belong in the local investigation
+report.
 
 The current device investigation is complete only when the root cause of the
 page-display failure is established by runtime evidence and controlled
@@ -18,6 +19,7 @@ subsequent work.
 
 - [Execution plan](docs/phase5-page-recovery-plan.md)
 - [Copyable handoff for the physical Mac](docs/phase5-page-recovery-handoff.md)
+- [Continue the Keychain investigation](docs/phase5-keychain-investigation-handoff.md)
 - [Experiment history](docs/phase5-page-recovery-history.md)
 - [Recovery kit and commands](scripts/page-recovery/README.md)
 
@@ -25,6 +27,11 @@ For the next stage, obtain the `phase5-page-recovery` branch from GitHub on the
 target MacBookAir6,1. The handoff includes clone/fetch instructions, GUI-user and
 Keychain checks, and the order of the device experiments. Browser bundles and
 previous evidence are inputs on the Mac; they are not included in this repository.
+
+The branch includes the device-side symlink fix from `cc49dd9`. For continuing
+the investigation, use the Keychain handoff and the latest local device report.
+It specifies authorization-response observations, repeated provider comparisons,
+GUI checks, and the evidence required to establish the cause.
 
 From the repository root, verify the portable kit with:
 

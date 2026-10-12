@@ -72,6 +72,8 @@ stderrには`process_requirement=2`などのログを追加する。`ProcessIsSi
 
 ### KeychainのSafe Storage待ちを診断する
 
+実機での続行手順と完了条件は[Keychain調査の続行プロンプト](../../docs/phase5-keychain-investigation-handoff.md)を参照する。通常→mock→通常の対照を承認状態変更の前に行い、未応答の承認待ちと拒否応答が返った状態を区別する。`--observe-seconds`中に応答した場合、待機前に採取されたdocument・画像を応答後の結果として使用せず、追加観測で採取時点をそろえる。
+
 Chromium Safe Storageへのアクセス拒否や、非同期暗号化providerのcallback待ちは、HTTP navigationが開始しない場合に調べる候補である。診断では各runに新しいprofileを使い、app、browser arguments、fixtureを揃えて一度に一つの条件だけを変える。必要なら`--use-mock-keychain`を対照条件として使い、通常Keychainとの差を比較する。GPU設定など別条件も比較する場合は、どの条件を固定し、どれを変更したかを記録する。
 
 同フラグだけの対照でHTTP fixtureの結果が変わった場合、Keychain provider経路が関係する可能性を示す。ただし、それ単独では特定の過去trialの原因や製品受入を証明しない。判断を強めるには、同じ時刻・processに結び付くruntime wait、Keychain/securityd authorization、read-only trusted-app metadata、request timelineを対応付ける。SecretsやKeychain item contentsを取得せず、ACLを変更しない。Chromiumの`KeychainKeyProvider`はKeychain workerの完了までOSCryptAsync initialization callbackを待ち、cookie callbacksが完了する前にURL requestがHTTP transactionを遅らせる可能性がある。

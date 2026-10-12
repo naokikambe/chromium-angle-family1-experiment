@@ -59,6 +59,10 @@ ChromiumのProcessRequirementは、Team IDだけでなく証明書種別も照�
 
 ### KeychainのSafe Storage待ちを診断する
 
+続行する実機担当者は[Keychain調査の続行プロンプト](phase5-keychain-investigation-handoff.md)を使用する。次は、承認状態を変える前の通常→mock→通常の対照、独立した3試験の実GUI確認、承認応答前後のAPI／callback／HTTP timeline、10月5日の記録との照合を進める。アクセス拒否がAPIから返った状態と、未応答の承認待ちで返らない状態を区別する。根本原因の特定と通常Keychainでの製品受入は別の判定である。
+
+現在の`probe.py`はGUI観察待機前にdocumentと画像を採取する。待機中にダイアログへ応答する試験では、応答後の観測を改めて採取し、応答前の結果で復旧を判定しない。
+
 Chromium Safe Storage authorizationや、暗号化providerの非同期callback待ちは、HTTP navigationが始まらない場合に調べる候補である。各試行にはfresh profileを使い、app、arguments、fixtureなどの条件を揃えて一つの要因だけを変える。`--use-mock-keychain`を対照にする場合も、それ以外のbrowser argumentsと環境条件を固定する。GPU設定など別要因の対照を行うときは、変更した条件を明示する。
 
 候補を評価するには、process stack、同じ時刻のsecurityd authorization記録、read-only trusted-app metadata、nonce付きnetwork request timelineを相互に対応付ける。確認対象は、Keychain item accessのauthorization待ち、OSCryptAsync initialization callback、cookie-store callback、およびHTTP transaction開始の順序である。`--use-mock-keychain`で結果が変化しても、それだけで機構や製品原因を確定しない。SecretsやKeychain item contentsを取得せず、ACLを変更しない。
@@ -72,7 +76,7 @@ Chromium Safe Storage authorizationや、暗号化providerの非同期callback�
 
 署名policy比較では同一snapshot由来のunsigned sourceと別のnew outputを使い、complete signing planとrole settingsを確認する。初回署名と後の再署名を区別し、適切なrole policyでも問題が続く場合はKeychain authorizationなど他要因を調べる。`--use-mock-keychain`は診断介入であり、製品修正として採用しない。Ordinary-Keychain acceptanceには、通常GUIの人間確認と通常設定での独立した3 fresh profilesの成功が必要である。Oct 5 archived evidenceとの対応も確認する。
 
-コード経路の参照は固定commit `82303c21` の`components/os_crypt/async/browser/keychain_key_provider.mm`、`components/os_crypt/common/keychain_password_mac.mm`、`net/url_request/url_request_http_job.cc`。
+コード経路の参照は固定commit `82303c21` の`components/os_crypt/async/browser/keychain_key_provider.mm`、`components/os_crypt/common/keychain_password_mac.mm`、`net/url_request/url_request_http_job.cc`。中間のcallback依存は`components/os_crypt/async/browser/os_crypt_async.cc`、`services/network/network_context.cc`、`net/extras/sqlite/sqlite_persistent_cookie_store.cc`で確認し、実際の入力版・実行時証拠と対応付ける。
 
 ### 観測環境を正す
 

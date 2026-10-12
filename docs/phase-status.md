@@ -15,10 +15,12 @@ Phase 5のページ表示復旧へ計画を立て直した。目標は、公式�
 | HTTP停止の原因調査 | 継続中 | Chromium Safe Storage authorizationや非同期crypto callback waitなどの候補を、process/runtime、read-only metadata、network timelineの対応で検証する。署名との相関だけでは原因としない。現時点でroot causeやproduct acceptanceは宣言しない |
 | 通信診断ログ入りChromiumの全体ビルド | 未完成 | run 37464208418は時間切れ。小規模対象の成功で完成済みとは扱わない |
 | ページ復旧キット | portable test suiteとsymlink root alias fix | `scripts/page-recovery/`。symlink regression covers internal aliases and rejects external or broken links. Platform behavior, GUI confirmation, and product acceptance require separate validation |
-| 次の作業 | 原因調査と受入確認 | GUI owner confirmation、独立した通常設定・fresh profileでの3回確認、Oct 5 archived evidenceとの照合を完了する。mock-keychainは診断対照に限り、通常Keychain product acceptanceには使わない |
+| 次の作業 | Keychain経路の原因検証 | 通常→mock→通常の対照、独立した3試験の実GUI確認、承認応答前後のcallback／HTTP timeline、10月5日の証跡との照合。通常Keychainでの製品受入は後続工程 |
 | KOOVの画面・基本操作・機器連携 | 未確認 | ページ表示復旧、独自ANGLE、WebGL1の確認後に進める |
 
 実行順序は[具体施策・実行計画](phase5-page-recovery-plan.md)、コマンドは[キットREADME](../scripts/page-recovery/README.md)、次のエージェントへの指示は[引き継ぎプロンプト](phase5-page-recovery-handoff.md)に記録した。過去の整理と現在までの経緯は[経過資料](phase5-page-recovery-history.md)を参照。
+
+Keychain経路を優先する続行指示は[続行プロンプト](phase5-keychain-investigation-handoff.md)に記録した。公開資料は一般的な手順と判定条件を示し、実機固有の結果はローカルの最新調査レポートへ保存する。
 
 一部の旧`WEBGL_SMOKE=pass`はテストページの読み込みだけを必須条件にしていた。context／draw、HTTP本文、画像、実GUIを別々に判定する。`RUNTIME_DEVICE_READY=false`はCI成果物の境界であり、過去に実機試験がなかったことを意味しない。
 

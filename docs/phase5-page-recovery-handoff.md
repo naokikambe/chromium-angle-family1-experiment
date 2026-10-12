@@ -1,3 +1,5 @@
+Keychain経路を絞り込んだ実機調査を続行する場合は、[Keychain調査の続行プロンプト](phase5-keychain-investigation-handoff.md)を使用してください。以下は初回の調査指示と一般的な完了条件の記録です。
+
 あなたは検証対象のMac実機で操作するエージェントです。クラウドで準備した診断キットをGitHubから取得し、chromium-angle-family1-experimentのPhase 5を進めてください。今回の依頼の完了条件は、ページ描画不可問題の根本原因を、実機の証拠と対照実験によって突き止めることです。MacのGUIログインユーザーの権限で、証拠採取・原因検証と、その証明に必要な修正・初回署名・起動・再試験を実行してください。
 
 製品としての最終目標は、MacBookAir6,1／Intel HD Graphics 5000で「一度も署名されていない公式のビルド済みChromiumに独自ANGLEを組み込み、完成後にApple Development証明書で初回署名し、HTTPページとKOOVを表示する」ことです。まずANGLE追加前の初回署名済みstock Chromiumで失敗を再現し、原因を検証してください。ANGLE移植・KOOV全体の動作確認は原因特定後の後続工程であり、今回の調査の完了条件には含めません。
