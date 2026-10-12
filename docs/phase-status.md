@@ -6,6 +6,8 @@
 
 Phase 5のページ表示復旧へ計画を立て直した。目標は、公式未署名のビルド済みChromiumへ独自ANGLEを組み込み、Apple Developmentで初回署名した実機アプリでHTTPページとKOOVを表示すること。
 
+今回の実機調査は、ページ描画不可の根本原因を実行時の証拠と原因条件だけを変えた対照実験で特定するまでを完了条件とする。従来の「再署名が原因」を維持する結論には、具体的な故障の仕組みを示す追加証拠が必須であり、既存結果の再掲では完了としない。初回署名でも失敗した事実を説明し、既存根拠と追加証拠を比較して報告する。ANGLE移植・KOOV全体の確認は原因特定後の後続工程とする。
+
 | 項目 | 状態 | 証拠と限界 |
 | --- | --- | --- |
 | 過去の実機ANGLE／Metal／EGL／WebGL1最小描画 | 成功記録あり | 固定コミットの[実機観測記録](https://github.com/naokikambe/chromium-angle-family1-experiment/blob/cc781c1063261ffbe227939ff607ecefb51f6b2b/docs/phase5-real-device-observation.md)。新キットによる実行結果ではない |

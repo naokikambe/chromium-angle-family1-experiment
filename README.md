@@ -9,6 +9,13 @@ ANGLE-added Chromium copies failed HTTP document navigation. The direct cause
 is unresolved. The new recovery kit passes portable checks; its macOS signing
 and browser execution have not been validated.
 
+The current device investigation is complete only when the root cause of the
+page-display failure is established by runtime evidence and controlled
+failure/success comparisons. Retaining re-signing as the explanation requires
+new causal evidence beyond the previous observations, including an explanation
+of failures after first signing. ANGLE integration and full KOOV validation are
+subsequent work.
+
 - [Execution plan](docs/phase5-page-recovery-plan.md)
 - [Copyable handoff for the physical Mac](docs/phase5-page-recovery-handoff.md)
 - [Experiment history](docs/phase5-page-recovery-history.md)

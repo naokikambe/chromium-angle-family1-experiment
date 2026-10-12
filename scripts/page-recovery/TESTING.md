@@ -12,3 +12,8 @@
 - Physical-Mac handoff update: checked 12 local Markdown links and shell-block
   syntax in the four updated entry-point documents. No executable code changed;
   the existing portable test result above remains the latest code verification.
+- Root-cause completion update: checked 13 local Markdown links and 4 shell
+  blocks in the four updated entry-point documents. Reviewed the completion
+  criteria, required new evidence for re-signing, and separation of cause
+  identification from subsequent ANGLE/KOOV work. Documentation changes only;
+  no new device experiment or root-cause finding is claimed.
