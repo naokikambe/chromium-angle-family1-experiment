@@ -60,7 +60,7 @@ patch_path=$(manifest_value RUNTIME_PATCH_PATH)
 [[ "$patch_path" != /* && "$patch_path" != *..* ]] || fail 'runtime patch path is not repository-relative'
 patch_sha=$(manifest_value RUNTIME_PATCH_SHA256)
 [[ "$patch_sha" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid runtime patch SHA-256'
-[[ "$patch_sha" == b78c5d8b216c37318d6a8bead9754673e597954e39b3e95c9a07810dd7cc7e6e ]] ||
+[[ "$patch_sha" == 9b6c473781953bca65d612858a618d91fcce9e517e0dca3e5c18bc177b681727 ]] ||
   fail 'runtime patch hash does not match the reviewed source patch'
 check_sha256 "$artifact_dir/runtime-patch.diff" "$patch_sha" 'runtime patch provenance'
 [[ "$(manifest_value RUNTIME_PATCH_APPLIED)" == true ]] || fail 'runtime patch was not recorded as applied'
