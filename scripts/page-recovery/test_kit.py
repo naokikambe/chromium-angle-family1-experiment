@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""Portable checks for false-positive prevention and signing-plan boundaries."""
+import json
+from pathlib import Path
+import plistlib
+import struct
+import tempfile
+import threading
+import unittest
+import zlib
+from unittest.mock import patch
+
+import probe
+import sign_once
+
+
+def png(rgb, filter_type=0):
+    width, height, bpp = 8, 8, 3
+    row = bytes(rgb) * width
+    rows, previous = [], bytes(len(row))
+    for _ in range(height):
+        encoded = bytearray()
+        for x, value in enumerate(row):
+            a, b, c = (row[x-bpp] if x >= bpp else 0), previous[x], (previous[x-bpp] if x >= bpp else 0)
+            p = a+b-c
+            delta = (abs(p-a), abs(p-b), abs(p-c))
+            predictors = (0, a, b, (a+b)//2, (a,b,c)[delta.index(min(delta))])
+            encoded.append((value-predictors[filter_type]) % 256)
+        rows.append(bytes([filter_type]) + encoded)
+        previous = row
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind+data))
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width,height,8,2,0,0,0)) + chunk(b"IDAT", zlib.compress(b"".join(rows))) + chunk(b"IEND", b"")
+
+
+class ProbeTests(unittest.TestCase):
+    def passing(self):
+        return {"transport":"http", "cdp_connected":True, "document_ok":True,
+                "server_page_received":True,"http_document_200":True,"fetch_ok":True,
+                "visual_patch_ok":True,"canvas_ok":True}
+
+    def test_http_status_or_dom_alone_never_proves_rendering(self):
+        for field in ("server_page_received","http_document_200","document_ok","fetch_ok","visual_patch_ok","canvas_ok"):
+            result = self.passing()
+            result[field] = False
+            self.assertNotEqual(probe.classify(result), "FIXTURE_PASS_GUI_CONFIRMATION_PENDING", field)
+        self.assertEqual(probe.classify(self.passing()), "FIXTURE_PASS_GUI_CONFIRMATION_PENDING")
+
+    def test_no_http_request_is_distinct_from_response_without_document(self):
+        result = self.passing()
+        result["document_ok"] = False
+        result["server_page_received"] = False
+        self.assertEqual(probe.classify(result), "HTTP_REQUEST_NOT_RECEIVED")
+        result["server_page_received"] = True
+        self.assertEqual(probe.classify(result), "HTTP_RESPONSE_TO_DOCUMENT_FAILED")
+
+    def test_visual_check_rejects_blank_or_wrong_color_for_all_png_filters(self):
+        for filter_type in range(5):
+            self.assertTrue(probe.png_green(png((0,160,0), filter_type)), filter_type)
+            self.assertFalse(probe.png_green(png((255,255,255), filter_type)), filter_type)
+        self.assertFalse(probe.png_green(b"not a screenshot"))
+
+    def test_fixture_server_distinguishes_case_nonce_and_response(self):
+        server = probe.FixtureServer("active", probe.fixture("active"))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with probe.OPENER.open(f"http://127.0.0.1:{server.server_port}/active/echo.json", timeout=2) as response:
+                self.assertEqual(json.load(response), {"nonce":"active"})
+            with self.assertRaises(Exception):
+                probe.OPENER.open(f"http://127.0.0.1:{server.server_port}/old/page.html", timeout=2)
+            self.assertEqual([(e["path"],e["status"]) for e in server.events], [("/active/echo.json",200),("/old/page.html",404)])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+    def test_full_probe_lifecycle_records_success_and_missing_http_separately(self):
+        nonce = "a"*32
+        page = probe.fixture(nonce)
+        server = probe.FixtureServer(nonce,page)
+        thread = threading.Thread(target=server.serve_forever,daemon=True)
+        thread.start()
+        mock = Path(__file__).parent / "mock_browser.py"
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                success = probe.run_one(mock,page,server,root / "pass","http",[],5)
+                self.assertEqual(success["classification"],"FIXTURE_PASS_GUI_CONFIRMATION_PENDING",success)
+                self.assertTrue((root / "pass/page.png").is_file())
+                failed = probe.run_one(mock,page,server,root / "fail","http",["--simulate-http-blocked"],5)
+                self.assertEqual(failed["classification"],"HTTP_REQUEST_NOT_RECEIVED",failed)
+                self.assertTrue((root / "fail/result.json").is_file())
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+
+class SigningTests(unittest.TestCase):
+    def fake_app(self, root):
+        app = root / "Chromium.app"
+        def bundle(path, name):
+            directory = path / "Contents/MacOS"
+            directory.mkdir(parents=True)
+            (path / "Contents/Info.plist").write_bytes(plistlib.dumps({"CFBundleExecutable":name}))
+            # Thin x86_64 MH_EXECUTE header, enough for plan construction only.
+            (directory / name).write_bytes(bytes.fromhex("cffaedfe") + struct.pack("<III", 0x01000007,3,2))
+        bundle(app, "Chromium")
+        for suffix in ("", " (Renderer)", " (GPU)", " (Aperitif Renderer)", " (Aperitif GPU)"):
+            name = "Chromium Helper" + suffix
+            bundle(app / "Contents/Helpers" / (name+".app"), name)
+        return app
+
+    def test_chromium_helpers_receive_distinct_policy_and_each_host_is_signed_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app = self.fake_app(root)
+            steps = sign_once.build_commands(app, "0"*40, root / "entitlements")
+            self.assertEqual(len(steps), 6)
+            self.assertEqual(steps[-1]["target"], ".")
+            self.assertEqual(len({s["target"] for s in steps}), len(steps))
+            for step in steps:
+                argv = step["argv"]
+                self.assertNotIn("--force", argv)
+                flags = argv[argv.index("--options")+1]
+                if step["role"] in ("renderer","gpu"):
+                    self.assertNotIn("library", flags)
+                    self.assertIn("--entitlements", argv)
+                else:
+                    self.assertIn("library", flags)
+
+    def test_resource_change_invalidates_frozen_assembly(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = self.fake_app(Path(directory))
+            resource = app / "Contents/Resources.txt"
+            resource.write_text("before")
+            before = sign_once.freeze_files(app)
+            resource.write_text("after")
+            self.assertNotEqual(sign_once.freeze_files(app), before)
+
+    def test_framework_style_internal_links_are_allowed_external_links_are_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app = self.fake_app(root)
+            internal = app / "Contents/LinkToMain"
+            internal.symlink_to("MacOS/Chromium")
+            sign_once.validate_links(app)
+            external = app / "Contents/External"
+            external.symlink_to(root)
+            with self.assertRaises(RuntimeError):
+                sign_once.validate_links(app)
+
+    def test_broken_bundle_links_are_not_signed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = self.fake_app(Path(directory))
+            (app / "Contents/Broken").symlink_to("missing")
+            with self.assertRaises(FileNotFoundError):
+                sign_once.validate_links(app)
+
+    def test_adhoc_or_invalid_signature_is_not_accepted_as_unsigned(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = self.fake_app(Path(directory))
+            for output in ((0,"Signature=adhoc"),(1,"invalid signature"),(124,"COMMAND_TIMEOUT")):
+                with patch.object(sign_once,"capture",return_value=output):
+                    with self.assertRaises(RuntimeError):
+                        sign_once.unsigned(app, Path(directory))
+
+
+if __name__ == "__main__":
+    unittest.main()

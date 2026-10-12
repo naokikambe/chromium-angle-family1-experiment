@@ -1,6 +1,30 @@
 # Phase 状態
 
-更新日: 2026-09-20
+更新日: 2026-10-12
+
+## 現在の作業
+
+Phase 5のページ表示復旧へ計画を立て直した。目標は、公式未署名のビルド済みChromiumへ独自ANGLEを組み込み、Apple Developmentで初回署名した実機アプリでHTTPページとKOOVを表示すること。
+
+| 項目 | 状態 | 証拠と限界 |
+| --- | --- | --- |
+| 過去の実機ANGLE／Metal／EGL／WebGL1最小描画 | 成功記録あり | 固定コミットの[実機観測記録](https://github.com/naokikambe/chromium-angle-family1-experiment/blob/cc781c1063261ffbe227939ff607ecefb51f6b2b/docs/phase5-real-device-observation.md)。新キットによる実行結果ではない |
+| 未署名のビルド済みChromiumのHTTPページ | CI成功記録あり | snapshot 1689422を使用したU0/U1。実機の初回署名後結果とは環境・入力版が異なる |
+| ANGLE追加なし／ありの初回署名済みChromium | 起動成功、HTTP document前で停止 | 10月4〜5日の実機S0/S1記録。署名に関連する条件は候補だが、単一の直接原因は未特定 |
+| 通信診断ログ入りChromiumの全体ビルド | 未完成 | run 37464208418は時間切れ。小規模対象の成功で完成済みとは扱わない |
+| ページ復旧キット | 作成・portable検証10件成功 | `scripts/page-recovery/`。CDP結合確認はmock使用。Macのcodesign・本物のChromium・GUIでは未検証 |
+| 次の実機作業 | 入力の所在確認から開始 | 既存S0・完全未署名原本・REVISIONS・有効なApple Development identityを対応付け、ANGLE追加前のページ表示を基準化する |
+| KOOVの画面・基本操作・機器連携 | 未確認 | ページ表示復旧、独自ANGLE、WebGL1の確認後に進める |
+
+実行順序は[具体施策・実行計画](phase5-page-recovery-plan.md)、コマンドは[キットREADME](../scripts/page-recovery/README.md)、次のエージェントへの指示は[引き継ぎプロンプト](phase5-page-recovery-handoff.md)に記録した。過去の整理と現在までの経緯は[経過資料](phase5-page-recovery-history.md)を参照。
+
+一部の旧`WEBGL_SMOKE=pass`はテストページの読み込みだけを必須条件にしていた。context／draw、HTTP本文、画像、実GUIを別々に判定する。`RUNTIME_DEVICE_READY=false`はCI成果物の境界であり、過去に実機試験がなかったことを意味しない。
+
+今回のコミットはキット・計画・記録の準備で、実機署名や起動、CI dispatch／cancel、リモートpushは実施していない。小規模候補の追加探索は打ち切る方針とし、実行中の別作業については次の担当者が最新状態を確認する。
+
+## 2026-09-20時点のbaseline記録
+
+以下は当時の記録として保持する。現在のPhase 3以降の状態は上の表と固定された後続記録を参照する。
 
 | Phase | 状態 | 記録 |
 | --- | --- | --- |

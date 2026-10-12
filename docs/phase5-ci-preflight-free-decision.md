@@ -1,5 +1,21 @@
 # Phase 5 Free preflight decision
 
+## Page-recovery follow-up (2026-10-12)
+
+The current plan is to investigate failed HTTP document navigation on the
+target Mac using the existing first-signed stock Chromium copy, then verify
+concrete signing or runtime-condition fixes on a fresh copy. Additional
+unrelated small-target compiles are not the next recovery step. The historical
+results below remain build/preflight evidence; they do not establish recovery
+of signed-browser page display.
+
+See [the execution plan](phase5-page-recovery-plan.md),
+[the agent handoff](phase5-page-recovery-handoff.md), and
+[the recovery kit](../scripts/page-recovery/README.md). The kit is prepared and
+passes portable checks; macOS signing and real-browser execution remain
+unverified. This documentation change does not dispatch or cancel an Actions
+run or alter any existing compile budget.
+
 ## Decision
 
 As of 2026-10-07 UTC, the formal preflight path available on GitHub Free is

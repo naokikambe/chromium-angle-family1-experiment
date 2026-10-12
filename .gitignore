@@ -18,3 +18,5 @@ profiles/
 # Local operating-system and temporary files
 .DS_Store
 tmp/
+__pycache__/
+*.py[cod]

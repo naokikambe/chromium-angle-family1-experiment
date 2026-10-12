@@ -1,0 +1,138 @@
+# ページ表示復旧・実機実行キット
+
+既存の初回署名済みstock Chromiumの停止位置を確認し、署名部品の設定差が見つかった場合に、新規コピーでその修正を試すためのキット。Python 3.10以上、MacのGUIログインユーザーのTerminal、Apple Development証明書を使用する。
+
+`probe.py`は既存アプリを変更しない。新規の一時profileで起動し、テスト後はその起動に属するブラウザだけを終了する。`sign_once.py`は完全未署名の原本から新しいコピーを作る試験用署名アダプターで、Chromium公式の全パッケージング・notarization処理を代替するものではない。参照するHelper別flags／entitlementは下記の固定ソースに基づく。
+
+## 入力を設定する
+
+リポジトリの`scripts/page-recovery/`ディレクトリへ移動してから、次の変数を実際の保存場所に設定する。既存S0は「ANGLE追加なしで初回署名した失敗コピー」。署名用原本は既存S0と別の、完全未署名のChromium.app。
+
+```bash
+cd scripts/page-recovery
+```
+
+計画は[具体施策](../../docs/phase5-page-recovery-plan.md)、次の担当者への指示は[引き継ぎプロンプト](../../docs/phase5-page-recovery-handoff.md)を参照。
+
+```bash
+kit_dir="$PWD"
+task_dir="$HOME/Desktop/chromium-page-recovery-$(date +%Y%m%d-%H%M%S)"
+mkdir -m 700 "$task_dir"
+old_stock_app="/実際の保存場所/S0/Chromium.app"
+unsigned_app="/実際の保存場所/chrome-mac/Chromium.app"
+revisions_file="/実際の保存場所/REVISIONS"
+identity_sha1="Apple Development証明書の40桁SHA1"
+```
+
+パスはMacの保存場所に置き換える。既存S0、未署名原本、REVISIONS、署名証明書の対応付けが必要である。
+
+## 1. 元の失敗を取得する
+
+```bash
+python3 "$kit_dir/probe.py" inventory --app "$old_stock_app" --out "$task_dir/old-stock-inventory"
+python3 "$kit_dir/probe.py" probe --app "$old_stock_app" --out "$task_dir/old-stock-normal"
+```
+
+`probe`のexit 2は診断で失敗を検出した意味。正常な観測結果として`result.json`、`summary.json`、NetLog、stderr、ページ画像を保存する。原本アプリのhash・署名情報はinventoryに保存する。
+
+初回は通常GUI・GPU設定で実行する。HTTPだけが失敗する場合の次の対照はGPU無効化。同一アプリで一つの条件だけ変更する。
+
+```bash
+python3 "$kit_dir/probe.py" probe --app "$old_stock_app" --out "$task_dir/old-stock-no-gpu" --browser-arg=--disable-gpu
+```
+
+起動自体がCrashpadエラーで止まる場合だけ、別結果ディレクトリで`--browser-arg=--disable-breakpad`を追加する。起動元の権限が異なる試験を混ぜない。CLIはrootやGUI所有者でないユーザーからの実行を拒否する。
+
+同じ実機の純正Chromeを、観測系の対照として使う場合：
+
+```bash
+python3 "$kit_dir/probe.py" probe --app "/Applications/Google Chrome.app" --out "$task_dir/official-chrome-control"
+```
+
+これはサーバー・CDP・GUIの動作対照であり、別ブラウザの差だけで署名因果を断定しない。
+
+## 2. 判定を読む
+
+各`data`／`file`／`http`フォルダの`result.json`で次を確認する。
+
+| classification | 観測結果 | 次の施策 |
+| --- | --- | --- |
+| CDP_OR_STARTUP_FAILED | 起動またはページプロセスとの接続が成立しない | stderrのCrashpad・bootstrap・process requirementエラー、GUI起動元を確認 |
+| LOCAL_DOCUMENT_FAILED | HTTPを使わない文書も読めない | renderer起動・終了、署名したRendererのJIT entitlementとflagsを照合 |
+| HTTP_REQUEST_NOT_RECEIVED | ローカル文書は読めるが、HTTPサーバーに対象GETが来ない | 対象requestのNetwork.loadingFailed、URLLoader／IPC・実行時署名のログを確認 |
+| HTTP_RESPONSE_TO_DOCUMENT_FAILED | サーバー受信後に本文・JSが成立しない | response／navigationの中断・プロセス終了を照合 |
+| SUBRESOURCE_FETCH_FAILED | 本文は読めるが同一originの追加fetchが失敗 | main documentとrenderer由来fetchのrequest IDを分けて追跡 |
+| DOCUMENT_OK_VISUAL_CHECK_FAILED | 本文・JSは成立するが緑色の描画領域を確認できない | page.pngと通常GUI、compositor／GPUログを照合 |
+| DOCUMENT_OK_CANVAS_FAILED | 文書は成立するが2D canvas readbackが失敗 | GPU／software描画の対照へ |
+| FIXTURE_PASS_GUI_CONFIRMATION_PENDING | HTTP／本文／JS／fetch／描画ピクセル／2D canvasの自動確認が成功 | 保存画像と通常GUIの実表示を確認して署名済みstockの基準を成立させる |
+
+HTTP 200や画像ファイルの存在だけでは合格にしない。試験ごとのnonceで、前のページや別ケースの通信を成功証拠にしない。CDP画像はウィンドウやディスプレイ全体の表示を保証しないため、GUIの最終確認は人間が行う。
+
+stderrには`process_requirement=2`などのログを追加する。`ProcessIsSignedAndFulfillsRequirement`、`HasSameTeamIdentifier`、Mach port rendezvous、Mojo切断などを確認する。署名検証の警告があるだけでHTTP停止の原因とはしない。参照版ではMach port peer validationは既定ON、enforcementは既定OFFであり、検証失敗が通信を実際に止めた証拠が必要である。
+
+## 3. 署名設定の修正を、新規コピーで試す
+
+この試験は、旧S0のinventory／receiptで公式のHelper別設定との差が見つかった場合、または旧署名処理の対象を復元できず基準コピーが必要な場合に実施する。
+
+`sign_once.py`は次の設定を明示する。
+
+- main app／通常Helper：`runtime,kill,restrict,library`
+- Renderer／GPU／AperitifのRenderer・GPU：`runtime,kill,restrict`と各JIT entitlement
+- Framework／dylib：hardened-runtime flagsを流用しない
+- main appとJIT Helperのdevelopment entitlements：固定版のテンプレートに`get-task-allow`を追加
+- 署名者はすべて同じ、現在有効なApple Development証明書
+- main executableを単独で署名してからappで重ねて署名する処理は行わず、各ホストbundleを内側から一回ずつ署名
+
+新規コピーと実行予定の一覧を作る：
+
+```bash
+python3 "$kit_dir/sign_once.py" prepare --source "$unsigned_app" --revisions "$revisions_file" --identity "$identity_sha1" --out "$task_dir/stock-role-policy"
+python3 -m json.tool "$task_dir/stock-role-policy/signing-plan.json"
+```
+
+`prepare`では署名しない。原本の全Mach-Oが未署名であること、対象がsnapshot 1689422／thin x86_64／org.chromium.Chromiumであることを確認し、別コピーを作る。アプリの全ファイルとsymlinkを凍結し、署名対象・順序・flags・entitlementを一覧にする。全署名設定を適用する比較なので、成功後に必要なら差分をさらに絞り、単一キーの原因を推測しない。
+
+一覧を確認した後の実行：
+
+```bash
+python3 "$kit_dir/sign_once.py" execute --plan "$task_dir/stock-role-policy/signing-plan.json"
+python3 "$kit_dir/probe.py" inventory --app "$task_dir/stock-role-policy/Chromium.app" --out "$task_dir/new-stock-inventory"
+python3 "$kit_dir/probe.py" probe --app "$task_dir/stock-role-policy/Chromium.app" --out "$task_dir/new-stock-normal"
+```
+
+署名を一つでも失敗した場合はそのコピーとreceiptを保存して停止する。実行済みコピーで署名をやり直さない。全体のstrict verificationに成功しても、ページ表示の合格とは別に判定する。
+
+このアダプターはsnapshot 1689422の署名部品設定専用。別snapshotに対しては対応する固定ソースを確認して更新する。原本とREVISIONSの結び付けには既存archive hash／取得記録も使う。REVISIONSファイルの一致だけでは、ローカルappの出所の証明にはならない。
+
+## 4. 修正の採否
+
+新規stockが成功したら、旧stockとの差分を署名receiptとinventoryで比較する。旧失敗を説明する実行時ログか再現条件を確認し、通常の設定へ戻した状態で3回の独立した新規profile試験に成功することを修正採用条件とする。
+
+GUIの最終確認では、HTTPページを20秒間表示してから終了する次のコマンドを使う。固定文字列・JS marker・緑の四角が実ウィンドウで見えることを確認し、確認者と時刻を結果フォルダに記録する。
+
+```bash
+python3 "$kit_dir/probe.py" probe --app "$task_dir/stock-role-policy/Chromium.app" --transports=http --observe-seconds=20 --out "$task_dir/new-stock-gui"
+```
+
+新規stockも同じHTTP停止なら、同じ署名試行を追加しない。新旧のdocument／network／stderrを照合し、失敗requestと関係する最初のエラー・切断を決める。既存ログで分からない時のソース診断候補は、browserのURLLoaderFactory生成、networkのCreateLoaderAndStart／ScheduleStart／OnMojoDisconnect／NotifyCompleted。そのうちどの分岐を判別するかを選んでから本体ビルドの要否を判断する。
+
+## 5. ANGLEへ進む条件
+
+初回署名stockのHTTPページ・本文・JS・画面が成功してから、snapshotのDEPSが指定するANGLE `8efd15f...`へFamily 1対応を合わせる。新しい未署名コピーへdylibを組み込み、完成後に同じ署名policyで初回署名する。HTTP基準を再確認した後、独自ANGLEの同一GPU PIDロード・WebGL1 context・draw・readback、KOOVの画面・操作へ進む。
+
+本キットはANGLEの版合わせ・ビルド・配置を自動化しない。現在のHTTP停止を先に解決するための実行手段である。
+
+## 検証と出典
+
+クラウド側で標準ライブラリのテスト10件を実行。HTTP未受信と応答後失敗の区別、空白画像の誤合格防止、fixtureのcase識別、署名対象の重複防止、Chromium Helper別policy、凍結後変更の拒否、bundle外へのsymlink拒否などを確認した。プロセス起動〜CDP〜証跡保存の結合確認にはmock_browserを使い、Mac上のcodesign・本物のChromium・GUIは未検証。
+
+```bash
+python3 -m unittest -v test_kit.py
+```
+
+- CDP transport：ユーザーのリポジトリの固定[phase5-unsigned-cdp-probe.py](https://github.com/naokikambe/chromium-angle-family1-experiment/blob/cc781c1063261ffbe227939ff607ecefb51f6b2b/scripts/phase5-unsigned-cdp-probe.py)をそのまま同梱。
+- Helper別署名policy：[固定Chromium parts.py](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/chrome/installer/mac/signing/parts.py)。
+- 開発署名：[固定Chromium README](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/chrome/installer/mac/signing/README.md)。
+- 実行時署名検証：[固定ProcessRequirement](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/base/mac/process_requirement.cc)。
+- peer検証の既定値：[固定MachPortRendezvous](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/base/apple/mach_port_rendezvous_mac.cc)。
+- 同梱entitlementの出典とSHA-256は`reference/provenance.json`、Chromiumのライセンスは`reference/LICENSE`。
