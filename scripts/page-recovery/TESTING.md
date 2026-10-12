@@ -22,13 +22,25 @@ Reference files and their SHA-256 digests are recorded in
 `reference/provenance.json`. The mock browser is tracked executable; tests do
 not chmod source files.
 
-## Continuation handoff verification (2026-10-12)
+## Post-observation samples
 
-- The `cc49dd9` portable suite was independently checked in the cloud: 11 tests
-  passed. This is a script verification result, not device rendering evidence.
-- The continuation update changes documentation only. Checked 23 local Markdown
-  links and 14 shell blocks in six documents, and reviewed the authorization
-  response observations and root-cause completion criteria.
-- The handoff notes that `probe.py` captures document/image evidence before its
-  GUI observation delay; response-after-delay experiments need fresh observations.
-- Device-specific measurements remain in the local investigation report.
+When `--observe-seconds` is enabled, the probe keeps its original pre-wait
+`result.json` and writes a timestamped second sample under
+`post-observation/`. This includes document/runtime values, a separate
+screenshot and visual patch when available, network response/failure evidence,
+and per-step capture errors. `network_events_snapshot_at` records when the
+client snapshots the network-event array; it is not an individual event's
+receive time. Queued CDP events may have arrived during the wait, so this is
+not a precise human-response timestamp. `network_events` contains only the
+delta newly appended to the CDP event list after the wait began, and
+`http_document_200_event_during_wait` is true only for a document HTTP 200 in
+that delta. An empty delta or false value does not imply the full run lacked a
+pre-wait HTTP 200. A post-wait capture failure remains diagnostic data and
+does not alter the pre-wait classification.
+
+The focused unit tests use a fake CDP client to check separate output,
+timestamped evidence, the network-event delta, and continued capture after a
+CDP error.
+They do not simulate GUI input or establish that an approval prompt was
+answered. GUI confirmation, ordinary-Keychain behavior, and product acceptance
+remain separate acceptance conditions.

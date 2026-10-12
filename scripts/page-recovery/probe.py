@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+from datetime import datetime, timezone
 import hashlib
 import http.server
 import json
@@ -285,6 +286,137 @@ def classify(result):
     return "FIXTURE_PASS_GUI_CONFIRMATION_PENDING"
 
 
+def utc_timestamp():
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def capture_post_observation(cdp, transport, url, nonce, out, event_start_index,
+                             observation_started_at):
+    """Capture a distinct CDP sample after the optional GUI observation wait.
+
+    This diagnostic record never updates the pre-wait result or its
+    classification. Network events are a post-wait-only delta. Their snapshot
+    time is recorded separately because events may have queued while no CDP
+    command was active; it is not an individual event's receive time or the
+    time a human answered a prompt.
+    """
+    out = Path(out)
+    out.mkdir(mode=0o700, parents=True, exist_ok=True)
+    record = {
+        "schema": "page-recovery-post-observation-v1",
+        "transport": transport,
+        "sample": "post-observation-wait",
+        "observation_started_at": observation_started_at,
+        "capture_started_at": utc_timestamp(),
+        "capture_errors": [],
+        "document": None,
+        "runtime": None,
+        "document_ok": False,
+        "canvas_ok": False,
+        "fetch_ok": False,
+        "http_document_200_event_during_wait": False,
+        "network_events": [],
+        "screenshot": {"captured": False, "path": None},
+        "visual_patch": {"captured": False, "path": None, "green": None},
+    }
+
+    def capture_error(step, exc):
+        record["capture_errors"].append({
+            "step": step,
+            "error": str(exc)[:500],
+            "observed_at": utc_timestamp(),
+        })
+
+    value = {}
+    try:
+        evaluation = cdp.call(
+            "Runtime.evaluate",
+            {"expression": EXPRESSION, "returnByValue": True},
+            timeout=4,
+        )
+        value = evaluation.get("result", {}).get("value") or {}
+        if evaluation.get("exceptionDetails"):
+            capture_error("runtime-evaluate", RuntimeError(str(evaluation["exceptionDetails"])))
+        record["document"] = {
+            "url": value.get("url"),
+            "title": value.get("title"),
+            "body": value.get("body"),
+            "rect": value.get("rect"),
+        }
+        runtime = value.get("probe") or {}
+        record["runtime"] = runtime
+        record["document_ok"] = (
+            value.get("url") == url
+            and value.get("title") == "PAGE_RECOVERY_" + nonce
+            and "BODY_OK_" + nonce in value.get("body", "")
+            and runtime.get("nonce") == nonce
+            and runtime.get("js_ok") is True
+        )
+        record["canvas_ok"] = runtime.get("canvas_ok") is True
+        record["fetch_ok"] = runtime.get("fetch_ok") is True
+    except Exception as exc:
+        capture_error("runtime-evaluate", exc)
+
+    try:
+        screenshot = cdp.call("Page.captureScreenshot", {"format": "png"}, timeout=4)
+        screenshot_data = base64.b64decode(screenshot["data"], validate=True)
+        screenshot_path = out / "page.png"
+        screenshot_path.write_bytes(screenshot_data)
+        record["screenshot"] = {"captured": True, "path": str(screenshot_path)}
+    except Exception as exc:
+        capture_error("screenshot", exc)
+
+    rect = value.get("rect") if isinstance(value, dict) else None
+    if isinstance(rect, dict) and record["document_ok"]:
+        try:
+            clip = {
+                "x": rect["x"] + rect["width"] / 2,
+                "y": rect["y"] + rect["height"] / 2,
+                "width": 8,
+                "height": 8,
+                "scale": 1,
+            }
+            screenshot = cdp.call("Page.captureScreenshot", {"format": "png", "clip": clip}, timeout=4)
+            patch_data = base64.b64decode(screenshot["data"], validate=True)
+            patch_path = out / "visual-patch.png"
+            patch_path.write_bytes(patch_data)
+            record["visual_patch"] = {
+                "captured": True,
+                "path": str(patch_path),
+                "green": png_green(patch_data),
+            }
+        except Exception as exc:
+            capture_error("visual-patch", exc)
+
+    relevant_methods = {
+        "Network.requestWillBeSent",
+        "Network.responseReceived",
+        "Network.loadingFailed",
+        "Network.loadingFinished",
+        "Inspector.targetCrashed",
+        "Inspector.detached",
+    }
+    record["network_events_snapshot_at"] = utc_timestamp()
+    events = cdp.events[event_start_index:]
+    # This is a delta of events newly collected after the wait began. In
+    # particular, a response observed by the pre-wait sample is not copied.
+    record["network_events"] = [event for event in events if event.get("method") in relevant_methods]
+    document_responses = [
+        event for event in record["network_events"]
+        if event.get("method") == "Network.responseReceived" and event.get("type") == "Document"
+    ]
+    record["http_document_200_event_during_wait"] = any(
+        event.get("status") == 200 for event in document_responses
+    )
+    record["capture_finished_at"] = utc_timestamp()
+    record["event_collection_window"] = {
+        "started_at": observation_started_at,
+        "finished_at": record["capture_finished_at"],
+    }
+    write_json(out / "result.json", record)
+    return record
+
+
 def run_one(executable, page, server, out, transport, browser_args, timeout, observe_seconds=0):
     out.mkdir(mode=0o700)
     profile = out / "profile"
@@ -368,8 +500,23 @@ def run_one(executable, page, server, out, transport, browser_args, timeout, obs
             result["http_document_200"] = any(e.get("method") == "Network.responseReceived" and e.get("type") == "Document" and e.get("status") == 200 for e in cdp.events)
             result["network_failures"] = [e for e in cdp.events if e.get("method") in ("Network.loadingFailed", "Inspector.targetCrashed", "Inspector.detached")]
             if observe_seconds:
-                print(f"Inspect the {transport} page in the GUI; it will close in {observe_seconds} seconds.", flush=True)
+                observation_started_at = utc_timestamp()
+                post_event_start_index = len(cdp.events)
+                print(f"Check the browser window during the next {observe_seconds} seconds; it will then close.", flush=True)
                 time.sleep(observe_seconds)
+                try:
+                    capture_post_observation(
+                        cdp,
+                        transport,
+                        url,
+                        nonce,
+                        out / "post-observation",
+                        post_event_start_index,
+                        observation_started_at,
+                    )
+                except Exception as exc:
+                    # Keep the pre-wait result and its classification untouched.
+                    print(f"Post-observation capture could not be saved: {exc}", file=sys.stderr)
         except Exception as exc:
             result["errors"].append(str(exc))
         finally:

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Portable checks for false-positive prevention and signing-plan boundaries."""
+import base64
 import json
 from pathlib import Path
 import plistlib
@@ -59,6 +60,87 @@ class ProbeTests(unittest.TestCase):
             self.assertTrue(probe.png_green(png((0,160,0), filter_type)), filter_type)
             self.assertFalse(probe.png_green(png((255,255,255), filter_type)), filter_type)
         self.assertFalse(probe.png_green(b"not a screenshot"))
+
+    def test_post_observation_is_separate_timestamped_sample_with_network_evidence(self):
+        nonce = "b" * 32
+        screenshot = base64.b64encode(png((0,160,0))).decode("ascii")
+
+        class FakeCDP:
+            events = [
+                {"method": "Network.responseReceived", "type": "Document", "status": 200},
+                {"method": "Network.loadingFailed", "type": "Fetch", "error_text": "blocked"},
+            ]
+
+            def call(self, method, params=None, timeout=None):
+                if method == "Runtime.evaluate":
+                    return {"result": {"value": {
+                        "url": "http://fixture.test/" + nonce,
+                        "title": "PAGE_RECOVERY_" + nonce,
+                        "body": "BODY_OK_" + nonce,
+                        "rect": {"x": 0, "y": 0, "width": 8, "height": 8},
+                        "probe": {"nonce": nonce, "js_ok": True, "canvas_ok": True, "fetch_ok": True},
+                    }}}
+                if method == "Page.captureScreenshot":
+                    return {"data": screenshot}
+                raise AssertionError(method)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pre_result = {"classification": "HTTP_REQUEST_NOT_RECEIVED", "document_ok": False}
+            (root / "result.json").write_text(json.dumps(pre_result))
+            post = probe.capture_post_observation(
+                FakeCDP(), "http", "http://fixture.test/" + nonce, nonce,
+                root / "post-observation", 0, "2026-10-12T00:00:00Z",
+            )
+            saved = json.loads((root / "post-observation/result.json").read_text())
+            self.assertEqual(post, saved)
+            self.assertEqual(json.loads((root / "result.json").read_text()), pre_result)
+            self.assertEqual(saved["sample"], "post-observation-wait")
+            self.assertTrue(saved["capture_started_at"].endswith("Z"))
+            self.assertTrue(saved["capture_finished_at"].endswith("Z"))
+            self.assertTrue(saved["document_ok"])
+            self.assertTrue(saved["canvas_ok"])
+            self.assertTrue(saved["fetch_ok"])
+            self.assertTrue(saved["http_document_200_event_during_wait"])
+            self.assertEqual(len(saved["network_events"]), 2)
+            self.assertTrue(saved["network_events_snapshot_at"].endswith("Z"))
+            self.assertTrue(all("collected_at" not in event for event in saved["network_events"]))
+            self.assertTrue((root / "post-observation/page.png").is_file())
+            self.assertTrue((root / "post-observation/visual-patch.png").is_file())
+
+            # If the only document 200 predates the wait, it is not copied into
+            # the post-wait delta or reported as an event during the wait.
+            earlier_only = probe.capture_post_observation(
+                FakeCDP(), "http", "http://fixture.test/" + nonce, nonce,
+                root / "earlier-only", 2, "2026-10-12T00:00:00Z",
+            )
+            self.assertEqual(earlier_only["network_events"], [])
+            self.assertFalse(earlier_only["http_document_200_event_during_wait"])
+
+    def test_post_observation_records_cdp_errors_and_continues_capture(self):
+        screenshot = base64.b64encode(png((0,160,0))).decode("ascii")
+
+        class FailingCDP:
+            events = [{"method": "Network.loadingFailed", "error_text": "blocked"}]
+
+            def call(self, method, params=None, timeout=None):
+                if method == "Runtime.evaluate":
+                    raise TimeoutError("runtime did not respond")
+                if method == "Page.captureScreenshot":
+                    return {"data": screenshot}
+                raise AssertionError(method)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = probe.capture_post_observation(
+                FailingCDP(), "http", "http://fixture.test/", "c" * 32,
+                root / "post-observation", 0, "2026-10-12T00:00:00Z",
+            )
+            self.assertEqual(record["capture_errors"][0]["step"], "runtime-evaluate")
+            self.assertTrue(record["capture_errors"][0]["observed_at"].endswith("Z"))
+            self.assertTrue(record["screenshot"]["captured"])
+            self.assertEqual(record["network_events"][0]["method"], "Network.loadingFailed")
+            self.assertTrue((root / "post-observation/result.json").is_file())
 
     def test_fixture_server_distinguishes_case_nonce_and_response(self):
         server = probe.FixtureServer("active", probe.fixture("active"))

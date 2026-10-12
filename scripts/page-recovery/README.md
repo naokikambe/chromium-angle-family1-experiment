@@ -72,7 +72,7 @@ stderrには`process_requirement=2`などのログを追加する。`ProcessIsSi
 
 ### KeychainのSafe Storage待ちを診断する
 
-実機での続行手順と完了条件は[Keychain調査の続行プロンプト](../../docs/phase5-keychain-investigation-handoff.md)を参照する。通常→mock→通常の対照を承認状態変更の前に行い、未応答の承認待ちと拒否応答が返った状態を区別する。`--observe-seconds`中に応答した場合、待機前に採取されたdocument・画像を応答後の結果として使用せず、追加観測で採取時点をそろえる。
+実機での続行手順と完了条件は[Keychain調査の続行プロンプト](../../docs/phase5-keychain-investigation-handoff.md)を参照する。通常→mock→通常の対照を承認状態変更の前に行い、未応答の承認待ちと拒否応答が返った状態を区別する。`--observe-seconds`を指定すると、待機前の記録を保ったまま、待機後に別のCDP sampleを採取し、`post-observation/result.json`と同ディレクトリの画像へ保存する。記録には観測時刻、document/runtime値、待機開始後に新たに収集したnetwork response/failure event、取得エラーが含まれる。`network_events`は待機開始時点のevent index以降の差分で、`network_events_snapshot_at`はその配列を採取した時刻を示す。個別eventの発生時刻ではない。`http_document_200_event_during_wait`はその差分内でdocumentのHTTP 200を観測した場合だけtrueになる。差分が空、またはこの値がfalseでも、待機前にHTTP 200がなかったことを意味しない。これは待機後の状態を示す追加sampleであり、待機中に人が応答した時刻や応答自体を証明せず、元のresultや分類も変更しない。UIへの入力や応答操作は行わない。
 
 Chromium Safe Storageへのアクセス拒否や、非同期暗号化providerのcallback待ちは、HTTP navigationが開始しない場合に調べる候補である。診断では各runに新しいprofileを使い、app、browser arguments、fixtureを揃えて一度に一つの条件だけを変える。必要なら`--use-mock-keychain`を対照条件として使い、通常Keychainとの差を比較する。GPU設定など別条件も比較する場合は、どの条件を固定し、どれを変更したかを記録する。
 
