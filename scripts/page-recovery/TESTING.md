@@ -78,6 +78,18 @@ remain separate acceptance conditions.
   plan, and status documents; whitespace checks passed.
 - Documentation only: no new device results, permission grants, or code changes.
 
+## Persistent cookie runner (2026-10-12)
+
+- Added a dedicated two-launch runner for one new profile, an HTTP-only synthetic
+  persistent cookie, clean browser shutdown/restart, read-only encrypted-value
+  metadata, and cookie receipt after restart. It records no cookie values.
+- Added focused offline tests for fixture cookie handling and encrypted-storage
+  metadata. These tests do not launch Chromium or bind a loopback socket.
+- The three focused persistence tests passed; Python syntax compilation and
+  `git diff --check` passed. The full suite was not run locally.
+- The target Mac run still requires explicit owner authorization and real GUI
+  confirmation; unit coverage is not normal-Keychain acceptance.
+
 ## Bundled investigation handoff review (2026-10-12)
 
 - Added an investigation-wide delegation boundary, operation conditions,

@@ -39,6 +39,8 @@ MacBookAir6,1で、正しく初回署名したstock Chromiumの正常なKeychain
 
    現行probeは毎回新規profileを作るため、再起動検査は小さな専用runnerまたは限定した拡張を準備してください。署名済みappや既存profileは変更しません。正常終了前後、cookie期限、nonce、保存形式、再起動後のserver受信を対応付ける意味のある検証を行い、関連文書と一緒にcommit／pushします。
 
+   `scripts/page-recovery/persistent_cookie_runner.py`は、一つの新規profileでsynthetic persistent cookieを設定し、正常終了、SQLiteの暗号化metadata確認、同じprofileでの再起動とcookie再送信を測る実装です。cookie値は記録しません。最初の起動に必要な一回のAllowが明示承認されている場合だけ応答し、再起動後にpromptが再び出たら追加の同意を推定せず未受入として記録します。runnerは通常GPUを使い、Keychain ACL、Always Allow、既存profileは変更しません。
+
 ## 結果別に次へ進む
 
 | 結果 | 同じ委任内で行うこと |

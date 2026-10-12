@@ -88,6 +88,21 @@ Chromium Safe Storageへのアクセス拒否や、非同期暗号化providerの
 
 固定ソースの追跡箇所は[Keychain key provider](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/components/os_crypt/async/browser/keychain_key_provider.mm)、[macOS Keychain password handling](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/components/os_crypt/common/keychain_password_mac.mm)、および[URL request job](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/net/url_request/url_request_http_job.cc)である。固定コードは調査の手掛かりであり、特定環境の実行時原因を単独で証明するものではない。
 
+### 正常終了後の暗号化cookie再利用
+
+`persistent_cookie_runner.py`は受入試験専用の新しいprofileを一つ作り、同じstock appを二度起動します。最初の起動ではfixtureが非機密のsynthetic cookieを設定し、通常終了後にSQLiteをread-onlyで調べて、cookieの平文欄が空で暗号化欄に値があり、有効期限が未来であることだけを記録します。二回目は同じprofileを使い、fixtureへの再送信とページのHTTP・DOM・JS・fetch・canvas・2D描画を確認します。cookie値・Keychain秘密値は記録しません。
+
+実機のGUIログインユーザーから実行します。stockのGPU既定値を使い、`--disable-gpu`も`--use-mock-keychain`も追加しません。実行前に必要なKeychain操作を明示的に承認してください。最初の起動で一致するSafe Storage promptが現れた場合、承認済みの一度だけ **Allow** を選びます。**Always Allow**は選びません。正常終了後の再起動でpromptが再び現れたら応答せず記録します。これは継続利用条件を満たさない結果です。
+
+```bash
+python3 persistent_cookie_runner.py \
+  --app "$stock_app" \
+  --out "$task_dir/normal-keychain-cookie-restart" \
+  --startup-timeout 45 --page-wait-seconds 60 --observe-seconds 20
+```
+
+結果は`PERSISTENT_COOKIE_PASS`または`PERSISTENT_COOKIE_FAIL`です。GUI確認は各phaseを表示している間にオーナーが行い、trial ID・phase・nonceへ対応付けて別途記録します。raw NetLogとverbose network loggingはcookie headerを保存し得るため、このrunnerでは使わず、request URL/statusだけを含む安全なCDP要約とfixture eventを保存します。このrunnerのfocused testはfixtureと暗号化metadataの判定だけを検査し、MacのKeychain・Chromium・GPU動作は検証しません。
+
 ## 3. 署名設定の修正を、新規コピーで試す
 
 この試験は、保存済みinventory／receiptで公式のHelper別設定との差が見つかった場合、または以前の署名処理対象を復元できず基準copyが必要な場合に実施する。

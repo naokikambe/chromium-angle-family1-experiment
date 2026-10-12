@@ -5,14 +5,17 @@ import io
 import json
 from pathlib import Path
 import plistlib
+import sqlite3
 import struct
 import tempfile
 import threading
+import time
 import unittest
 import zlib
 from unittest.mock import patch
 
 import probe
+import persistent_cookie_runner as persistence
 import sign_once
 
 
@@ -282,6 +285,82 @@ class SigningTests(unittest.TestCase):
                 with patch.object(sign_once,"capture",return_value=output):
                     with self.assertRaises(RuntimeError):
                         sign_once.unsigned(app, Path(directory))
+
+
+class PersistentCookieTests(unittest.TestCase):
+    def test_browser_command_keeps_stock_gpu_and_normal_keychain_defaults(self):
+        executable = Path("/test/Chromium")
+        profile = Path("/test/new-profile")
+        command = persistence.browser_command(executable, profile)
+        self.assertIn(f"--user-data-dir={profile}", command)
+        self.assertFalse(any(argument.startswith("--disable-gpu") for argument in command))
+        self.assertNotIn("--use-mock-keychain", command)
+        self.assertFalse(any(argument.startswith("--log-net-log") for argument in command))
+        self.assertNotIn("--v=1", command)
+
+    def test_fixture_sets_and_checks_a_nonsecret_cookie_without_logging_its_value(self):
+        nonce = "d" * 32
+        cookie_name = "phase5_persistence_check"
+
+        class FakeServer:
+            def __init__(self):
+                self.nonce, self.cookie_name = nonce, cookie_name
+                self.cookie_value = "synthetic-cookie-value"
+                self.events, self.events_lock = [], threading.Lock()
+
+        class FakeHandler(persistence.CookieHandler):
+            def __init__(self, path, cookie=""):
+                self.path = path
+                self.headers = {"Cookie": cookie}
+                self.server = FakeServer()
+                self.wfile = __import__("io").BytesIO()
+                self.sent_headers = {}
+                self.status = None
+
+            def send_response(self, status):
+                self.status = status
+
+            def send_header(self, key, value):
+                self.sent_headers[key] = value
+
+            def end_headers(self):
+                pass
+
+        seed = FakeHandler(f"/{nonce}/seed.html")
+        seed.do_GET()
+        self.assertIn(f"BODY_OK_{nonce}".encode(), seed.wfile.getvalue())
+        self.assertIn(f"{cookie_name}=synthetic-cookie-value", seed.sent_headers["Set-Cookie"])
+        cookie = f"{cookie_name}=synthetic-cookie-value"
+        check = FakeHandler(f"/{nonce}/check.html", cookie)
+        check.do_GET()
+        self.assertIn(f"BODY_OK_{nonce}".encode(), check.wfile.getvalue())
+        echo = FakeHandler(f"/{nonce}/echo.json", cookie)
+        echo.do_GET()
+        self.assertEqual(json.loads(echo.wfile.getvalue()), {"nonce": nonce, "cookie_ok": True})
+        self.assertEqual([x["cookie_present"] for x in (seed.server.events + check.server.events + echo.server.events)],
+                         [False, True, True])
+        self.assertNotIn(cookie, json.dumps(seed.server.events + check.server.events + echo.server.events))
+        self.assertNotIn("synthetic-cookie-value", json.dumps(seed.server.events + check.server.events + echo.server.events))
+        self.assertEqual(set(seed.server.events[0]), {"time_unix", "observed_at", "path", "status", "cookie_present"})
+
+    def test_cookie_database_check_reports_only_encryption_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            profile = Path(directory)
+            cookie_dir = profile / "Default" / "Network"
+            cookie_dir.mkdir(parents=True)
+            database = cookie_dir / "Cookies"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE cookies (name TEXT, value TEXT, encrypted_value BLOB, host_key TEXT, expires_utc INTEGER)")
+                expiry = int((time.time() + 11644473600 + 3600) * 1_000_000)
+                connection.execute("INSERT INTO cookies VALUES (?, ?, ?, ?, ?)",
+                                   ("phase5_persistence_check", "", b"v10synthetic-ciphertext", "127.0.0.1", expiry))
+            result = persistence.inspect_cookie_database(profile, "phase5_persistence_check")
+            self.assertTrue(result["encrypted"])
+            self.assertTrue(result["plain_value_empty"])
+            self.assertTrue(result["expires_in_future"])
+            self.assertEqual(result["encrypted_value_version_prefix"], "v10")
+            serialized = json.dumps(result)
+            self.assertNotIn("synthetic-ciphertext", serialized)
 
 
 if __name__ == "__main__":
