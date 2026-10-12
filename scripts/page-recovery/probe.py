@@ -417,7 +417,28 @@ def capture_post_observation(cdp, transport, url, nonce, out, event_start_index,
     return record
 
 
-def run_one(executable, page, server, out, transport, browser_args, timeout, observe_seconds=0):
+def wait_for_page_target(profile, process, startup_timeout):
+    """Wait for a debuggable page target, using a separately recorded budget."""
+    deadline = time.monotonic() + startup_timeout
+    while time.monotonic() < deadline:
+        active_port = profile / "DevToolsActivePort"
+        if process.poll() is not None:
+            raise RuntimeError(f"Browser exited before CDP: {process.returncode}")
+        if active_port.exists():
+            port = int(active_port.read_text().splitlines()[0])
+            try:
+                with OPENER.open(f"http://127.0.0.1:{port}/json/list", timeout=1) as response:
+                    targets = json.load(response)
+                target = next((t for t in targets if t.get("type") == "page" and t.get("webSocketDebuggerUrl")), None)
+                if target:
+                    return target
+            except (OSError, ValueError):
+                pass
+        time.sleep(0.1)
+    raise TimeoutError("No page CDP target within startup budget")
+
+
+def run_one(executable, page, server, out, transport, browser_args, timeout, observe_seconds=0, startup_timeout=12):
     out.mkdir(mode=0o700)
     profile = out / "profile"
     profile.mkdir(mode=0o700)
@@ -442,23 +463,7 @@ def run_one(executable, page, server, out, transport, browser_args, timeout, obs
         try:
             process = subprocess.Popen(command, stdout=stdout, stderr=stderr, start_new_session=True)
             result["pid"] = process.pid
-            deadline = time.monotonic() + min(12, timeout)
-            while time.monotonic() < deadline:
-                active_port = profile / "DevToolsActivePort"
-                if process.poll() is not None:
-                    raise RuntimeError(f"Browser exited before CDP: {process.returncode}")
-                if active_port.exists():
-                    port = int(active_port.read_text().splitlines()[0])
-                    try:
-                        with OPENER.open(f"http://127.0.0.1:{port}/json/list", timeout=1) as response:
-                            targets = json.load(response)
-                        target = next((t for t in targets if t.get("type") == "page" and t.get("webSocketDebuggerUrl")), None)
-                        if target: break
-                    except (OSError, ValueError):
-                        pass
-                time.sleep(0.1)
-            else:
-                raise TimeoutError("No page CDP target within startup budget")
+            target = wait_for_page_target(profile, process, startup_timeout)
             cdp = CDP(target["webSocketDebuggerUrl"], events)
             result["cdp_connected"] = True
             for method in ("Page.enable", "Network.enable", "Runtime.enable"):
@@ -549,7 +554,8 @@ def probe(args):
     app, executable, _ = app_executable(args.app)
     out = fresh_dir(args.out)
     before = sha256(executable)
-    write_json(out / "context.json", {"context": context, "app": str(app), "main_hash_before": before, "browser_args": args.browser_arg})
+    write_json(out / "context.json", {"context": context, "app": str(app), "main_hash_before": before, "browser_args": args.browser_arg,
+                                      "startup_timeout_seconds": args.startup_timeout})
     nonce = uuid.uuid4().hex
     page = fixture(nonce)
     server = FixtureServer(nonce, page)
@@ -558,7 +564,8 @@ def probe(args):
     results = []
     try:
         for transport in args.transports.split(","):
-            results.append(run_one(executable, page, server, out / transport, transport, args.browser_arg, args.timeout, args.observe_seconds))
+            results.append(run_one(executable, page, server, out / transport, transport, args.browser_arg, args.timeout,
+                                   args.observe_seconds, args.startup_timeout))
     finally:
         server.shutdown()
         server.server_close()
@@ -580,6 +587,8 @@ def main():
         command.set_defaults(action=inventory if name == "inventory" else probe)
         if name == "probe":
             command.add_argument("--timeout", type=float, default=20)
+            command.add_argument("--startup-timeout", type=float, default=12,
+                                 help="Wait budget for a DevTools page target before navigation (5..60 seconds)")
             command.add_argument("--transports", default="data,file,http")
             command.add_argument("--browser-arg", action="append", default=[])
             command.add_argument("--observe-seconds", type=int, default=0, help="Keep each observed page open for a GUI check (0..60)")
@@ -590,6 +599,8 @@ def main():
             parser.error("transports must be a unique comma-separated selection of data,file,http")
         if not 5 <= args.timeout <= 60:
             parser.error("timeout must be 5..60 seconds per navigation")
+        if not 5 <= args.startup_timeout <= 60:
+            parser.error("startup-timeout must be 5..60 seconds")
         if not 0 <= args.observe_seconds <= 60:
             parser.error("observe-seconds must be 0..60")
         if any(a.startswith(("--user-data-dir", "--remote-debugging-", "--log-net-log")) for a in args.browser_arg):

@@ -76,6 +76,8 @@ stderrには`process_requirement=2`などのログを追加する。`ProcessIsSi
 
 実機での続行手順と完了条件は[Keychain調査の続行プロンプト](../../docs/phase5-keychain-investigation-handoff.md)を参照する。通常→mock→通常の対照を承認状態変更の前に行い、未応答の承認待ちと拒否応答が返った状態を区別する。`--observe-seconds`を指定すると、待機前の記録を保ったまま、待機後に別のCDP sampleを採取し、`post-observation/result.json`と同ディレクトリの画像へ保存する。記録には観測時刻、document/runtime値、待機開始後に新たに収集したnetwork response/failure event、取得エラーが含まれる。`network_events`は待機開始時点のevent index以降の差分で、`network_events_snapshot_at`はその配列を採取した時刻を示す。個別eventの発生時刻ではない。`http_document_200_event_during_wait`はその差分内でdocumentのHTTP 200を観測した場合だけtrueになる。差分が空、またはこの値がfalseでも、待機前にHTTP 200がなかったことを意味しない。これは待機後の状態を示す追加sampleであり、待機中に人が応答した時刻や応答自体を証明せず、元のresultや分類も変更しない。UIへの入力や応答操作は行わない。
 
+CDPのpage targetを待つ起動猶予は`--startup-timeout`（5〜60秒、既定12秒）で独立して指定できる。これはChromiumの起動引数やnavigation timeoutとは別のprobe側待機時間である。Keychain応答直後にtargetがまだ現れない試行では、例えば`--startup-timeout 45`として観測窓を延ばし、targetがないままfixture navigationを開始したと誤認しない。`context.json`に指定値を記録する。待機延長だけでHTTP要求やcallback成功を証明することはできず、追加のKeychain応答操作には明示的なオーナー同意が必要である。
+
 Chromium Safe Storageへのアクセス拒否や、非同期暗号化providerのcallback待ちは、HTTP navigationが開始しない場合に調べる候補である。診断では各runに新しいprofileを使い、app、browser arguments、fixtureを揃えて一度に一つの条件だけを変える。必要なら`--use-mock-keychain`を対照条件として使い、通常Keychainとの差を比較する。GPU設定など別条件も比較する場合は、どの条件を固定し、どれを変更したかを記録する。
 
 同フラグだけの対照でHTTP fixtureの結果が変わった場合、Keychain provider経路が関係する可能性を示す。ただし、それ単独では特定の過去trialの原因や製品受入を証明しない。判断を強めるには、同じ時刻・processに結び付くruntime wait、Keychain/securityd authorization、read-only trusted-app metadata、request timelineを対応付ける。SecretsやKeychain item contentsを取得せず、ACLを変更しない。Chromiumの`KeychainKeyProvider`はKeychain workerの完了までOSCryptAsync initialization callbackを待ち、cookie callbacksが完了する前にURL requestがHTTP transactionを遅らせる可能性がある。

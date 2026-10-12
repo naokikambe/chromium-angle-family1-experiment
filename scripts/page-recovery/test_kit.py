@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Portable checks for false-positive prevention and signing-plan boundaries."""
 import base64
+import io
 import json
 from pathlib import Path
 import plistlib
@@ -46,6 +47,28 @@ class ProbeTests(unittest.TestCase):
             result[field] = False
             self.assertNotEqual(probe.classify(result), "FIXTURE_PASS_GUI_CONFIRMATION_PENDING", field)
         self.assertEqual(probe.classify(self.passing()), "FIXTURE_PASS_GUI_CONFIRMATION_PENDING")
+
+    def test_page_target_wait_can_continue_past_legacy_twelve_second_cap(self):
+        with tempfile.TemporaryDirectory() as directory:
+            profile = Path(directory)
+            (profile / "DevToolsActivePort").write_text("9222\n/devtools/browser/test\n")
+
+            class RunningProcess:
+                returncode = None
+
+                def poll(self):
+                    return None
+
+            payload = json.dumps([{
+                "type": "page",
+                "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/test",
+            }]).encode()
+            with patch("probe.time.monotonic", side_effect=[0, 0, 12.5]), \
+                    patch("probe.time.sleep"), \
+                    patch("probe.OPENER.open", side_effect=[OSError("not ready"), io.BytesIO(payload)]):
+                target = probe.wait_for_page_target(profile, RunningProcess(), 13)
+            self.assertEqual(target["type"], "page")
+            self.assertTrue(target["webSocketDebuggerUrl"].endswith("/test"))
 
     def test_no_http_request_is_distinct_from_response_without_document(self):
         result = self.passing()
