@@ -77,3 +77,12 @@ remain separate acceptance conditions.
 - Checked 17 local Markdown links and 1 bash block in the three updated handoff,
   plan, and status documents; whitespace checks passed.
 - Documentation only: no new device results, permission grants, or code changes.
+
+## Bundled investigation handoff review (2026-10-12)
+
+- Added an investigation-wide delegation boundary, operation conditions,
+  result-dependent next steps, bundled owner-input requests, and stopping rules.
+- Preserved the existing cause-identification criteria and one-time-response
+  consent boundary; this document does not grant new Keychain permissions.
+- Checked 11 local Markdown links and 1 bash block in the two updated handoff
+  and plan documents; whitespace checks passed. Documentation only.
