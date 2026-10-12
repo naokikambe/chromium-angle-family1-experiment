@@ -5,8 +5,9 @@ display in an Apple Development-signed Chromium copy.
 
 Current work: Phase 5 page recovery. Historical device experiments reached
 Metal/EGL initialization and minimal WebGL1 drawing, but signed stock and
-ANGLE-added Chromium copies failed HTTP document navigation. The direct cause
-is unresolved. The recovery kit provides portable checks. Device runtime
+ANGLE-added Chromium copies failed HTTP document navigation. The device agent
+has identified the cause for current S0 under the GPU-disabled diagnostic
+condition; normal-Keychain stock recovery remains pending. The recovery kit provides portable checks. Device runtime
 findings and unresolved acceptance checks belong in the local investigation
 report.
 
@@ -22,6 +23,7 @@ subsequent work.
 - [Initial execution plan](docs/phase5-page-recovery-plan.md)
 - [Copyable handoff for the physical Mac](docs/phase5-page-recovery-handoff.md)
 - [Continue the Keychain investigation](docs/phase5-keychain-investigation-handoff.md)
+- [Ordinary-Keychain stock recovery handoff](docs/phase5-normal-keychain-handoff.md)
 - [Experiment history](docs/phase5-page-recovery-history.md)
 - [Recovery kit and commands](scripts/page-recovery/README.md)
 
@@ -30,12 +32,15 @@ target MacBookAir6,1. The handoff includes clone/fetch instructions, GUI-user an
 Keychain checks, and the order of the device experiments. Browser bundles and
 previous evidence are inputs on the Mac; they are not included in this repository.
 
-The branch includes the device-side symlink fix from `cc49dd9` and the
-post-observation capture from `383310b`. Use the revised plan, Keychain handoff,
-and latest local device report. The next decision is whether a real authorization
-response releases the HTTP wait. Subsequent recovery trials use ordinary Keychain
-access and, where needed, an isolated login Keychain before considering browser
-code changes.
+The branch includes the device-side symlink fix from `cc49dd9`, post-observation
+capture from `383310b`, and configurable startup wait from `71d5bb1`. The device
+agent reports cause identification complete for current S0 with GPU disabled:
+an unanswered Safe Storage authorization blocks progress; after denial and a
+Keychain error, a subsequently started fixture request and rendering succeed.
+Individual callback transitions remain source-derived. The next bundled handoff
+tests successful ordinary-Keychain access, normal GPU rendering, and encrypted
+test-data reuse after restart. Denial and mock success are diagnostic results;
+new owner permissions are not inferred from the earlier one-time denial consent.
 
 From the repository root, verify the portable kit with:
 

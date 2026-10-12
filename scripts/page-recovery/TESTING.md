@@ -86,3 +86,17 @@ remain separate acceptance conditions.
   consent boundary; this document does not grant new Keychain permissions.
 - Checked 11 local Markdown links and 1 bash block in the two updated handoff
   and plan documents; whitespace checks passed. Documentation only.
+
+## Cause-report intake and stock recovery handoff (2026-10-12)
+
+- Fast-forwarded to device commit `71d5bb1`; independently passed its focused
+  startup-wait regression and Python syntax checks in the cloud.
+- Recorded the device agent's scoped cause-completion report, distinguishing
+  post-denial requests from resumption of an existing request. Device logs and
+  owner observations were not independently re-audited from the cloud.
+- Added a bundled normal-Keychain stock recovery handoff covering successful key
+  access, normal GPU, three fresh profiles with owner observations, and encrypted
+  test-cookie persistence after restart. These are future acceptance conditions.
+- Checked 33 local Markdown links and 2 shell blocks in five entry-point/plan
+  documents; whitespace checks passed. No additional device measurements or
+  new owner permission grants were made by this documentation update.

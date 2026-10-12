@@ -6,7 +6,7 @@
 
 Phase 5のページ表示復旧へ計画を立て直した。目標は、公式未署名のビルド済みChromiumへ独自ANGLEを組み込み、Apple Developmentで初回署名した実機アプリでHTTPページとKOOVを表示すること。
 
-現在は[Keychain経路を中心にした再計画](phase5-page-recovery-replan.md)を適用する。現行S0の原因特定を締め、その結果に応じて通常Keychainでの正常アクセス、独立したKeychain環境、継続利用条件を検証する。10月5日の適用範囲の調査は並行し、現在の検証を止める条件にはしない。
+現在は[Keychain経路を中心にした再計画](phase5-page-recovery-replan.md)を適用する。現行S0・GPU無効化の範囲で原因特定完了の担当者報告を受領した。次工程の[一括プロンプト](phase5-normal-keychain-handoff.md)は通常Keychainでの正常アクセス、独立した検証環境、通常GPU、再起動後の継続利用を対象とする。10月5日の適用範囲の調査は並行し、現在の検証を止める条件にはしない。
 
 今回の実機調査は、ページ描画不可の根本原因を実行時の証拠と原因条件だけを変えた対照実験で特定するまでを完了条件とする。従来の「再署名が原因」を維持する結論には、具体的な故障の仕組みを示す追加証拠が必須であり、既存結果の再掲では完了としない。初回署名でも失敗した事実を説明し、既存根拠と追加証拠を比較して報告する。ANGLE移植・KOOV全体の確認は原因特定後の後続工程とする。
 
@@ -14,10 +14,10 @@ Phase 5のページ表示復旧へ計画を立て直した。目標は、公式�
 | --- | --- | --- |
 | 過去の実機ANGLE／Metal／EGL／WebGL1最小描画 | 成功記録あり | 固定コミットの[実機観測記録](https://github.com/naokikambe/chromium-angle-family1-experiment/blob/cc781c1063261ffbe227939ff607ecefb51f6b2b/docs/phase5-real-device-observation.md)。新キットによる実行結果ではない |
 | 未署名のビルド済みChromiumのHTTPページ | CI成功記録あり | snapshot 1689422を使用したU0/U1。実機の初回署名後結果とは環境・入力版が異なる |
-| HTTP停止の原因調査 | 現行S0のKeychain承認待ちが強く支持される | 担当者報告では通常→mock→通常と同一試行のruntime／network対応がある。拒否応答後・実GUIは未確認。callbackの中間経路にはソースからの推定が含まれ、調査完了は未宣言 |
+| HTTP停止の原因調査 | 現行S0・GPU無効化の範囲で完了報告受領 | 未応答試行と、拒否・APIエラー返却後に開始した要求のHTTP・描画成功を区別。mockの独立profile3件は実GUI確認済みとの報告。callback各段階にはソース推定を含む。実機生ログはクラウドで未再監査 |
 | 通信診断ログ入りChromiumの全体ビルド | 未完成 | run 37464208418は時間切れ。小規模対象の成功で完成済みとは扱わない |
 | ページ復旧キット | portable test suiteとsymlink root alias fix | `scripts/page-recovery/`。symlink regression covers internal aliases and rejects external or broken links. Platform behavior, GUI confirmation, and product acceptance require separate validation |
-| 次の作業 | 起動前の準備を解決し、拒否応答後と実GUIで因果を確認 | loopback失敗と自動審査拒否の具体的理由を切り分ける。既存の同意回答を確認し、GPU無効化を固定した対照で応答前後のAPI／callback／HTTPと独立した3試験の実GUIを確認。383310bのpost-observation採取を使用する。通常GPUの動作は別検証 |
+| 次の作業 | 通常Keychainでのstock復旧 | 正常な鍵取得、通常GPUでの独立profile3件と実GUI、同じ検証profileの再起動・暗号化cookie利用を一括で検証する。必要な許可操作と環境変更は既存同意から推定しない |
 | 復旧の後続工程 | 通常Keychainの継続利用条件を検証 | 正常アクセス、同じ署名済みappと独立login Keychainの比較、対象appに限定した信頼条件または利用分離の方針を選択。環境作成・権限変更は現在の原因調査とは別の実行範囲 |
 | KOOVの画面・基本操作・機器連携 | 未確認 | ページ表示復旧、独自ANGLE、WebGL1の確認後に進める |
 
@@ -27,7 +27,7 @@ Keychain経路を優先する続行指示は[続行プロンプト](phase5-keych
 
 一部の旧`WEBGL_SMOKE=pass`はテストページの読み込みだけを必須条件にしていた。context／draw、HTTP本文、画像、実GUIを別々に判定する。`RUNTIME_DEVICE_READY=false`はCI成果物の境界であり、過去に実機試験がなかったことを意味しない。
 
-ページ表示の原因調査は継続中。GUI owner confirmation、Oct 5 archived evidenceとの照合、ordinary-Keychain product acceptance、ANGLE/KOOVは保留。mock-keychainのdiagnostic resultはproduct recoveryやcause acceptanceを意味しない。小規模候補の追加探索は打ち切る方針とし、別作業の最新状態はその担当者が確認する。
+現行S0の原因特定とmockのGUI3件は完了報告を受領した。10月5日証跡との照合、通常Keychain・通常GPUでのstock受入、ANGLE／KOOVは未完了。拒否後の暗号化不可での表示成功とmock診断は製品復旧を意味しない。`71d5bb1`の起動待機改善を取り込み、追加の焦点テストをクラウドでも確認した。
 
 ## 2026-09-20時点のbaseline記録
 
