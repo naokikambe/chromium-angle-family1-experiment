@@ -90,6 +90,20 @@ remain separate acceptance conditions.
 - The target Mac run still requires explicit owner authorization and real GUI
   confirmation; unit coverage is not normal-Keychain acceptance.
 
+## Family 1 runner argument boundary (2026-10-13)
+
+- Preserved the stock runner's exact default browser argv and normal GPU path.
+- Added an explicit Family 1 experiment option with a fixed four-switch allowlist;
+  both launches reuse one recorded argv/environment configuration.
+- Rejected unknown or partial browser switches and unexpected opt-in environment
+  values before output/profile creation or process launch.
+- Focused checks exercise the default command, shared restart configuration, and
+  unsafe-argument rejection with a synthetic output path. The two-launch case
+  mocks app metadata, server, cookie metadata, and launch phases; it creates no
+  real profile and starts no browser.
+- Documented the exact fixed-snapshot Chromium switch definitions and dynamic
+  library location/order. This does not establish device acceptance.
+
 ## Stock preflight follow-up review (2026-10-12)
 
 - Fast-forwarded to `2e70227` and independently passed its three focused

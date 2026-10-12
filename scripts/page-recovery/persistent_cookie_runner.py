@@ -26,6 +26,37 @@ import uuid
 import probe
 
 
+FAMILY1_BROWSER_ARGUMENTS = (
+    "--use-gl=angle",
+    "--use-angle=metal",
+    "--use-dynamic-angle",
+    "--disable-angle-features=requireGpuFamily2",
+)
+FAMILY1_OPT_IN_ENV = "ANGLE_PHASE5_ENABLE_METAL_FAMILY1"
+
+
+def validated_runtime_options(browser_arguments, metal_family1_experiment):
+    """Accept only the fixed ANGLE Family 1 option set used in Stage B."""
+    arguments = tuple(browser_arguments or ())
+    unknown = sorted(set(arguments) - set(FAMILY1_BROWSER_ARGUMENTS))
+    if unknown:
+        raise ValueError("unsupported browser argument: " + ", ".join(unknown))
+    if len(arguments) != len(set(arguments)):
+        raise ValueError("duplicate browser arguments are not accepted")
+    if arguments and not metal_family1_experiment:
+        raise ValueError("custom browser arguments require --metal-family1-experiment")
+    if metal_family1_experiment and set(arguments) != set(FAMILY1_BROWSER_ARGUMENTS):
+        raise ValueError("the Family 1 experiment requires all four reviewed ANGLE arguments")
+    inherited_opt_in = os.environ.get(FAMILY1_OPT_IN_ENV)
+    if inherited_opt_in not in (None, "1"):
+        raise ValueError(f"{FAMILY1_OPT_IN_ENV} has an unsupported value")
+    if inherited_opt_in == "1" and not metal_family1_experiment:
+        raise ValueError(f"{FAMILY1_OPT_IN_ENV}=1 requires --metal-family1-experiment")
+    # Retain the reviewed order regardless of the order repeated on the CLI.
+    ordered_arguments = tuple(arg for arg in FAMILY1_BROWSER_ARGUMENTS if arg in arguments)
+    return ordered_arguments, ("1" if metal_family1_experiment else None)
+
+
 def timestamp():
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
@@ -141,19 +172,26 @@ return {url:location.href,title:document.title,body:document.body.innerText,rect
             "rect": value.get("rect"), "value": value}
 
 
-def browser_command(executable, profile):
+def browser_command(executable, profile, browser_arguments=()):
     return [str(executable), "--no-first-run", "--no-default-browser-check", "--disable-sync",
             "--disable-background-networking", "--enable-logging=stderr", "--remote-debugging-address=127.0.0.1",
-            "--remote-debugging-port=0", f"--user-data-dir={profile}", "about:blank"]
+            "--remote-debugging-port=0", f"--user-data-dir={profile}", *browser_arguments, "about:blank"]
+
+
+def browser_launch_configuration(executable, profile, browser_arguments=(), metal_family1_opt_in=None):
+    return {"argv": browser_command(executable, profile, browser_arguments),
+            "runtime_environment": {FAMILY1_OPT_IN_ENV: metal_family1_opt_in}}
 
 
 def launch_phase(executable, profile, out, server, phase, startup_timeout,
-                 observe_seconds=0, page_wait_seconds=60):
+                 observe_seconds=0, page_wait_seconds=60, launch_config=None):
     out.mkdir(mode=0o700)
     path = "seed.html" if phase == "seed" else "check.html"
     url = f"http://127.0.0.1:{server.server_port}/{server.nonce}/{path}"
-    command = browser_command(executable, profile)
-    probe.write_json(out / "launch.json", {"argv": command})
+    launch_config = launch_config or browser_launch_configuration(executable, profile)
+    command = launch_config["argv"]
+    metal_family1_opt_in = launch_config["runtime_environment"][FAMILY1_OPT_IN_ENV]
+    probe.write_json(out / "launch.json", launch_config)
     result = {"phase": phase, "url": url, "started_at": timestamp(), "pid": None,
               "navigated": False, "http_document_200": False, "document_ok": False,
               "js_ok": False, "fetch_ok": False, "canvas_ok": False,
@@ -161,7 +199,12 @@ def launch_phase(executable, profile, out, server, phase, startup_timeout,
     process, cdp = None, None
     with (out / "browser-stdout.log").open("wb") as stdout, (out / "browser-stderr.log").open("wb") as stderr, (out / "events.jsonl").open("w") as events:
         try:
-            process = subprocess.Popen(command, stdout=stdout, stderr=stderr, start_new_session=True)
+            process_environment = os.environ.copy()
+            process_environment.pop(FAMILY1_OPT_IN_ENV, None)
+            if metal_family1_opt_in is not None:
+                process_environment[FAMILY1_OPT_IN_ENV] = metal_family1_opt_in
+            process = subprocess.Popen(command, stdout=stdout, stderr=stderr,
+                                       start_new_session=True, env=process_environment)
             result["pid"] = process.pid
             target = probe.wait_for_page_target(profile, process, startup_timeout)
             cdp = probe.CDP(target["webSocketDebuggerUrl"], events)
@@ -234,6 +277,8 @@ def launch_phase(executable, profile, out, server, phase, startup_timeout,
 
 
 def run(args):
+    browser_arguments, metal_family1_opt_in = validated_runtime_options(
+        args.browser_arg, args.metal_family1_experiment)
     context = probe.mac_context()
     app, executable, info = probe.app_executable(args.app)
     if info.get("CFBundleIdentifier") != "org.chromium.Chromium":
@@ -242,21 +287,26 @@ def run(args):
     output.mkdir(parents=True, exist_ok=False, mode=0o700)
     profile = output / "profile"
     profile.mkdir(mode=0o700)
+    launch_config = browser_launch_configuration(
+        executable, profile, browser_arguments, metal_family1_opt_in)
     nonce = uuid.uuid4().hex
     cookie_name = "phase5_persistence_check"
     context_record = {"context": context, "app": str(app), "main_hash_before": probe.sha256(executable),
                       "bundle_identifier": info.get("CFBundleIdentifier"),
                       "version": info.get("CFBundleShortVersionString"), "nonce": nonce,
-                      "profile": str(profile), "browser_arguments": ["stock defaults; normal GPU; no mock provider"],
+                      "profile": str(profile), "browser_arguments": list(browser_arguments),
+                      "browser_argv": launch_config["argv"],
+                      "runtime_environment": launch_config["runtime_environment"],
         "cookie_name": cookie_name, "cookie_value_logged": False, "raw_netlog_enabled": False}
     probe.write_json(output / "context.json", context_record)
     server = CookieServer(nonce)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        print("If Chromium shows the matching Safe Storage prompt, click Allow once only. Do not choose Always Allow.", flush=True)
+        print("If the exact matching Safe Storage prompt appears, answer only after separate owner authorization for this prompt; otherwise leave it unanswered. Never choose Always Allow.", flush=True)
         first = launch_phase(executable, profile, output / "launch-1-seed", server, "seed",
-                             args.startup_timeout, args.observe_seconds, args.page_wait_seconds)
+                             args.startup_timeout, args.observe_seconds, args.page_wait_seconds,
+                             launch_config)
         with server.events_lock:
             first_events = list(server.events)
         expected_seed = any(e["path"] == f"/{nonce}/seed.html" and e["status"] == 200 for e in first_events)
@@ -268,9 +318,10 @@ def run(args):
                 result["server_events"] = list(server.events)
         else:
             cookie_storage = inspect_cookie_database(profile, cookie_name)
-            print("Launching the same profile after a clean exit. If another Safe Storage prompt appears, do not answer it.", flush=True)
+            print("If another Safe Storage prompt appears, do not answer it; record failed continuity.", flush=True)
             second = launch_phase(executable, profile, output / "launch-2-restart", server, "check",
-                                  args.startup_timeout, args.observe_seconds, args.page_wait_seconds)
+                                  args.startup_timeout, args.observe_seconds, args.page_wait_seconds,
+                                  launch_config)
             with server.events_lock:
                 events = list(server.events)
             check_event = next((e for e in events if e["path"] == f"/{nonce}/check.html"), None)
@@ -307,6 +358,10 @@ def main():
                         help="Wait for page, JS, and fetch callbacks (5..120 seconds)")
     parser.add_argument("--observe-seconds", type=int, default=0,
                         help="Keep each browser phase visible for a human check (0..60)")
+    parser.add_argument("--browser-arg", action="append", default=[],
+                        help="Reviewed ANGLE Family 1 argument; repeat all four with --metal-family1-experiment")
+    parser.add_argument("--metal-family1-experiment", action="store_true",
+                        help="Set ANGLE_PHASE5_ENABLE_METAL_FAMILY1=1 for both launches with all reviewed ANGLE arguments")
     args = parser.parse_args()
     if not 5 <= args.startup_timeout <= 60:
         parser.error("startup-timeout must be 5..60 seconds")
@@ -314,6 +369,10 @@ def main():
         parser.error("page-wait-seconds must be 5..120 seconds")
     if not 0 <= args.observe_seconds <= 60:
         parser.error("observe-seconds must be 0..60")
+    try:
+        validated_runtime_options(args.browser_arg, args.metal_family1_experiment)
+    except ValueError as exc:
+        parser.error(str(exc))
     try:
         return run(args)
     except Exception as exc:

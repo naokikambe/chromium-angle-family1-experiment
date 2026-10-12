@@ -1,0 +1,633 @@
+diff --git a/src/common/apple_platform_utils.mm b/src/common/apple_platform_utils.mm
+index 635abb6..baad4c8 100644
+--- a/src/common/apple_platform_utils.mm
++++ b/src/common/apple_platform_utils.mm
+@@ -13,11 +13,33 @@
+ #include <Foundation/Foundation.h>
+ #include <Metal/Metal.h>
+ 
++#include <cstdlib>
++#include <cstring>
++
+ namespace angle
+ {
++namespace
++{
++bool IsFamily1RuntimeOptInEnabled()
++{
++    const char *value = std::getenv("ANGLE_PHASE5_ENABLE_METAL_FAMILY1");
++    if (value == nullptr)
++    {
++        return false;
++    }
++    if (std::strcmp(value, "1") != 0)
++    {
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] family1_runtime_opt_in=invalid_value";
++        return false;
++    }
++    ERR() << "[ANGLE_PHASE5_METAL_INIT] family1_runtime_opt_in=enabled";
++    return true;
++}
++}  // namespace
+ 
+ bool IsMetalRendererAvailable()
+ {
++    const bool family1RuntimeOptIn = IsFamily1RuntimeOptInEnabled();
+ #if defined(ANGLE_PLATFORM_MACOS) || defined(ANGLE_PLATFORM_MACCATALYST)
+     static bool queriedMachineModel    = false;
+     static bool machineModelSufficient = true;
+@@ -70,11 +92,6 @@ bool IsMetalRendererAvailable()
+         }
+     }
+ 
+-    if (!machineModelSufficient)
+-    {
+-        ASSERT(queriedMachineModel);
+-        return false;
+-    }
+ #endif
+ 
+ #if defined(ANGLE_PLATFORM_MACOS) && defined(__aarch64__)
+@@ -95,27 +112,49 @@ bool IsMetalRendererAvailable()
+     }
+ #endif
+ 
+-    static bool gpuFamilySufficient = []() -> bool {
++    static bool gpuFamilySufficient = [family1RuntimeOptIn]() -> bool {
+         ANGLE_APPLE_OBJC_SCOPE
+         {
+             auto device = [MTLCreateSystemDefaultDevice() ANGLE_APPLE_AUTORELEASE];
+             if (!device)
+             {
++                ERR() << "[ANGLE_PHASE5_METAL_INIT] default_metal_device=missing";
+                 return false;
+             }
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] default_metal_device=present";
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+ #if TARGET_OS_MACCATALYST && __IPHONE_OS_VERSION_MIN_REQUIRED < 160000
+-            // Devices in family 1, such as MacBookPro11,4, cannot use ANGLE's Metal backend.
+-            return [device supportsFamily:MTLGPUFamilyMacCatalyst2];
++            const bool supportsFamily2 = [device supportsFamily:MTLGPUFamilyMacCatalyst2];
++            const bool supportsFamily1 = [device supportsFamily:MTLGPUFamilyMacCatalyst1];
+ #elif TARGET_OS_MACCATALYST || TARGET_OS_OSX
+-            // Devices in family 1, such as MacBookPro11,4, cannot use ANGLE's Metal backend.
+-            return [device supportsFamily:MTLGPUFamilyMac2];
++            const bool supportsFamily2 = [device supportsFamily:MTLGPUFamilyMac2];
++            const bool supportsFamily1 = [device supportsFamily:MTLGPUFamilyMac1];
+ #else
+             // Devices starting with A9 onwards are supported. Simulator is supported as per
+             // definition that running simulator on Mac Family 1 devices is not supported.
+             return true;
++#endif
++#pragma clang diagnostic pop
++#if TARGET_OS_MACCATALYST || TARGET_OS_OSX
++            if (!machineModelSufficient)
++            {
++                ASSERT(queriedMachineModel);
++                if (family1RuntimeOptIn && supportsFamily1 && !supportsFamily2)
++                {
++                    ERR() << "[ANGLE_PHASE5_METAL_INIT] machine_model_gate=family1_opt_in";
++                    return true;
++                }
++                ERR() << "[ANGLE_PHASE5_METAL_INIT] machine_model_gate=reject";
++                return false;
++            }
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] machine_model_gate=pass";
++            return supportsFamily2 || (family1RuntimeOptIn && supportsFamily1 && !supportsFamily2);
+ #endif
+         }
+     }();
++    ERR() << "[ANGLE_PHASE5_METAL_INIT] renderer_availability="
++           << (gpuFamilySufficient ? "available" : "unavailable");
+     return gpuFamilySufficient;
+ }
+ 
+diff --git a/src/libANGLE/Context.cpp b/src/libANGLE/Context.cpp
+index 511c080..250c27c 100644
+--- a/src/libANGLE/Context.cpp
++++ b/src/libANGLE/Context.cpp
+@@ -786,8 +786,22 @@ egl::Error Context::initialize()
+     // validation is always done even with EGL validation disabled because it's not possible to
+     // detect ahead of time if an ES 3.1 context is supported (no ES_31_BIT) or if
+     // KHR_no_config_context is used.
+-    if (getClientVersion() > getDisplay()->getMaxSupportedESVersion())
+-    {
++    const Version requestedVersion    = getClientVersion();
++    const Version maxSupportedVersion = getDisplay()->getMaxSupportedESVersion();
++    ::fprintf(stderr,
++              "[ANGLE_PHASE5_EGL] context_version_check requested=%u.%u max_supported=%u.%u\n",
++              requestedVersion.getMajor(), requestedVersion.getMinor(),
++              maxSupportedVersion.getMajor(), maxSupportedVersion.getMinor());
++    ::fflush(stderr);
++    if (requestedVersion > maxSupportedVersion)
++    {
++        ::fprintf(stderr,
++                  "[ANGLE_PHASE5_EGL] context_version_rejected reason=max_supported_version\n");
++        ::fflush(stderr);
++        ::fprintf(stderr,
++                  "[ANGLE_PHASE5_EGL] context_error code=EGL_BAD_ATTRIBUTE attribute=0x3098 value=%u\n",
++                  requestedVersion.getMajor());
++        ::fflush(stderr);
+         return egl::Error(EGL_BAD_ATTRIBUTE, "Requested version is not supported");
+     }
+ 
+diff --git a/src/libANGLE/Display.cpp b/src/libANGLE/Display.cpp
+index f4b27db..88c92f6 100644
+--- a/src/libANGLE/Display.cpp
++++ b/src/libANGLE/Display.cpp
+@@ -14,6 +14,7 @@
+ #include <algorithm>
+ #include <iterator>
+ #include <sstream>
++#include <cstdio>
+ #include <vector>
+ 
+ #include <EGL/eglext.h>
+@@ -1180,19 +1181,28 @@ Error Display::initialize()
+         return NoError();
+     }
+ 
++    ::fprintf(stderr, "[ANGLE_PHASE5_EGL] display_initialize_backend_begin\n");
++    ::fflush(stderr);
+     Error error = mImplementation->initialize(this);
+     if (error.isError())
+     {
++        ::fprintf(stderr, "[ANGLE_PHASE5_EGL] display_initialize_backend_failure id=%d\n",
++                  static_cast<int>(error.getID()));
++        ::fflush(stderr);
+         // Log extended error message here
+         ERR() << "ANGLE Display::initialize error " << error.getID() << ": " << error.getMessage();
+         return error;
+     }
+ 
++    ::fprintf(stderr, "[ANGLE_PHASE5_EGL] display_initialize_backend_success\n");
++    ::fflush(stderr);
+     mCaps = mImplementation->getCaps();
+ 
+     mConfigSet = mImplementation->generateConfigs();
+     if (mConfigSet.size() == 0)
+     {
++        ::fprintf(stderr, "[ANGLE_PHASE5_EGL] config_generation_failure\n");
++        ::fflush(stderr);
+         mImplementation->terminate();
+         return egl::Error(EGL_NOT_INITIALIZED, "No configs were generated.");
+     }
+@@ -1792,9 +1802,16 @@ Error Display::createContext(const Config *configuration,
+     Error error = context->initialize();
+     if (error.isError())
+     {
++        ::fprintf(stderr,
++                  "[ANGLE_PHASE5_EGL] context_initialize_error code=0x%04x id=%d message=%s\n",
++                  static_cast<unsigned int>(error.getCode()), static_cast<int>(error.getID()),
++                  error.getMessage().c_str());
++        ::fflush(stderr);
+         delete context;
+         return error;
+     }
++    ::fprintf(stderr, "[ANGLE_PHASE5_EGL] context_initialize_success\n");
++    ::fflush(stderr);
+ 
+     if (shareContext != nullptr)
+     {
+diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/metal/DisplayMtl.mm
+index 71f0c61..bbc32e8 100644
+--- a/src/libANGLE/renderer/metal/DisplayMtl.mm
++++ b/src/libANGLE/renderer/metal/DisplayMtl.mm
+@@ -38,6 +38,24 @@
+ #endif
+ 
+ #include "EGL/eglext.h"
++#include <cstdio>
++namespace
++{
++void Phase5RawLog(const char *event)
++{
++    ::fprintf(stderr, "%s\n", event);
++    ::fflush(stderr);
++}
++}
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wglobal-constructors"
++__attribute__((constructor)) static void Phase5LogMetalLibraryLoaded()
++{
++    Phase5RawLog("[ANGLE_PHASE5_LOAD] libGLESv2_loaded");
++    ERR() << "[ANGLE_PHASE5_LOAD] libGLESv2_loaded";
++}
++#pragma clang diagnostic pop
++
+ 
+ namespace rx
+ {
+@@ -92,7 +110,10 @@ static EGLint GetStencilSize(GLint internalformat)
+ 
+ bool IsMetalDisplayAvailable()
+ {
+-    return angle::IsMetalRendererAvailable();
++    const bool rendererAvailable = angle::IsMetalRendererAvailable();
++    ERR() << "[ANGLE_PHASE5_METAL_INIT] display_renderer_availability="
++           << (rendererAvailable ? "available" : "unavailable");
++    return rendererAvailable;
+ }
+ 
+ DisplayImpl *CreateMetalDisplay(const egl::DisplayState &state)
+@@ -110,7 +131,13 @@ bool IsMetalDisplayAvailable()
+ {
+     ASSERT(IsMetalDisplayAvailable());
+ 
++    Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] display_initialize_begin");
+     angle::Result result = initializeImpl(display);
++    Phase5RawLog(result == angle::Result::Continue
++                     ? "[ANGLE_PHASE5_METAL_INIT] display_initialize_result=success"
++                     : "[ANGLE_PHASE5_METAL_INIT] display_initialize_result=failure");
++    ERR() << "[ANGLE_PHASE5_METAL_INIT] display_initialize_result="
++           << (result == angle::Result::Continue ? "success" : "failure");
+     if (result != angle::Result::Continue)
+     {
+         terminate();
+@@ -129,8 +156,12 @@ bool IsMetalDisplayAvailable()
+         // If we can't create a device, fail initialization.
+         if (!mMetalDevice.get())
+         {
++            Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] metal_device_selection=failure");
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] metal_device_selection=failure";
+             return angle::Result::Stop;
+         }
++        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] metal_device_selection=success");
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] metal_device_selection=success";
+ 
+         mMetalDeviceVendorId = mtl::GetDeviceVendorId(mMetalDevice);
+ 
+@@ -138,24 +169,72 @@ bool IsMetalDisplayAvailable()
+ 
+         initializeFeatures();
+ 
+-        if (mFeatures.requireGpuFamily2.enabled && !supportsEitherGPUFamily(1, 2))
++        const bool requireGpuFamily2Enabled = mFeatures.requireGpuFamily2.enabled;
++        const bool requireGpuFamily2HasOverride = mFeatures.requireGpuFamily2.hasOverride;
++        bool supportsRequiredGpuFamily = false;
++        if (requireGpuFamily2Enabled)
++        {
++            supportsRequiredGpuFamily = supportsEitherGPUFamily(1, 2);
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] require_gpu_family2 family_check=checked supported="
++                   << (supportsRequiredGpuFamily ? "true" : "false");
++        }
++        else
++        {
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] require_gpu_family2 family_check=skipped";
++        }
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] require_gpu_family2 enabled="
++               << (requireGpuFamily2Enabled ? "true" : "false") << " has_override="
++               << (requireGpuFamily2HasOverride ? "true" : "false");
++        if (requireGpuFamily2Enabled && !supportsRequiredGpuFamily)
+         {
+             ANGLE_MTL_LOG("Could not initialize: Metal device does not support Mac GPU family 2.");
+             return angle::Result::Stop;
+         }
+ 
+-        if (mFeatures.disableMetalOnNvidia.enabled && isNVIDIA())
++        const bool disableMetalOnNvidiaEnabled = mFeatures.disableMetalOnNvidia.enabled;
++        bool isNvidiaDevice = false;
++        if (disableMetalOnNvidiaEnabled)
++        {
++            isNvidiaDevice = isNVIDIA();
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] nvidia_gate enabled=true is_nvidia="
++                   << (isNvidiaDevice ? "true" : "false");
++        }
++        else
++        {
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] nvidia_gate enabled=false is_nvidia=skipped";
++        }
++        if (disableMetalOnNvidiaEnabled && isNvidiaDevice)
+         {
+             ANGLE_MTL_LOG("Could not initialize: Metal not supported on NVIDIA GPUs.");
+             return angle::Result::Stop;
+         }
+ 
+         mCmdQueue = angle::adoptObjCPtr([mMetalDevice newCommandQueue]);
++        if (!mCmdQueue)
++        {
++            Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] command_queue=failed");
++            ERR() << "[ANGLE_PHASE5_METAL_INIT] command_queue=failed";
++            return angle::Result::Stop;
++        }
++        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] command_queue=success");
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] command_queue=success";
++        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] format_table=begin");
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] format_table=begin";
+ 
+         ANGLE_TRY(mFormatTable.initialize(this));
++        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] format_table=success");
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] format_table=success";
++        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] shader_library=begin");
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] shader_library=begin";
+         ANGLE_TRY(initializeShaderLibrary());
++        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] shader_library=success");
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] shader_library=success";
+ 
++        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] render_utils=begin");
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] render_utils=begin";
+         mUtils = std::make_unique<mtl::RenderUtils>();
++        Phase5RawLog("[ANGLE_PHASE5_METAL_INIT] render_utils=success");
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] render_utils=success";
+ 
+         return angle::Result::Continue;
+     }
+@@ -432,10 +511,24 @@ bool IsMetalDisplayAvailable()
+     // FIXME: None of the feature conditions are checked for simulator support.
+     return gl::Version(3, 0);
+ #else
+-    if (supportsEitherGPUFamily(4, 1))
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wdeprecated-declarations"
++    const bool supportsMacFamily1 = [getMetalDevice() supportsFamily:MTLGPUFamilyMac1];
++#pragma clang diagnostic pop
++    const bool supportsMacFamily2 = [getMetalDevice() supportsFamily:MTLGPUFamilyMac2];
++    if (supportsMacFamily1 && !supportsMacFamily2)
++    {
++        ERR() << "[ANGLE_PHASE5_METAL_INIT] max_es_version=2.0 family=mac1";
++        return gl::Version(2, 0);
++    }
++    const bool supportsGpuFamily4Or1 = supportsEitherGPUFamily(4, 1);
++    ERR() << "[ANGLE_PHASE5_METAL_INIT] max_es_version_gpu_family4_or1="
++           << (supportsGpuFamily4Or1 ? "true" : "false");
++    if (supportsGpuFamily4Or1)
+     {
+         return mtl::kMaxSupportedGLVersion;
+     }
++    ERR() << "[ANGLE_PHASE5_METAL_INIT] max_es_version=2.0";
+     return gl::Version(2, 0);
+ #endif
+ }
+diff --git a/src/libANGLE/validationEGL.cpp b/src/libANGLE/validationEGL.cpp
+index dd0a706..2f63e4c 100644
+--- a/src/libANGLE/validationEGL.cpp
++++ b/src/libANGLE/validationEGL.cpp
+@@ -7,6 +7,7 @@
+ // validationEGL.cpp: Validation functions for generic EGL entry point parameters
+ 
+ #include <array>
++#include <cstdio>
+ 
+ #include "common/unsafe_buffers.h"
+ #include "libANGLE/validationEGL_autogen.h"
+@@ -1827,7 +1828,7 @@ bool ValidateQueryDisplayAttribBase(const ValidationContext *val,
+     return true;
+ }
+ 
+-bool ValidateCreateContextAttribute(const ValidationContext *val,
++bool ValidateCreateContextAttributeImpl(const ValidationContext *val,
+                                     const Display *display,
+                                     EGLAttrib attribute)
+ {
+@@ -2075,7 +2076,7 @@ bool ValidateCreateContextAttribute(const ValidationContext *val,
+     return true;
+ }
+ 
+-bool ValidateCreateContextAttributeValue(const ValidationContext *val,
++bool ValidateCreateContextAttributeValueImpl(const ValidationContext *val,
+                                          const Display *display,
+                                          const gl::Context *shareContext,
+                                          EGLAttrib attribute,
+@@ -2954,6 +2955,34 @@ bool ValidateTerminate(const ValidationContext *val, const Display *display)
+     return ValidateDisplayPointer(val, display);
+ }
+ 
++bool ValidateCreateContextAttribute(const ValidationContext *val,
++                                    const Display *display,
++                                    EGLAttrib attribute)
++{
++    const bool valid = ValidateCreateContextAttributeImpl(val, display, attribute);
++    ::fprintf(stderr,
++              "[ANGLE_PHASE5_EGL] context_attribute_validation key=0x%04x result=%s\n",
++              static_cast<unsigned int>(attribute), valid ? "true" : "false");
++    ::fflush(stderr);
++    return valid;
++}
++
++bool ValidateCreateContextAttributeValue(const ValidationContext *val,
++                                         const Display *display,
++                                         const gl::Context *shareContext,
++                                         EGLAttrib attribute,
++                                         EGLAttrib value)
++{
++    const bool valid =
++        ValidateCreateContextAttributeValueImpl(val, display, shareContext, attribute, value);
++    ::fprintf(stderr,
++              "[ANGLE_PHASE5_EGL] context_attribute_value_validation key=0x%04x value=%d result=%s\n",
++              static_cast<unsigned int>(attribute), static_cast<int>(value),
++              valid ? "true" : "false");
++    ::fflush(stderr);
++    return valid;
++}
++
+ bool ValidateCreateContext(const ValidationContext *val,
+                            const Display *display,
+                            const Config *configuration,
+diff --git a/src/libEGL/libEGL_autogen.cpp b/src/libEGL/libEGL_autogen.cpp
+index 9637887..a441fb3 100644
+--- a/src/libEGL/libEGL_autogen.cpp
++++ b/src/libEGL/libEGL_autogen.cpp
+@@ -11,6 +11,7 @@
+ #include "common/system_utils.h"
+ 
+ #include <memory>
++#include <cstdio>
+ 
+ #if defined(ANGLE_USE_EGL_LOADER)
+ #    include "libEGL/egl_loader_autogen.h"
+@@ -21,6 +22,40 @@
+ 
+ namespace
+ {
++void Phase5LogEGL(const char *event)
++{
++    ::fprintf(stderr, "[ANGLE_PHASE5_EGL] %s\n", event);
++    ::fflush(stderr);
++}
++
++void Phase5LogEGLContextAttributes(const EGLint *attrib_list)
++{
++    if (!attrib_list)
++    {
++        Phase5LogEGL("eglCreateContext_attributes=null");
++        return;
++    }
++
++    Phase5LogEGL("eglCreateContext_attributes=begin");
++    constexpr int kMaxAttributePairs = 32;
++    for (int index = 0; index < kMaxAttributePairs; ++index)
++    {
++        const EGLint key = attrib_list[index * 2];
++        if (key == EGL_NONE)
++        {
++            Phase5LogEGL("eglCreateContext_attributes=end");
++            return;
++        }
++
++        const EGLint value = attrib_list[index * 2 + 1];
++        ::fprintf(stderr,
++                  "[ANGLE_PHASE5_EGL] eglCreateContext_attribute key=0x%04x value=%d\n",
++                  static_cast<unsigned int>(key), static_cast<int>(value));
++        ::fflush(stderr);
++    }
++    Phase5LogEGL("eglCreateContext_attributes=truncated");
++}
++
+ #if defined(ANGLE_USE_EGL_LOADER)
+ bool gLoaded          = false;
+ void *gEntryPointsLib = nullptr;
+@@ -55,6 +90,19 @@ void EnsureEGLLoaded() {}
+ #endif  // defined(ANGLE_USE_EGL_LOADER)
+ }  // anonymous namespace
+ 
++#if defined(__APPLE__)
++#if defined(__clang__)
++#    pragma clang diagnostic push
++#    pragma clang diagnostic ignored "-Wglobal-constructors"
++#endif
++__attribute__((constructor)) static void Phase5LogEGLibraryLoaded()
++{
++    Phase5LogEGL("[ANGLE_PHASE5_LOAD] libEGL_loaded");
++}
++#if defined(__clang__)
++#    pragma clang diagnostic pop
++#endif
++#endif
+ extern "C" {
+ 
+ // EGL 1.0
+@@ -65,7 +113,13 @@ EGLBoolean EGLAPIENTRY eglChooseConfig(EGLDisplay dpy,
+                                        EGLint *num_config)
+ {
+     EnsureEGLLoaded();
+-    return EGL_ChooseConfig(dpy, attrib_list, configs, config_size, num_config);
++    Phase5LogEGL("eglChooseConfig_enter");
++    EGLBoolean returnValue = EGL_ChooseConfig(dpy, attrib_list, configs, config_size, num_config);
++    ::fprintf(stderr,
++              "[ANGLE_PHASE5_EGL] eglChooseConfig_return success=%s num_config=%d\n",
++              returnValue ? "true" : "false", (returnValue && num_config) ? *num_config : -1);
++    ::fflush(stderr);
++    return returnValue;
+ }
+ 
+ EGLBoolean EGLAPIENTRY eglCopyBuffers(EGLDisplay dpy,
+@@ -82,7 +136,14 @@ EGLContext EGLAPIENTRY eglCreateContext(EGLDisplay dpy,
+                                         const EGLint *attrib_list)
+ {
+     EnsureEGLLoaded();
+-    return EGL_CreateContext(dpy, config, share_context, attrib_list);
++    Phase5LogEGL("eglCreateContext_enter");
++    Phase5LogEGL(config == EGL_NO_CONFIG_KHR ? "eglCreateContext_config=no_config"
++                                             : "eglCreateContext_config=selected");
++    Phase5LogEGLContextAttributes(attrib_list);
++    EGLContext returnValue = EGL_CreateContext(dpy, config, share_context, attrib_list);
++    Phase5LogEGL(returnValue == EGL_NO_CONTEXT ? "eglCreateContext_return_no_context"
++                                               : "eglCreateContext_return_context");
++    return returnValue;
+ }
+ 
+ EGLSurface EGLAPIENTRY eglCreatePbufferSurface(EGLDisplay dpy,
+@@ -129,7 +190,13 @@ EGLBoolean EGLAPIENTRY eglGetConfigAttrib(EGLDisplay dpy,
+                                           EGLint *value)
+ {
+     EnsureEGLLoaded();
+-    return EGL_GetConfigAttrib(dpy, config, attribute, value);
++    EGLBoolean returnValue = EGL_GetConfigAttrib(dpy, config, attribute, value);
++    ::fprintf(stderr,
++              "[ANGLE_PHASE5_EGL] eglGetConfigAttrib attribute=0x%04x success=%s value=%d\n",
++              static_cast<unsigned int>(attribute), returnValue ? "true" : "false",
++              (returnValue && value) ? static_cast<int>(*value) : -1);
++    ::fflush(stderr);
++    return returnValue;
+ }
+ 
+ EGLBoolean EGLAPIENTRY eglGetConfigs(EGLDisplay dpy,
+@@ -156,13 +223,21 @@ EGLSurface EGLAPIENTRY eglGetCurrentSurface(EGLint readdraw)
+ EGLDisplay EGLAPIENTRY eglGetDisplay(EGLNativeDisplayType display_id)
+ {
+     EnsureEGLLoaded();
+-    return EGL_GetDisplay(display_id);
++    Phase5LogEGL("eglGetDisplay_enter");
++    EGLDisplay returnValue = EGL_GetDisplay(display_id);
++    Phase5LogEGL(returnValue == EGL_NO_DISPLAY ? "eglGetDisplay_return_no_display"
++                                                : "eglGetDisplay_return_display");
++    return returnValue;
+ }
+ 
+ EGLint EGLAPIENTRY eglGetError()
+ {
+     EnsureEGLLoaded();
+-    return EGL_GetError();
++    EGLint returnValue = EGL_GetError();
++    ::fprintf(stderr, "[ANGLE_PHASE5_EGL] eglGetError_return=0x%04x\n",
++              static_cast<unsigned int>(returnValue));
++    ::fflush(stderr);
++    return returnValue;
+ }
+ 
+ __eglMustCastToProperFunctionPointerType EGLAPIENTRY eglGetProcAddress(const char *procname)
+@@ -174,7 +249,10 @@ __eglMustCastToProperFunctionPointerType EGLAPIENTRY eglGetProcAddress(const cha
+ EGLBoolean EGLAPIENTRY eglInitialize(EGLDisplay dpy, EGLint *major, EGLint *minor)
+ {
+     EnsureEGLLoaded();
+-    return EGL_Initialize(dpy, major, minor);
++    Phase5LogEGL("eglInitialize_enter");
++    EGLBoolean returnValue = EGL_Initialize(dpy, major, minor);
++    Phase5LogEGL(returnValue ? "eglInitialize_return_success" : "eglInitialize_return_failure");
++    return returnValue;
+ }
+ 
+ EGLBoolean EGLAPIENTRY eglMakeCurrent(EGLDisplay dpy,
+@@ -362,7 +440,11 @@ EGLDisplay EGLAPIENTRY eglGetPlatformDisplay(EGLenum platform,
+                                              const EGLAttrib *attrib_list)
+ {
+     EnsureEGLLoaded();
+-    return EGL_GetPlatformDisplay(platform, native_display, attrib_list);
++    Phase5LogEGL("eglGetPlatformDisplay_enter");
++    EGLDisplay returnValue = EGL_GetPlatformDisplay(platform, native_display, attrib_list);
++    Phase5LogEGL(returnValue == EGL_NO_DISPLAY ? "eglGetPlatformDisplay_return_no_display"
++                                                : "eglGetPlatformDisplay_return_display");
++    return returnValue;
+ }
+ 
+ EGLBoolean EGLAPIENTRY eglGetSyncAttrib(EGLDisplay dpy,
+@@ -734,7 +816,11 @@ EGLDisplay EGLAPIENTRY eglGetPlatformDisplayEXT(EGLenum platform,
+                                                 const EGLint *attrib_list)
+ {
+     EnsureEGLLoaded();
+-    return EGL_GetPlatformDisplayEXT(platform, native_display, attrib_list);
++    Phase5LogEGL("eglGetPlatformDisplayEXT_enter");
++    EGLDisplay returnValue = EGL_GetPlatformDisplayEXT(platform, native_display, attrib_list);
++    Phase5LogEGL(returnValue == EGL_NO_DISPLAY ? "eglGetPlatformDisplayEXT_return_no_display"
++                                                : "eglGetPlatformDisplayEXT_return_display");
++    return returnValue;
+ }
+ 
+ // EGL_EXT_surface_compression
+diff --git a/src/libGLESv2/entry_points_egl_autogen.cpp b/src/libGLESv2/entry_points_egl_autogen.cpp
+index dc03843..dc639e5 100644
+--- a/src/libGLESv2/entry_points_egl_autogen.cpp
++++ b/src/libGLESv2/entry_points_egl_autogen.cpp
+@@ -9,6 +9,7 @@
+ //   Defines the EGL entry points.
+ 
+ #include "libGLESv2/entry_points_egl_autogen.h"
++#include <cstdio>
+ #include "libGLESv2/entry_points_egl_ext_autogen.h"
+ 
+ #include "libANGLE/capture/capture_egl_autogen.h"
+@@ -135,7 +136,12 @@ EGLContext EGLAPIENTRY EGL_CreateContext(EGLDisplay dpy,
+         {
+             ANGLE_EGL_SCOPED_CONTEXT_LOCK_DPY(CreateContext, thread, validDisplay,
+                                               share_contextPacked);
+-            if (IsEGLValidationEnabled())
++            const bool validationEnabled = IsEGLValidationEnabled();
++            ::fprintf(stderr,
++                      "[ANGLE_PHASE5_EGL] eglCreateContext_validation_enabled=%s\n",
++                      validationEnabled ? "true" : "false");
++            ::fflush(stderr);
++            if (validationEnabled)
+             {
+                 ANGLE_EGL_VALIDATE(thread, CreateContext, validDisplay, EGLContext, validDisplay,
+                                    configPacked, share_contextPacked, attrib_listPacked);

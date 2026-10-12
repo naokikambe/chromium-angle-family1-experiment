@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Portable checks for false-positive prevention and signing-plan boundaries."""
 import base64
+from contextlib import redirect_stdout
 import io
 import json
 from pathlib import Path
@@ -11,6 +12,7 @@ import tempfile
 import threading
 import time
 import unittest
+from types import SimpleNamespace
 import zlib
 from unittest.mock import patch
 
@@ -292,11 +294,127 @@ class PersistentCookieTests(unittest.TestCase):
         executable = Path("/test/Chromium")
         profile = Path("/test/new-profile")
         command = persistence.browser_command(executable, profile)
+        self.assertEqual(command, [
+            "/test/Chromium", "--no-first-run", "--no-default-browser-check", "--disable-sync",
+            "--disable-background-networking", "--enable-logging=stderr",
+            "--remote-debugging-address=127.0.0.1", "--remote-debugging-port=0",
+            f"--user-data-dir={profile}", "about:blank",
+        ])
         self.assertIn(f"--user-data-dir={profile}", command)
         self.assertFalse(any(argument.startswith("--disable-gpu") for argument in command))
         self.assertNotIn("--use-mock-keychain", command)
         self.assertFalse(any(argument.startswith("--log-net-log") for argument in command))
         self.assertNotIn("--v=1", command)
+
+    def test_family1_run_reuses_same_argv_and_environment_for_seed_and_restart(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "synthetic-output"
+            class FakeServer:
+                def __init__(self, nonce):
+                    self.nonce, self.server_port = nonce, 12345
+                    self.events, self.events_lock = [], threading.Lock()
+
+                def serve_forever(self):
+                    pass
+
+                def shutdown(self):
+                    pass
+
+                def server_close(self):
+                    pass
+
+            class FakeThread:
+                def __init__(self, *args, **kwargs):
+                    pass
+
+                def start(self):
+                    pass
+
+                def join(self, timeout=None):
+                    pass
+
+            server = None
+            launch_records = []
+            context_records = {}
+
+            def fake_server(nonce):
+                nonlocal server
+                server = FakeServer(nonce)
+                return server
+
+            def fake_launch(executable, profile, out, active_server, phase,
+                            startup_timeout, observe_seconds, page_wait_seconds, launch_config):
+                launch_records.append((phase, launch_config, list(launch_config["argv"])))
+                if phase == "seed":
+                    active_server.events.append({"path": f"/{active_server.nonce}/seed.html", "status": 200})
+                else:
+                    active_server.events.extend([
+                        {"path": f"/{active_server.nonce}/check.html", "cookie_present": True},
+                        {"path": f"/{active_server.nonce}/echo.json", "cookie_present": True},
+                    ])
+                return {"returncode": 0, "http_document_200": True, "document_ok": True,
+                        "js_ok": True, "fetch_ok": True, "canvas_ok": True,
+                        "visual_patch_ok": True, "cookie_ok": True}
+
+            def capture_json(path, value):
+                context_records[Path(path).name] = value
+
+            info = {"CFBundleIdentifier": "org.chromium.Chromium",
+                    "CFBundleShortVersionString": "test-version"}
+            args = SimpleNamespace(
+                app="/synthetic/Chromium.app", out=str(output), startup_timeout=45,
+                observe_seconds=0, page_wait_seconds=60,
+                browser_arg=list(reversed(persistence.FAMILY1_BROWSER_ARGUMENTS)),
+                metal_family1_experiment=True,
+            )
+            with patch.dict(persistence.os.environ,
+                            {persistence.FAMILY1_OPT_IN_ENV: "1"}, clear=False), \
+                    patch.object(persistence.probe, "mac_context", return_value={"synthetic": True}), \
+                    patch.object(persistence.probe, "app_executable", return_value=(
+                        Path("/synthetic/Chromium.app"), Path("/synthetic/Chromium"), info)), \
+                    patch.object(persistence.probe, "sha256", return_value="synthetic-hash"), \
+                    patch.object(persistence.probe, "write_json", side_effect=capture_json), \
+                    patch.object(persistence, "CookieServer", side_effect=fake_server), \
+                    patch.object(persistence.threading, "Thread", FakeThread), \
+                    patch.object(persistence, "launch_phase", side_effect=fake_launch), \
+                    patch.object(persistence, "inspect_cookie_database", return_value={
+                        "encrypted": True, "plain_value_empty": True, "expires_in_future": True}):
+                with redirect_stdout(io.StringIO()):
+                    result = persistence.run(args)
+
+            self.assertEqual(result, 0)
+            self.assertTrue(output.is_dir())
+            self.assertTrue((output / "profile").is_dir())
+            self.assertEqual([record[0] for record in launch_records], ["seed", "check"])
+            self.assertIs(launch_records[0][1], launch_records[1][1])
+            self.assertEqual(launch_records[0][2], launch_records[1][2])
+            self.assertEqual(launch_records[0][2][-5:-1],
+                             list(persistence.FAMILY1_BROWSER_ARGUMENTS))
+            self.assertEqual(launch_records[0][2], context_records["context.json"]["browser_argv"])
+            self.assertEqual(context_records["context.json"]["runtime_environment"], {
+                persistence.FAMILY1_OPT_IN_ENV: "1",
+            })
+            self.assertEqual(launch_records[0][1]["runtime_environment"], {
+                persistence.FAMILY1_OPT_IN_ENV: "1",
+            })
+
+    def test_unsafe_flags_and_unknown_opt_in_fail_before_output_or_launch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "must-not-be-created"
+            args = SimpleNamespace(browser_arg=["--no-sandbox"],
+                                   metal_family1_experiment=False, out=str(output))
+            with patch.object(persistence.probe, "mac_context") as mac_context, \
+                    patch.object(persistence.subprocess, "Popen") as popen:
+                with self.assertRaisesRegex(ValueError, "unsupported browser argument"):
+                    persistence.run(args)
+                mac_context.assert_not_called()
+                popen.assert_not_called()
+            self.assertFalse(output.exists())
+
+        with patch.dict(persistence.os.environ,
+                        {persistence.FAMILY1_OPT_IN_ENV: "unexpected"}):
+            with self.assertRaisesRegex(ValueError, "unsupported value"):
+                persistence.validated_runtime_options([], False)
 
     def test_fixture_sets_and_checks_a_nonsecret_cookie_without_logging_its_value(self):
         nonce = "d" * 32

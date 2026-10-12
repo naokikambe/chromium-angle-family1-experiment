@@ -27,6 +27,8 @@ subsequent work.
 - [Complete device handoff: stock, custom ANGLE, and KOOV](docs/phase5-device-completion-handoff.md)
 - [Experiment history](docs/phase5-page-recovery-history.md)
 - [Recovery kit and commands](scripts/page-recovery/README.md)
+- [Snapshot-matched Family 1 ANGLE build preparation](docs/phase5-angle-snapshot-build.md)
+- [Current KOOV PWA entry and acceptance preparation](docs/phase5-koov-current-entry.md)
 
 For the next stage, obtain the `phase5-page-recovery` branch from GitHub on the
 target MacBookAir6,1. The handoff includes clone/fetch instructions, GUI-user and
@@ -44,6 +46,12 @@ and encrypted test-data reuse after restart, then proceeds to a DEPS-matched
 Family 1 ANGLE build, assembly and first signing, and KOOV acceptance. Each stage
 has a prerequisite and completion gate. Denial and mock success are diagnostic
 results; new owner permissions are not inferred from prior one-time responses.
+
+The bounded `luna_implementer` model is `gpt-6-luna` in both
+`.codex/agents/luna-implementer.toml` and the project
+`.codex/config.toml` default. Its implementation boundaries and existing
+`medium` reasoning setting are retained; the parent reviews changes and
+controls publication and device operations.
 
 From the repository root, verify the portable kit with:
 

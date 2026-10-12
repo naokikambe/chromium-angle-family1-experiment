@@ -44,6 +44,8 @@ MacBookAir6,1／Intel HD Graphics 5000で、公式の完全未署名・ビルド
 
 ## 工程C：KOOVの画面・基本操作・再起動・安定性
 
+現行PC版の公開PWA入力と旧方式との差は [KOOV起動入力の補足](phase5-koov-current-entry.md) を参照してください。実際の専用profileのインストールと受入結果で確認します。
+
 1. 工程Aで確認した起動方式を専用の検証環境へ用意します。正しい実験Chromiumの実パス・version・profile・起動引数・GPU PIDで起動を確認し、Dockのアイコンや旧ランチャー名だけで判定しません。
 2. KOOVのdocument・JS・追加fetch・WebGL領域を確認し、オーナーの実画面観察を取得します。nonce付きfixtureの成功と実KOOVの成功を分けて保存します。
 3. 非機密のテストプロジェクトで、画面遷移、ブロック編集、保存、再読込、必要な3D描画、resizeを確認します。既存プロジェクトを上書きしません。Chrome Apps互換性、拡張、認証、ネットワーク、WebGLの失敗を分け、最初の未完了境界を調べます。

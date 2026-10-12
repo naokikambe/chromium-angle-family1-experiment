@@ -4,11 +4,11 @@ on:
   workflow_call:
     inputs:
       angle_revision:
-        description: Exact ANGLE revision used by the Phase 5 runtime artifact
+        description: Pinned ANGLE revision from Chromium snapshot 1689422 DEPS
         required: true
         type: string
       chrome_version:
-        description: Chrome release version whose DEPS ANGLE pin must match
+        description: Chromium snapshot version for the pinned source revision
         required: true
         type: string
       runtime_patch_sha256:
@@ -18,24 +18,24 @@ on:
   workflow_dispatch:
     inputs:
       angle_revision:
-        description: Exact ANGLE revision used by the Phase 5 runtime artifact
+        description: Pinned ANGLE revision from Chromium snapshot 1689422 DEPS
         required: true
-        default: 1ff8799c596d4fc9acea28343610b1f33650a6fa
+        default: 8efd15f71c27cd0bc2a9cf0074d77e899ca9c448
         type: string
       chrome_version:
-        description: Chrome release version whose DEPS ANGLE pin must match
+        description: Chromium snapshot version for the pinned source revision
         required: true
-        default: 154.0.8037.59
+        default: 154.0.8037.0
         type: string
       runtime_patch_sha256:
         description: SHA-256 of the checked-in Phase 5 runtime patch
         required: true
-        default: f694cf32baef58e01dae3cd31acd0871c942144045f975344001e6dc35646afe
+        default: b78c5d8b216c37318d6a8bead9754673e597954e39b3e95c9a07810dd7cc7e6e
         type: string
 
 concurrency:
-  group: phase5-metal-family1-runtime-${{ github.ref }}
-  cancel-in-progress: true
+  group: phase5-metal-family1-runtime-${{ github.workflow }}-${{ github.run_id }}-${{ github.run_attempt }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -53,6 +53,7 @@ jobs:
       DEPOT_TOOLS_UPDATE: "0"
       ANGLE_REVISION: ${{ inputs.angle_revision }}
       CHROME_VERSION: ${{ inputs.chrome_version }}
+      CHROMIUM_REVISION: 82303c21a18acdc256c6264cd2ed0e1588df99d4
       RUNTIME_PATCH_PATH: patches/phase5-metal-family1-runtime.patch
       RUNTIME_PATCH_SHA256: ${{ inputs.runtime_patch_sha256 }}
 
@@ -94,9 +95,11 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$ANGLE_REVISION" =~ ^[0-9a-f]{40}$ ]]
-          test "$ANGLE_REVISION" = 1ff8799c596d4fc9acea28343610b1f33650a6fa
+          test "$ANGLE_REVISION" = 8efd15f71c27cd0bc2a9cf0074d77e899ca9c448
           [[ "$CHROME_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          test "$CHROME_VERSION" = 154.0.8037.59
+          test "$CHROME_VERSION" = 154.0.8037.0
+          [[ "$CHROMIUM_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          test "$CHROMIUM_REVISION" = 82303c21a18acdc256c6264cd2ed0e1588df99d4
           [[ "$RUNTIME_PATCH_SHA256" =~ ^[0-9a-f]{64}$ ]]
           test -f "$RUNTIME_PATCH_PATH"
           test "$(shasum -a 256 "$RUNTIME_PATCH_PATH" | awk '{print $1}')" = "$RUNTIME_PATCH_SHA256"
@@ -108,16 +111,16 @@ jobs:
             printf 'RUNTIME_PATCH_SHA256=%s\n' "$RUNTIME_PATCH_SHA256"
           } | tee "$DIAG_DIR/source-input.txt"
 
-      - name: Resolve Chromium tag and ANGLE revision
+      - name: Resolve pinned Chromium snapshot and DEPS ANGLE revision
         timeout-minutes: 10
         shell: bash
         run: |
           set -euo pipefail
-          tag="refs/tags/$CHROME_VERSION"
           git init "$CHROMIUM_ROOT"
           git -C "$CHROMIUM_ROOT" remote add origin "$CHROMIUM_REPOSITORY"
-          git -C "$CHROMIUM_ROOT" fetch --depth=1 origin "$tag"
+          git -C "$CHROMIUM_ROOT" fetch --depth=1 origin "$CHROMIUM_REVISION"
           chromium_revision=$(git -C "$CHROMIUM_ROOT" rev-parse FETCH_HEAD^{commit})
+          test "$chromium_revision" = "$CHROMIUM_REVISION"
           chromium_version=$(git -C "$CHROMIUM_ROOT" show "$chromium_revision:chrome/VERSION" | \
             awk -F= '$1 == "MAJOR" {a=$2} $1 == "MINOR" {b=$2} $1 == "BUILD" {c=$2} $1 == "PATCH" {d=$2} END {printf "%s.%s.%s.%s", a,b,c,d}')
           test "$chromium_version" = "$CHROME_VERSION"
@@ -212,7 +215,12 @@ jobs:
           git apply --unidiff-zero -- "$GITHUB_WORKSPACE/$RUNTIME_PATCH_PATH"
           expected_source_paths=$(printf '%s\n' \
               'src/common/apple_platform_utils.mm' \
-              'src/libANGLE/renderer/metal/DisplayMtl.mm')
+              'src/libANGLE/Context.cpp' \
+              'src/libANGLE/Display.cpp' \
+              'src/libANGLE/renderer/metal/DisplayMtl.mm' \
+              'src/libANGLE/validationEGL.cpp' \
+              'src/libEGL/libEGL_autogen.cpp' \
+              'src/libGLESv2/entry_points_egl_autogen.cpp' | LC_ALL=C sort)
           test "$(git status --short | sed 's/^.. //' | LC_ALL=C sort)" = "$expected_source_paths"
           {
             printf 'SOURCE_REVISION=%s\n' "$(git rev-parse HEAD)"
@@ -326,10 +334,12 @@ jobs:
             printf 'DEPOT_TOOLS_ACTUAL_REVISION=%s\n' "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)"
             printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"
             printf 'RUNTIME_PATCH_SHA256=%s\n' "$RUNTIME_PATCH_SHA256"
-            printf 'RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21\n'
+            printf 'RUNTIME_OPT_IN=ANGLE_PHASE5_ENABLE_METAL_FAMILY1=1 --disable-angle-features=requireGpuFamily2\n'
             printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
             printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
             printf 'CPU_ARCHITECTURE=%s\n' "$(uname -m)"
+            printf 'TARGET_ARCH=x86_64\n'
+            printf 'MACOS_DEPLOYMENT_TARGET=13.0\n'
             xcodebuild -version
             printf 'MACOS_SDK_VERSION=%s\n' "$(xcrun --show-sdk-version)"
             xcrun clang --version
@@ -348,12 +358,17 @@ jobs:
             printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"
             printf 'RUNTIME_PATCH_SHA256=%s\n' "$RUNTIME_PATCH_SHA256"
             printf 'RUNTIME_PATCH_APPLIED=true\n'
-            printf 'RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21\n'
+            printf 'UNSIGNED_ARTIFACT=true\n'
+            printf 'RUNTIME_OPT_IN=ANGLE_PHASE5_ENABLE_METAL_FAMILY1=1 --disable-angle-features=requireGpuFamily2\n'
             printf 'TEST_ONLY_STUB=absent\n'
             printf 'RUNTIME_DEVICE_READY=false\n'
             printf 'CHROME_VERSION=%s\n' "$CHROME_VERSION"
             printf 'CHROMIUM_REVISION=%s\n' "$CHROMIUM_REVISION"
+            printf 'ANGLE_EXPECTED_REVISION=%s\n' "$ANGLE_REVISION"
+            printf 'ANGLE_ACTUAL_REVISION=%s\n' "$(git rev-parse HEAD)"
             printf 'ANGLE_REVISION=%s\n' "$ANGLE_REVISION"
+            printf 'DEPOT_TOOLS_EXPECTED_REVISION=%s\n' "$DEPOT_TOOLS_REVISION"
+            printf 'DEPOT_TOOLS_ACTUAL_REVISION=%s\n' "$(git -C "$DEPOT_TOOLS_ROOT" rev-parse HEAD)"
             printf 'DEPOT_TOOLS_REVISION=%s\n' "$DEPOT_TOOLS_REVISION"
             printf 'LIBEGL_SHA256=%s\n' "$(shasum -a 256 "$ARTIFACT_DIR/libEGL.dylib" | awk '{print $1}')"
             printf 'LIBGLESV2_SHA256=%s\n' "$(shasum -a 256 "$ARTIFACT_DIR/libGLESv2.dylib" | awk '{print $1}')"
@@ -399,7 +414,7 @@ jobs:
             printf 'SOURCE_REVISION=%s\n' "$source_revision"
             printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"
             printf 'RUNTIME_PATCH_SHA256=%s\n' "$RUNTIME_PATCH_SHA256"
-            printf 'RUNTIME_OPT_IN=--disable-angle-features=requireGpuFamily2,requireMsl21\n'
+            printf 'RUNTIME_OPT_IN=ANGLE_PHASE5_ENABLE_METAL_FAMILY1=1 --disable-angle-features=requireGpuFamily2\n'
             printf 'LIBEGL_RESULT=%s\n' "$(cat "$DIAG_DIR/libegl-result.txt" 2>/dev/null || printf '%s' unavailable)"
             printf 'LIBGLESV2_RESULT=%s\n' "$(cat "$DIAG_DIR/libglesv2-result.txt" 2>/dev/null || printf '%s' unavailable)"
           } > "$DIAG_DIR/manifest.txt"

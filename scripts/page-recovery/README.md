@@ -103,6 +103,24 @@ python3 persistent_cookie_runner.py \
 
 結果は`PERSISTENT_COOKIE_PASS`または`PERSISTENT_COOKIE_FAIL`です。GUI確認は各phaseを表示している間にオーナーが行い、trial ID・phase・nonceへ対応付けて別途記録します。raw NetLogとverbose network loggingはcookie headerを保存し得るため、このrunnerでは使わず、request URL/statusだけを含む安全なCDP要約とfixture eventを保存します。このrunnerのfocused testはfixtureと暗号化metadataの判定だけを検査し、MacのKeychain・Chromium・GPU動作は検証しません。
 
+同じrunnerには、stockの通常GPU試験と分けたFamily 1 ANGLE実験モードがあります。実験を明示的に選んだ場合だけ、固定snapshotで定義を確認した次の4引数を両方の起動へ同じ順序で渡し、子プロセス環境に`ANGLE_PHASE5_ENABLE_METAL_FAMILY1=1`を設定します。
+
+`--app`には、stock appへパッチや再署名を行わず、実験用に新しく組み立てたfirst-signing前のcopyを指定します。stock appはこの実験の入力に使いません。
+
+```bash
+python3 persistent_cookie_runner.py \
+  --app "$experiment_app" \
+  --out "$task_dir/family1-angle-cookie-restart" \
+  --metal-family1-experiment \
+  --browser-arg=--use-gl=angle \
+  --browser-arg=--use-angle=metal \
+  --browser-arg=--use-dynamic-angle \
+  --browser-arg=--disable-angle-features=requireGpuFamily2 \
+  --startup-timeout 45 --page-wait-seconds 60 --observe-seconds 20
+```
+
+この引数集合以外の`--browser-arg`、一部だけの指定、重複指定は拒否され、出力directoryやprofileの作成とbrowser起動より前に終了します。環境に同じopt-in変数が予期しない値で設定されている場合も拒否します。`context.json`と各`launch.json`には実際のargvと、このopt-in変数だけを記録します。stock試験では`--browser-arg`と`--metal-family1-experiment`を省略し、従来どおりの起動引数と通常GPU設定を使います。両モードとも独立した新しい`--out`を指定し、実験の成功は実機確認前には主張しません。SwiftShaderやnull backendへの切替は許可されません。
+
 ## 3. 署名設定の修正を、新規コピーで試す
 
 この試験は、保存済みinventory／receiptで公式のHelper別設定との差が見つかった場合、または以前の署名処理対象を復元できず基準copyが必要な場合に実施する。
