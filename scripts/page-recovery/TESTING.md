@@ -102,6 +102,19 @@ remain separate acceptance conditions.
   whitespace checks passed. No new device trials, Keychain approvals, or trust
   configuration changes were performed by this documentation update.
 
+## Complete device handoff review (2026-10-12)
+
+- Added a single delegation covering stock recovery, DEPS-matched Family 1 ANGLE
+  assembly and first signing, WebGL validation, and KOOV software acceptance.
+  Explicit stage prerequisites preserve the normal-Keychain acceptance criteria.
+- Verified that the existing runtime workflow pins a different input and references
+  absent files; located its patch/verifier/static check at fixed history
+  `cc781c1063261ffbe227939ff607ecefb51f6b2b` for a future reviewed port.
+- Checked 31 local Markdown links and 1 shell block in five updated entry-point
+  and handoff documents; whitespace checks passed.
+- Documentation only: no workflow dispatch, signing, Keychain changes, new device
+  trials, or claims of ANGLE/KOOV acceptance.
+
 ## Bundled investigation handoff review (2026-10-12)
 
 - Added an investigation-wide delegation boundary, operation conditions,

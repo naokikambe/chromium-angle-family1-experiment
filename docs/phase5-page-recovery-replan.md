@@ -112,6 +112,8 @@ mock、GPU無効化、保護機能の無効化を使わず、正しい初回署�
 
 ## stock復旧後：ANGLEとKOOV
 
+[実機作業の一括プロンプト](phase5-device-completion-handoff.md)に、現在の阻害要因からstock・ANGLE・KOOVの開始条件、結果別の追加調査、最終完了条件を記録した。各工程の条件が成立したら同じ委任内で次へ進む。stock受入前に独自ANGLEを組み込む試験は先行させない。
+
 1. 成功した公式snapshotとDEPSのANGLE revisionを固定する。
 2. Family 1対応をそのANGLE版へ合わせ、必要なANGLEライブラリをビルドする。
 3. 新規の完全未署名Chromiumへ組み込み、完成後に同じidentity・role policyで初回署名する。

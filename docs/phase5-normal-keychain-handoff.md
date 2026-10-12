@@ -1,5 +1,7 @@
 # 通常Keychainでのstock復旧：実機エージェントへの一括指示
 
+後工程も委任する場合は[stock復旧からANGLE・KOOVまでの一括プロンプト](phase5-device-completion-handoff.md)を使用してください。この文書は同プロンプトの工程Aの詳細として適用します。
+
 MacBookAir6,1で、正しく初回署名したstock Chromiumの正常なKeychainアクセスとページ描画を検証してください。この指示を次工程として受け取った場合、準備、結果別の追加調査、受入検査、文書化、必要な変更の検証・commit／pushまでを一括で進めます。Keychainの許可操作やシステム変更への同意は、作業委任と区別してください。
 
 ## 出発点と目的
