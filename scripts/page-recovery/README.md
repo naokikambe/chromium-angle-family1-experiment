@@ -142,6 +142,19 @@ python3 webgl1_runner.py \
 
 Runnerは既定のFamily 1用4引数と`ANGLE_PHASE5_ENABLE_METAL_FAMILY1=1`だけを適用します。boundsはMac／app検査と出力作成より先に確認され、appはlaunch前に`codesign --verify --deep --strict`で読み取り検証されます。WebGL stateのCDP確認は最大20秒、GUI観察時間は`--observe-seconds`で別に指定し、その秒数の観察が保証されるわけではありません。自動結果がpassでも、GUI確認と同一GPU PIDにおける独自dylib／Metal loadの親reviewは別途必要です。結果分類はreview待ちを明示し、単独ではStage Bの実機受入を意味しません。失敗時の自動retryや強制終了は行いません。
 
+Program link後に`drawArrays`は返るもののpixelが期待色にならない場合は、acceptance runnerとディレクトリを分けて次のcomponent診断を使う。これは同じstrict app検証、Family 1 argv、env opt-inを使い、指定した新規`--out`だけを作る。
+
+```bash
+python3 webgl1_diagnostic_runner.py \
+  --app "$experiment_app" \
+  --out "$task_dir/family1-webgl1-diagnostic" \
+  --startup-timeout 45 --navigation-timeout 60 --observe-seconds 20
+```
+
+9段階を順に記録する。最初は元の受入triangleと同じRGB `[0,160,0]` をdefault framebufferへ描き、明示clearや`gl.finish()`より前のraw `readPixels`と、finish後の再readbackを記録する。この比較で初回描画とfinishの影響を切り分ける。続いてdefault framebuffer clear、scissor clear、VBO triangle、uniform color triangle、center pixelへconstant attributeで打つpoint、offscreen RGBA/UNSIGNED_BYTE framebuffer clear、同framebufferのVBO triangle、独立canvasのantialias-disabled clear/VBO triangleを記録する。最初のcanvasはacceptance fixtureと同じく`antialias:true`を要求し、実際の`getContextAttributes()`と`SAMPLE_BUFFERS`／`SAMPLES`を記録する。最後のcanvasは`antialias:false`を要求して別contextの値とpixelを記録する。この比較は原因切り分けだけに使い、antialias-disabled成功を通常contextの受入へ置き換えない。各段階にdraw call発行の有無、attribute／buffer／uniform／framebuffer条件、期待pixelと実readback、bounded GL errorsを別々に保存する。shader/program logsは4096文字まで、pixelのreadbackはRGBA/UNSIGNED_BYTEのみ。最初のraw triangle後の段階では各操作前にGL stateをresetする。通常のGL error後は他の独立段階を続け、先行GL errorに`OUT_OF_MEMORY`またはcontext-lossが含まれる場合は以後のGL処理と別context作成をskipする。
+
+Canvasは実WebGLの描画/readbackを表示し、2D canvas・CSS色・mock backendやWebGL extensionを使わない。`draw_call_issued`はAPI callが発行された記録であり描画成功を意味しない。色はreadback pixelで個別に照合する。結果はloopbackのnonce付き正確なdocument URLとraw state nonceを検証し、既知の9段階が重複・欠落・順序違いなく記録された場合だけcomplete markerを認める。全段階を記録できた場合もclassificationは`WEBGL1_DIAGNOSTIC_CAPTURED_REVIEW_PENDING`のままで、受入・conformance判定ではない。page画像、画面の段階一覧、`result.json`を次の判断材料として確認する。元の緑pixel acceptance fixtureは変更しない。
+
 ## 3. 署名設定の修正を、新規コピーで試す
 
 この試験は、保存済みinventory／receiptで公式のHelper別設定との差が見つかった場合、または以前の署名処理対象を復元できず基準copyが必要な場合に実施する。
