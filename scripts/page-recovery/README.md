@@ -131,6 +131,8 @@ python3 persistent_cookie_runner.py \
 
 `webgl1_runner.py`は、署名検証済みの新しい実験用Chromium copyと新規profileで、nonce付きloopback fixtureを一度起動します。seed/restore用の2D canvasやCSS色には頼らず、WebGL1 context、GLSL ES 1.00 vertex/fragment shader compile、program link、fullscreen triangle draw、中央pixel `readPixels`のRGBA `[0,160,0,255]`、`GL_NO_ERROR`を検査します。失敗ログはshader／programごと4096文字まで記録し、取得可能なGL version、vendor／renderer、debug renderer extensionのunmasked名は512文字まで記録します。page上の`DRAW_OK`／`READBACK_OK`または`FAIL`とpixel値、state観測時刻、GUI観察開始・終了UTC時刻を残し、CDP state・canvas中央のscreenshot patch・通常ページscreenshotも保存します。raw NetLogは使わず、fixture server eventにはnonce、path、statusだけを残します。
 
+起動したfresh profileの`DevToolsActivePort`からlocal browser CDP endpointを検証して`SystemInfo.getInfo`／`getProcessInfo`を読み、限定したGL renderer/vendor/version、display type、feature status、GPU PIDとbrowser PIDをprivateな`gpu-info.json`へ記録します。API失敗は型だけを含む別diagnosticにし、WebGLのpass/failやerrorsへ混ぜません。browser-root CDP connectionはcloseしますが、capture helperからBrowser.closeは送りません。
+
 ```bash
 python3 webgl1_runner.py \
   --app "$experiment_app" \

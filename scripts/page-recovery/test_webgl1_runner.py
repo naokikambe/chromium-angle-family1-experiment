@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Focused, synthetic checks for the Stage B WebGL1 runner."""
 from pathlib import Path
+import json
 import tempfile
 import threading
 import unittest
@@ -91,6 +92,165 @@ class WebGL1RunnerTests(unittest.TestCase):
                         runner.run(args)
                     context.assert_not_called()
                 self.assertFalse(output.exists())
+
+    def test_browser_gpu_info_uses_fresh_local_endpoint_filters_fields_and_closes(self):
+        class FakeCDP:
+            def __init__(self, url, _events):
+                self.url = url
+                self.calls = []
+                self.closed = False
+                self.ws = self
+
+            def call(self, method, params=None, timeout=4):
+                self.calls.append((method, params, timeout))
+                if method == "SystemInfo.getInfo":
+                    return {"gpu": {
+                        "auxAttributes": {
+                            "glRenderer": "R" * 600, "glVendor": "ANGLE",
+                            "glVersion": "OpenGL ES 2.0", "displayType": "ANGLE_METAL",
+                            "privateAttribute": "must-not-be-recorded"},
+                        "featureStatus": {"webgl": "enabled", "webgl2": "disabled",
+                                           **{f"feature-{index}": "enabled"
+                                              for index in range(128)}},
+                        "glRenderer": "top-level decoy",
+                        "machineModelName": "must-not-be-recorded"}}
+                if method == "SystemInfo.getProcessInfo":
+                    return {"processInfo": [
+                        {"type": "browser", "id": 123},
+                        {"type": "GPU", "id": 456},
+                        {"type": "Network Service", "id": 789},
+                        {"type": "GPU", "id": "not-an-id"}]}
+                raise AssertionError(method)
+
+            def close(self):
+                self.closed = True
+
+        with tempfile.TemporaryDirectory() as directory:
+            profile = Path(directory)
+            (profile / "DevToolsActivePort").write_text(
+                "9222\n/devtools/browser/owned-profile-id\n", encoding="ascii")
+            clients = []
+
+            def factory(url, events):
+                client = FakeCDP(url, events)
+                clients.append(client)
+                return client
+
+            record = runner.capture_browser_gpu_info(profile, 123, factory)
+            self.assertEqual(clients[0].url, "ws://127.0.0.1:9222/devtools/browser/owned-profile-id")
+            self.assertEqual(record["status"], "captured")
+            self.assertEqual(record["browser_pid"], 123)
+            self.assertEqual(record["browser_pid_status"], "matched")
+            self.assertTrue(record["observed_at"].endswith("Z"))
+            self.assertEqual(record["gpu_process_ids"], [456])
+            self.assertEqual(record["gpu"]["glRenderer"], "R" * 512)
+            self.assertEqual(record["gpu"]["glVendor"], "ANGLE")
+            self.assertEqual(record["gpu"]["glVersion"], "OpenGL ES 2.0")
+            self.assertEqual(record["gpu"]["displayType"], "ANGLE_METAL")
+            self.assertEqual(record["gpu"]["featureStatus"]["webgl"], "enabled")
+            self.assertEqual(record["gpu"]["featureStatus"]["webgl2"], "disabled")
+            self.assertEqual(len(record["gpu"]["featureStatus"]), 128)
+            self.assertTrue(clients[0].closed)
+            self.assertEqual([call[0] for call in clients[0].calls],
+                             ["SystemInfo.getInfo", "SystemInfo.getProcessInfo"])
+            encoded = json.dumps(record)
+            self.assertNotIn("must-not-be-recorded", encoded)
+            self.assertNotIn("9222", encoded)
+            self.assertNotIn("owned-profile-id", encoded)
+
+    def test_browser_gpu_info_discards_data_on_browser_pid_mismatch(self):
+        class FakeCDP:
+            def __init__(self, _url, _events):
+                self.ws = self
+                self.closed = False
+
+            def call(self, method, params=None, timeout=4):
+                if method == "SystemInfo.getInfo":
+                    return {"gpu": {"auxAttributes": {
+                        "glRenderer": "must-be-discarded"},
+                        "featureStatus": {"webgl": "enabled"}}}
+                return {"processInfo": [
+                    {"type": "browser", "id": 999},
+                    {"type": "GPU", "id": 456}]}
+
+            def close(self):
+                self.closed = True
+
+        with tempfile.TemporaryDirectory() as directory:
+            profile = Path(directory)
+            (profile / "DevToolsActivePort").write_text(
+                "9224\n/devtools/browser/owned-id\n", encoding="ascii")
+            clients = []
+
+            def factory(url, events):
+                client = FakeCDP(url, events)
+                clients.append(client)
+                return client
+
+            record = runner.capture_browser_gpu_info(profile, 321, factory)
+            self.assertEqual(record["status"], "failed")
+            self.assertEqual(record["browser_pid_status"], "mismatch")
+            self.assertEqual(record["gpu"], {})
+            self.assertEqual(record["gpu_process_ids"], [])
+            self.assertEqual(record["errors"][-1], {
+                "stage": "browser-identity", "type": "BrowserIdentityMismatch"})
+            self.assertNotIn("must-be-discarded", json.dumps(record))
+            self.assertNotIn('"id": 999', json.dumps(record))
+            self.assertTrue(clients[0].closed)
+
+    def test_browser_gpu_info_api_failure_is_separate_and_still_closes(self):
+        class FakeCDP:
+            def __init__(self, _url, _events):
+                self.ws = self
+                self.closed = False
+
+            def call(self, method, params=None, timeout=4):
+                if method == "SystemInfo.getInfo":
+                    raise RuntimeError("sensitive endpoint detail")
+                return {"processInfo": [{"type": "GPU", "id": 999}]}
+
+            def close(self):
+                self.closed = True
+
+        with tempfile.TemporaryDirectory() as directory:
+            profile = Path(directory)
+            (profile / "DevToolsActivePort").write_text(
+                "9223\n/devtools/browser/owned-id\n", encoding="ascii")
+            clients = []
+
+            def factory(url, events):
+                client = FakeCDP(url, events)
+                clients.append(client)
+                return client
+
+            record = runner.capture_browser_gpu_info(profile, 321, factory)
+            self.assertEqual(record["status"], "partial")
+            self.assertEqual(record["gpu_process_ids"], [999])
+            self.assertEqual(record["errors"], [{
+                "method": "SystemInfo.getInfo", "type": "RuntimeError"}])
+            self.assertNotIn("sensitive endpoint detail", json.dumps(record))
+            self.assertTrue(clients[0].closed)
+
+    def test_browser_gpu_info_rejects_nonlocal_or_malformed_active_port(self):
+        for active_port in (
+                "0\n/devtools/browser/id\n",
+                "65536\n/devtools/browser/id\n",
+                "9222\n/devtools/page/id\n",
+                "9222\nws://example.invalid/devtools/browser/id\n"):
+            with self.subTest(active_port=active_port), tempfile.TemporaryDirectory() as directory:
+                profile = Path(directory)
+                (profile / "DevToolsActivePort").write_text(active_port, encoding="ascii")
+                factory_called = False
+
+                def factory(_url, _events):
+                    nonlocal factory_called
+                    factory_called = True
+                    raise AssertionError("invalid endpoint must not connect")
+
+                record = runner.capture_browser_gpu_info(profile, 654, factory)
+                self.assertEqual(record["status"], "failed")
+                self.assertEqual(record["errors"][0]["stage"], "active-port")
+                self.assertFalse(factory_called)
 
 
 if __name__ == "__main__":

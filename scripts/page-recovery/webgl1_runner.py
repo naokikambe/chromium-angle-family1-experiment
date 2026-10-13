@@ -10,9 +10,11 @@ import argparse
 import base64
 from datetime import datetime, timezone
 import http.server
+import io
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import threading
@@ -203,6 +205,139 @@ def read_state(cdp, nonce):
             "rect": value.get("rect"), "state": state}
 
 
+def browser_websocket_url(profile):
+    """Read and validate the browser endpoint owned by this fresh profile."""
+    with (Path(profile) / "DevToolsActivePort").open("rb") as active_port:
+        raw = active_port.read(2049)
+    if len(raw) > 2048:
+        raise ValueError("DevToolsActivePort exceeds the expected size")
+    data = raw.decode("ascii")
+    lines = data.splitlines()
+    if len(lines) != 2 or not lines[0].isascii() or not lines[0].isdigit():
+        raise ValueError("DevToolsActivePort has an invalid format")
+    port = int(lines[0])
+    path = lines[1]
+    if not 1 <= port <= 65535:
+        raise ValueError("DevToolsActivePort port is out of range")
+    if not re.fullmatch(r"/devtools/browser/[A-Za-z0-9_-]{1,128}", path):
+        raise ValueError("DevToolsActivePort browser path is invalid")
+    return f"ws://127.0.0.1:{port}{path}"
+
+
+def _bounded_string(value, maximum=512):
+    return value[:maximum] if isinstance(value, str) else None
+
+
+def capture_browser_gpu_info(profile, browser_pid, cdp_factory=None):
+    """Capture a small allowlist of SystemInfo fields from this browser only.
+
+    Errors are returned as bounded diagnostics instead of being raised into the
+    WebGL acceptance path. The browser-root CDP connection is only closed; it
+    never sends Browser.close.
+    """
+    record = {"observed_at": timestamp(), "browser_pid": browser_pid,
+              "gpu_process_ids": [], "status": "failed", "gpu": {},
+              "browser_pid_status": "unverified", "errors": []}
+    try:
+        endpoint = browser_websocket_url(profile)
+    except Exception as exc:
+        record["errors"].append({"stage": "active-port", "type": type(exc).__name__})
+        return record
+
+    client = None
+    successes = 0
+    try:
+        factory = cdp_factory or probe.CDP
+        client = factory(endpoint, io.StringIO())
+        try:
+            response = client.call("SystemInfo.getInfo", timeout=5)
+            gpu = response.get("gpu") if isinstance(response, dict) else None
+            if isinstance(gpu, dict):
+                aux_attributes = gpu.get("auxAttributes")
+                if isinstance(aux_attributes, dict):
+                    for name in ("glRenderer", "glVendor", "glVersion", "displayType"):
+                        value = _bounded_string(aux_attributes.get(name))
+                        if value is not None:
+                            record["gpu"][name] = value
+                feature_status = gpu.get("featureStatus")
+                if isinstance(feature_status, dict):
+                    bounded_status = {}
+                    for key, value in list(feature_status.items())[:128]:
+                        if isinstance(key, str) and isinstance(value, str):
+                            bounded_status[key[:128]] = value[:128]
+                    record["gpu"]["featureStatus"] = bounded_status
+                successes += 1
+            else:
+                record["errors"].append({"method": "SystemInfo.getInfo",
+                                         "type": "InvalidResponse"})
+        except Exception as exc:
+            record["errors"].append({"method": "SystemInfo.getInfo",
+                                     "type": type(exc).__name__})
+
+        try:
+            response = client.call("SystemInfo.getProcessInfo", timeout=5)
+            processes = response.get("processInfo") if isinstance(response, dict) else None
+            if isinstance(processes, list):
+                gpu_ids = []
+                browser_ids = []
+                browser_process_seen = False
+                for item in processes[:256]:
+                    if not isinstance(item, dict):
+                        continue
+                    process_type = item.get("type")
+                    process_id = item.get("id")
+                    valid_id = (isinstance(process_id, int)
+                                and not isinstance(process_id, bool)
+                                and process_id > 0)
+                    if process_type == "GPU" and valid_id:
+                        gpu_ids.append(process_id)
+                    elif process_type == "browser":
+                        browser_process_seen = True
+                        if valid_id:
+                            browser_ids.append(process_id)
+                        else:
+                            browser_ids.append(None)
+                record["gpu_process_ids"] = sorted(set(gpu_ids))
+                unique_browser_ids = set(browser_ids)
+                if browser_process_seen:
+                    if unique_browser_ids == {browser_pid}:
+                        record["browser_pid_status"] = "matched"
+                    else:
+                        record["browser_pid_status"] = "mismatch"
+                        record["gpu"] = {}
+                        record["gpu_process_ids"] = []
+                        record["errors"].append({
+                            "stage": "browser-identity",
+                            "type": "BrowserIdentityMismatch"})
+                else:
+                    record["browser_pid_status"] = "not-reported"
+                successes += 1
+            else:
+                record["errors"].append({"method": "SystemInfo.getProcessInfo",
+                                         "type": "InvalidResponse"})
+        except Exception as exc:
+            record["errors"].append({"method": "SystemInfo.getProcessInfo",
+                                     "type": type(exc).__name__})
+    except Exception as exc:
+        record["errors"].append({"stage": "browser-cdp-connect",
+                                 "type": type(exc).__name__})
+    finally:
+        if client is not None:
+            try:
+                client.ws.close()
+            except Exception:
+                pass
+
+    if record["browser_pid_status"] == "mismatch":
+        record["status"] = "failed"
+    elif successes == 2:
+        record["status"] = "captured"
+    elif successes:
+        record["status"] = "partial"
+    record["observed_at"] = timestamp()
+    return record
+
+
 def run(args):
     validate_options(args.startup_timeout, args.navigation_timeout, args.observe_seconds)
     output = Path(args.out).expanduser().absolute()
@@ -263,6 +398,12 @@ def run(args):
                 result["pid"] = process.pid
                 target = probe.wait_for_page_target(profile, process, args.startup_timeout)
                 cdp = probe.CDP(target["webSocketDebuggerUrl"], events)
+                gpu_info = capture_browser_gpu_info(profile, process.pid)
+                probe.write_json(output / "gpu-info.json", gpu_info)
+                result["gpu_info_diagnostic"] = {
+                    "file": "gpu-info.json", "status": gpu_info["status"],
+                    "observed_at": gpu_info["observed_at"],
+                    "browser_pid": gpu_info["browser_pid"]}
                 for method in ("Page.enable", "Network.enable", "Runtime.enable"):
                     cdp.call(method)
                 cdp.call("Page.navigate", {"url": url}, timeout=args.navigation_timeout)
