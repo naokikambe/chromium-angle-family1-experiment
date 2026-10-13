@@ -15,6 +15,47 @@ downloads/
 profiles/
 *.app/
 
+# Owner-only device evidence; never stage these generated or copied records.
+/private-evidence/
+/device-evidence/
+/screenshots/
+/recordings/
+/device-receipts/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.bmp
+*.tif
+*.tiff
+*.heic
+*.mov
+*.mp4
+*.m4v
+*.webm
+*.mkv
+*.avi
+*.wav
+*.m4a
+*.crash
+*.ips
+*.netlog
+*.pcap
+*.har
+*.sqlite
+*.db
+/typescript
+/typescript.*
+*.keychain
+*.keychain-db
+*.p12
+*.pfx
+*signing-receipt*.json
+*signing_receipt*.json
+*.trace
+*.log
+
 # Local operating-system and temporary files
 .DS_Store
 tmp/

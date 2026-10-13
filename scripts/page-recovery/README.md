@@ -217,7 +217,7 @@ The portable suite checks HTTP failure classification, image validation, fixture
 python3 -m unittest -v test_kit.py
 ```
 
-- CDP transport：ユーザーのリポジトリの固定[phase5-unsigned-cdp-probe.py](https://github.com/naokikambe/chromium-angle-family1-experiment/blob/cc781c1063261ffbe227939ff607ecefb51f6b2b/scripts/phase5-unsigned-cdp-probe.py)をそのまま同梱。
+- CDP transport：ユーザーのリポジトリの固定[phase5-unsigned-cdp-probe.py](https://github.com/naokikambe/chromium-angle-family1-experiment/blob/a873f0642ef77e67927b9847d645f13fc788f071/scripts/phase5-unsigned-cdp-probe.py)をそのまま同梱。
 - Helper別署名policy：[固定Chromium parts.py](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/chrome/installer/mac/signing/parts.py)。
 - 開発署名：[固定Chromium README](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/chrome/installer/mac/signing/README.md)。
 - 実行時署名検証：[固定ProcessRequirement](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/base/mac/process_requirement.cc)。

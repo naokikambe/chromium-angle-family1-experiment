@@ -11,6 +11,13 @@ condition; normal-Keychain stock recovery remains pending. The recovery kit prov
 findings and unresolved acceptance checks belong in the local investigation
 report.
 
+Publication rules prohibit personal and actual-device evidence in Git or CI.
+See [the privacy boundary](docs/publication-privacy.md) and run
+`python3 scripts/check-publication-privacy.py` against the staged snapshot
+before publication. Git hooks in `.githooks/` provide pre-commit staged-content
+and pre-push incoming-history checks when installed by the parent; the scanner
+can also be run directly with `--tree REF` for a committed snapshot.
+
 The current device investigation is complete only when the root cause of the
 page-display failure is established by runtime evidence and controlled
 failure/success comparisons. Retaining re-signing as the explanation requires

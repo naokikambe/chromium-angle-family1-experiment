@@ -12,7 +12,7 @@ Phase 5のページ表示復旧へ計画を立て直した。目標は、公式�
 
 | 項目 | 状態 | 証拠と限界 |
 | --- | --- | --- |
-| 過去の実機ANGLE／Metal／EGL／WebGL1最小描画 | 成功記録あり | 固定コミットの[実機観測記録](https://github.com/naokikambe/chromium-angle-family1-experiment/blob/cc781c1063261ffbe227939ff607ecefb51f6b2b/docs/phase5-real-device-observation.md)。新キットによる実行結果ではない |
+| 過去の実機ANGLE／Metal／EGL／WebGL1最小描画 | 成功記録あり | 固定コミットの[実機観測記録](https://github.com/naokikambe/chromium-angle-family1-experiment/blob/a873f0642ef77e67927b9847d645f13fc788f071/docs/phase5-real-device-observation.md)。新キットによる実行結果ではない |
 | 未署名のビルド済みChromiumのHTTPページ | CI成功記録あり | snapshot 1689422を使用したU0/U1。実機の初回署名後結果とは環境・入力版が異なる |
 | HTTP停止の原因調査 | 現行S0・GPU無効化の範囲で完了報告受領 | 未応答試行と、拒否・APIエラー返却後に開始した要求のHTTP・描画成功を区別。mockの独立profile3件は実GUI確認済みとの報告。callback各段階にはソース推定を含む。実機生ログはクラウドで未再監査 |
 | 通信診断ログ入りChromiumの全体ビルド | 未完成 | run 37464208418は時間切れ。小規模対象の成功で完成済みとは扱わない |
