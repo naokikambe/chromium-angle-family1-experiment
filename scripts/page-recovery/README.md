@@ -127,6 +127,19 @@ python3 persistent_cookie_runner.py \
 
 この引数集合以外の`--browser-arg`、一部だけの指定、重複指定は拒否され、出力directoryやprofileの作成とbrowser起動より前に終了します。環境に同じopt-in変数が予期しない値で設定されている場合も拒否します。`context.json`と各`launch.json`には実際のargvと、このopt-in変数だけを記録します。stock試験では`--browser-arg`と`--metal-family1-experiment`を省略し、従来どおりの起動引数と通常GPU設定を使います。両モードとも独立した新しい`--out`を指定し、実験の成功は実機確認前には主張しません。SwiftShaderやnull backendへの切替は許可されません。
 
+### Stage B WebGL1 shader fixture
+
+`webgl1_runner.py`は、署名検証済みの新しい実験用Chromium copyと新規profileで、nonce付きloopback fixtureを一度起動します。seed/restore用の2D canvasやCSS色には頼らず、WebGL1 context、GLSL ES 1.00 vertex/fragment shader compile、program link、fullscreen triangle draw、中央pixel `readPixels`のRGBA `[0,160,0,255]`、`GL_NO_ERROR`を検査します。失敗ログはshader／programごと4096文字まで記録し、取得可能なGL version、vendor／renderer、debug renderer extensionのunmasked名は512文字まで記録します。page上の`DRAW_OK`／`READBACK_OK`または`FAIL`とpixel値、state観測時刻、GUI観察開始・終了UTC時刻を残し、CDP state・canvas中央のscreenshot patch・通常ページscreenshotも保存します。raw NetLogは使わず、fixture server eventにはnonce、path、statusだけを残します。
+
+```bash
+python3 webgl1_runner.py \
+  --app "$experiment_app" \
+  --out "$task_dir/family1-webgl1" \
+  --startup-timeout 45 --navigation-timeout 60 --observe-seconds 20
+```
+
+Runnerは既定のFamily 1用4引数と`ANGLE_PHASE5_ENABLE_METAL_FAMILY1=1`だけを適用します。boundsはMac／app検査と出力作成より先に確認され、appはlaunch前に`codesign --verify --deep --strict`で読み取り検証されます。WebGL stateのCDP確認は最大20秒、GUI観察時間は`--observe-seconds`で別に指定し、その秒数の観察が保証されるわけではありません。自動結果がpassでも、GUI確認と同一GPU PIDにおける独自dylib／Metal loadの親reviewは別途必要です。結果分類はreview待ちを明示し、単独ではStage Bの実機受入を意味しません。失敗時の自動retryや強制終了は行いません。
+
 ## 3. 署名設定の修正を、新規コピーで試す
 
 この試験は、保存済みinventory／receiptで公式のHelper別設定との差が見つかった場合、または以前の署名処理対象を復元できず基準copyが必要な場合に実施する。

@@ -19,6 +19,11 @@ root is reached through an aliased parent, while external and broken links are
 rejected. `sign_once.py` canonicalizes the bundle root before checking resolved
 link targets.
 
+`python3 -m unittest -v test_webgl1_runner.py` checks synthetic WebGL-state
+acceptance and failure cases, the nonce-bound loopback fixture without a browser,
+and bounds rejection before GUI-context inspection or output creation. These
+tests do not launch Chromium, validate a GPU, or establish Metal library loading.
+
 The mock browser exercises the probe lifecycle; it is not evidence of Chromium
 rendering. GUI confirmation, ordinary-Keychain behavior, and product acceptance
 are separate from these portable unit checks. Do not use the diagnostic
