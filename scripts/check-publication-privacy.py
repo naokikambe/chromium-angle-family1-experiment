@@ -179,6 +179,31 @@ def tree_blobs(root: Path, ref: str) -> list[tuple[str, bytes]]:
     return blobs
 
 
+def scan_tree_blobs(
+    root: Path, ref: str, deny_values: list[str], clean_cache: set[tuple[str, str]]
+) -> list[Finding]:
+    """Scan one committed tree, reusing clean scans for identical path/blob pairs."""
+    records = git(root, "ls-tree", "-r", "-z", "--full-tree", ref).split(b"\0")
+    for record in records:
+        if not record:
+            continue
+        header, raw_path = record.split(b"\t", 1)
+        mode, object_type, oid = header.decode("ascii").split()
+        path = raw_path.decode("utf-8", "surrogateescape")
+        key = (path, oid)
+        if key in clean_cache:
+            continue
+        if object_type != "blob" or mode not in {"100644", "100755", "120000"}:
+            content = b"\x00"
+        else:
+            content = git(root, "cat-file", "blob", oid)
+        findings = scan_blobs([(path, content)], deny_values)
+        if findings:
+            return findings
+        clean_cache.add(key)
+    return []
+
+
 def identity_findings(root: Path, tree: str | None) -> list[Finding]:
     if tree:
         output = git(root, "log", "-1", "--format=%an%x00%ae%x00%cn%x00%ce", tree).decode("utf-8", "replace")
@@ -228,6 +253,7 @@ def scan_blobs(blobs: list[tuple[str, bytes]], deny_values: list[str]) -> list[F
 
 def pre_push_findings(root: Path, input_bytes: bytes, deny_values: list[str]) -> list[Finding]:
     findings: list[Finding] = []
+    clean_cache: set[tuple[str, str]] = set()
     zero = "0" * 40
     for raw_line in input_bytes.splitlines():
         if not raw_line.strip():
@@ -248,7 +274,7 @@ def pre_push_findings(root: Path, input_bytes: bytes, deny_values: list[str]) ->
             findings = identity_findings(root, commit)
             if findings:
                 return findings
-            findings = scan_blobs(tree_blobs(root, commit), deny_values)
+            findings = scan_tree_blobs(root, commit, deny_values, clean_cache)
             if findings:
                 return findings
             message = git(root, "log", "-1", "--format=%B", commit)

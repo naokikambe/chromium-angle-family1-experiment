@@ -275,6 +275,63 @@ class PublicationPrivacyTests(unittest.TestCase):
                                 input=ref_input, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
         self.assertEqual(result.returncode, 0, result.stderr.decode())
 
+    def test_pre_push_scans_a_reused_clean_path_blob_once(self):
+        base = run_git(self.root, "rev-parse", "HEAD").stdout.decode().strip()
+        (self.root / "first.md").write_text("first clean synthetic file\n", encoding="utf-8")
+        run_git(self.root, "add", "first.md")
+        run_git(self.root, "commit", "-qm", "first clean addition")
+        (self.root / "second.md").write_text("second clean synthetic file\n", encoding="utf-8")
+        run_git(self.root, "add", "second.md")
+        run_git(self.root, "commit", "-qm", "second clean addition")
+        local_tip = run_git(self.root, "rev-parse", "HEAD").stdout.decode().strip()
+        ref_input = f"refs/heads/topic {local_tip} refs/heads/topic {base}\n".encode()
+
+        module = runpy.run_path(str(SCRIPT), run_name="publication_privacy_cache_test")
+        original_git = module["git"]
+        safe_blob_oid = run_git(self.root, "rev-parse", "HEAD:safe.md").stdout.decode().strip()
+        safe_blob_reads = 0
+
+        def counted_git(root: Path, *args: str, data: bytes | None = None) -> bytes:
+            nonlocal safe_blob_reads
+            if len(args) == 3 and args[0:2] == ("cat-file", "blob") and args[2] == safe_blob_oid:
+                safe_blob_reads += 1
+            return original_git(root, *args, data=data)
+
+        module["pre_push_findings"].__globals__["git"] = counted_git
+        findings = module["pre_push_findings"](self.root, ref_input, [])
+        self.assertEqual(findings, [])
+        self.assertEqual(safe_blob_reads, 1)
+
+    def test_pre_push_still_checks_older_commit_message_after_blob_cache_hit(self):
+        base = run_git(self.root, "rev-parse", "HEAD").stdout.decode().strip()
+        message = "Synthetic historical note " + "dev@" + "local" + ".test"
+        run_git(self.root, "commit", "--allow-empty", "-m", message)
+        run_git(self.root, "commit", "--allow-empty", "-m", "clean newer commit")
+        local_tip = run_git(self.root, "rev-parse", "HEAD").stdout.decode().strip()
+        ref_input = f"refs/heads/topic {local_tip} refs/heads/topic {base}\n".encode()
+        result = subprocess.run([sys.executable, str(SCRIPT), "--repo", str(self.root), "--pre-push"],
+                                input=ref_input, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+        output = result.stdout.decode() + result.stderr.decode()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("<commit-message>:1: email", output)
+        self.assertNotIn("dev@" + "local.test", output)
+
+    def test_pre_push_still_checks_older_commit_metadata_after_blob_cache_hit(self):
+        base = run_git(self.root, "rev-parse", "HEAD").stdout.decode().strip()
+        env = os.environ.copy()
+        env["GIT_AUTHOR_NAME"] = "Synthetic Reviewer"
+        env["GIT_AUTHOR_EMAIL"] = "reviewer@local" + ".test"
+        run_git(self.root, "commit", "--allow-empty", "-m", "clean tree invalid identity", env=env)
+        run_git(self.root, "commit", "--allow-empty", "-m", "clean newer commit")
+        local_tip = run_git(self.root, "rev-parse", "HEAD").stdout.decode().strip()
+        ref_input = f"refs/heads/topic {local_tip} refs/heads/topic {base}\n".encode()
+        result = subprocess.run([sys.executable, str(SCRIPT), "--repo", str(self.root), "--pre-push"],
+                                input=ref_input, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+        output = result.stdout.decode() + result.stderr.decode()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("author-email", output)
+        self.assertNotIn("reviewer@local" + ".test", output)
+
     def test_pre_push_checks_commit_messages_even_when_tree_is_clean(self):
         base = run_git(self.root, "rev-parse", "HEAD").stdout.decode().strip()
         message = "Synthetic review record " + "dev@" + "local.test"

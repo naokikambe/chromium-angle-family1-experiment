@@ -109,8 +109,8 @@ zlibライブラリ、zlib_bench、minigzip、zpipe、brotli、opus_compare、op
 
 ## 根拠資料
 
-- [実機観測記録（固定コミット）](https://github.com/naokikambe/chromium-angle-family1-experiment/blob/a873f0642ef77e67927b9847d645f13fc788f071/docs/phase5-real-device-observation.md)
-- [未署名Chromium・初回署名比較の記録](https://github.com/naokikambe/chromium-angle-family1-experiment/blob/a873f0642ef77e67927b9847d645f13fc788f071/docs/phase5-unsigned-chromium-one-sign-experiment-plan.md)
+- [実機観測記録（固定コミット）](https://github.com/naokikambe/chromium-angle-family1-experiment/blob/292c7e2bab8bd06e9cf2ec50d7d20a451393290d/docs/phase5-real-device-observation.md)
+- [未署名Chromium・初回署名比較の記録](https://github.com/naokikambe/chromium-angle-family1-experiment/blob/292c7e2bab8bd06e9cf2ec50d7d20a451393290d/docs/phase5-unsigned-chromium-one-sign-experiment-plan.md)
 - [本体ビルドの実行記録](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37464208418)
 - [無料CI事前確認と小規模ビルドの記録](https://github.com/naokikambe/chromium-angle-family1-experiment/blob/8df3e449d2dff8ca4532bbb44a56dbfc5d86b28b/docs/phase5-ci-preflight-free-decision.md)
 - [確認時点の実行中CI](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/38180664558)
