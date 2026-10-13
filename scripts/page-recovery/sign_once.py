@@ -125,6 +125,29 @@ def freeze_files(app):
     return result
 
 
+def capture_signing_command(command, destination, timeout=120):
+    """Run only a codesign write with public artifact umask and private logs."""
+    if (not command or command[0] != "/usr/bin/codesign" or "--sign" not in command):
+        raise ValueError("scoped signature-resource umask is only for codesign --sign")
+    try:
+        process = subprocess.run(command, capture_output=True, text=True,
+                                 timeout=timeout, umask=0o022)
+        output, code = process.stdout + process.stderr, process.returncode
+    except subprocess.TimeoutExpired:
+        output, code = "COMMAND_TIMEOUT\n", 124
+    destination = Path(destination)
+    descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            descriptor = -1
+            stream.write(output)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    return code, output
+
+
 def prepare(args):
     mac_context()
     source, executable, info = app_executable(args.source)
@@ -191,7 +214,7 @@ def execute(args):
     write_json(out / "signing-receipt.json", receipt)
     try:
         for index, step in enumerate(plan["steps"]):
-            code, _ = capture(step["argv"], out / f"sign-{index:03d}.txt", timeout=120)
+            code, _ = capture_signing_command(step["argv"], out / f"sign-{index:03d}.txt", timeout=120)
             receipt["steps"].append({"target": step["target"], "role": step["role"], "exit": code})
             write_json(out / "signing-receipt.json", receipt)
             if code != 0:

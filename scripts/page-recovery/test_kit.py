@@ -4,10 +4,12 @@ import base64
 from contextlib import redirect_stdout
 import io
 import json
+import os
 from pathlib import Path
 import plistlib
 import sqlite3
 import struct
+import sys
 import tempfile
 import threading
 import time
@@ -288,6 +290,47 @@ class SigningTests(unittest.TestCase):
                 with patch.object(sign_once,"capture",return_value=output):
                     with self.assertRaises(RuntimeError):
                         sign_once.unsigned(app, Path(directory))
+
+    def test_signing_child_umask_makes_resources_cross_user_readable_and_keeps_logs_private(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resource = root / "Chromium.app/Contents/_CodeSignature/CodeResources"
+            log = root / "sign-000.txt"
+            original_umask = os.umask(0o077)
+            try:
+                original_run = sign_once.subprocess.run
+                creation_script = (
+                    "from pathlib import Path; import sys; "
+                    "p=Path(sys.argv[1]); p.parent.mkdir(parents=True); "
+                    "p.write_text('synthetic signature resources'); print('signed')"
+                )
+
+                def synthetic_signing_child(command, *, capture_output, text, timeout, umask):
+                    self.assertEqual(command[:2], ["/usr/bin/codesign", "--sign"])
+                    self.assertEqual(umask, 0o022)
+                    return original_run([sys.executable, "-c", creation_script, str(resource)],
+                                        capture_output=capture_output, text=text,
+                                        timeout=timeout, umask=umask)
+
+                with patch.object(sign_once.subprocess, "run", side_effect=synthetic_signing_child):
+                    code, output = sign_once.capture_signing_command(
+                        ["/usr/bin/codesign", "--sign", "synthetic-id", "/synthetic/Chromium.app"], log)
+
+                self.assertEqual(code, 0)
+                self.assertEqual(output, "signed\n")
+                self.assertEqual(resource.stat().st_mode & 0o777, 0o644)
+                self.assertEqual(resource.parent.stat().st_mode & 0o777, 0o755)
+                self.assertEqual(log.stat().st_mode & 0o777, 0o600)
+                current_umask = os.umask(0o077)
+                self.assertEqual(current_umask, 0o077)
+            finally:
+                os.umask(original_umask)
+
+    def test_public_resource_umask_is_refused_for_non_signing_commands(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "only for codesign --sign"):
+                sign_once.capture_signing_command(["/usr/bin/codesign", "--verify", "/synthetic/app"],
+                                                  Path(directory) / "private-log.txt")
 
 
 class PersistentCookieTests(unittest.TestCase):

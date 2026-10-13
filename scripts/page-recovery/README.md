@@ -172,6 +172,8 @@ python3 "$kit_dir/probe.py" probe --app "$task_dir/stock-role-policy/Chromium.ap
 
 署名を一つでも失敗した場合はそのコピーとreceiptを保存して停止する。実行済みコピーで署名をやり直さない。全体のstrict verificationに成功しても、ページ表示の合格とは別に判定する。
 
+別のGUIユーザーが署名済みcopyを使う場合は、署名者側のstrict verificationだけでなく、対象ユーザーが各nested bundleの`_CodeSignature/CodeResources`を読み取れ、そこまでの親directoryを検索できることをread-onlyで確認する。future first-signではcodesign書込みsubprocessだけにumask `022`を渡し、新規signature resourceを他ユーザーから読めるmodeで生成する。signing plan、entitlements、receipt、command logはprivateのまま維持する。preflightに失敗した既存署名copyへad hocなchmodや再署名をせず、必要な対応は新しいfresh copyを使う手順として別途評価する。
+
 このアダプターはsnapshot 1689422の署名部品設定専用。別snapshotに対しては対応する固定ソースを確認して更新する。原本とREVISIONSの結び付けには既存archive hash／取得記録も使う。REVISIONSファイルの一致だけでは、ローカルappの出所の証明にはならない。
 
 ## 4. 修正の採否
