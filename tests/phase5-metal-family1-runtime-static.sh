@@ -7,7 +7,7 @@ patch=${2:?runtime patch path}
 test -f "$workflow"
 test -f "$patch"
 patch_sha256=$(shasum -a 256 "$patch" | awk '{print $1}')
-test "$patch_sha256" = 816622e659a0a46c9c68dfbcf63af59d7d69a81c39632fa4aa2460de6f57f491
+test "$patch_sha256" = 8cf28ad02dd132b653e93e85535dd7f9fd26571ff4b2ee7c5a0c27f73a720dcb
 python3 - "$workflow" "$patch" scripts/verify-phase5-runtime-artifact.sh <<'PY'
 import hashlib
 import re
@@ -51,7 +51,7 @@ with tempfile.TemporaryDirectory(prefix="phase5-patch-manifest-") as directory:
     manifest = Path(directory) / "ANGLE_RELEASE_MANIFEST"
     for label, value, expected_exit in (
             ("current hash accepted", patch_sha, 0),
-            ("previous hash rejected", "9b6c473781953bca65d612858a618d91fcce9e517e0dca3e5c18bc177b681727", 1)):
+            ("previous hash rejected", "816622e659a0a46c9c68dfbcf63af59d7d69a81c39632fa4aa2460de6f57f491", 1)):
         manifest.write_text(f"RUNTIME_PATCH_SHA256={value}\n")
         result = subprocess.run(["bash", "-c", shell, "--", str(manifest)],
                                 text=True, capture_output=True, check=False)
@@ -199,7 +199,7 @@ grep -F 'family1RuntimeOptIn && supportsFamily1' "$patch" >/dev/null
 grep -F 'supportsMacFamily1 && !supportsMacFamily2' "$patch" >/dev/null
 grep -F 'MTLGPUFamilyMacCatalyst1' "$patch" >/dev/null
 grep -F 'MTLGPUFamilyMacCatalyst2' "$patch" >/dev/null
-test "$(grep -Ec '#[[:space:]]*pragma clang diagnostic ignored "-Wdeprecated-declarations"' "$patch")" -eq 2
+test "$(grep -Ec '#[[:space:]]*pragma clang diagnostic ignored "-Wdeprecated-declarations"' "$patch")" -eq 4
 test "$(grep -Ec '#[[:space:]]*pragma clang diagnostic push' "$patch")" -ge 2
 test "$(grep -Ec '#[[:space:]]*pragma clang diagnostic pop' "$patch")" -ge 2
 grep -F '#if TARGET_OS_MACCATALYST || TARGET_OS_OSX' "$patch" >/dev/null
@@ -208,6 +208,12 @@ grep -F 'returnValue && value' "$patch" >/dev/null
 ! grep -F 'max_es_version=2.0 family=mac1' "$patch" >/dev/null
 grep -F 'max_es_version_gpu_family4_or1=' "$patch" >/dev/null
 grep -F 'angle::GetEnvironmentVar("ANGLE_PHASE5_ENABLE_METAL_FAMILY1") == "1"' "$patch" >/dev/null
+grep -F 'UseLegacyMathOptionsForPhase5Family1(metalDevice, options.get())' "$patch" >/dev/null
+grep -F 'respondsToSelector:@selector(setMathMode:)' "$patch" >/dev/null
+grep -F 'respondsToSelector:@selector(setMathFloatingPointFunctions:)' "$patch" >/dev/null
+grep -F 'options.get().fastMathEnabled = !disableFastMath;' "$patch" >/dev/null
+grep -F 'math_options=legacy_fastMathEnabled' "$patch" >/dev/null
+grep -F 'math-options-policy.py' "$workflow" >/dev/null
 grep -F 'native_mac_family=1 mac1=true mac2=false' "$patch" >/dev/null
 grep -F 'src/libANGLE/renderer/metal/mtl_utils.mm' "$patch" >/dev/null
 grep -F 'eglInitialize_return_failure' "$patch" >/dev/null

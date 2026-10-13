@@ -350,10 +350,72 @@ index 71f0c61..bbc32e8 100644
  #endif
  }
 diff --git a/src/libANGLE/renderer/metal/mtl_utils.mm b/src/libANGLE/renderer/metal/mtl_utils.mm
-index 6912d1c..e712050 100644
+index 6912d1cf0d70fc483a49815be223b7c8f5f7a7b3..f12db754dbf19d1a7e0336c83e812bce672db271 100644
 --- a/src/libANGLE/renderer/metal/mtl_utils.mm
 +++ b/src/libANGLE/renderer/metal/mtl_utils.mm
-@@ -1423,6 +1423,23 @@ bool SupportsMacGPUFamily(id<MTLDevice> device, uint8_t macFamily)
+@@ -887,6 +887,38 @@
+     return currentVersion;
+ }
+
++#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000 || __IPHONE_OS_VERSION_MAX_ALLOWED >= 180000 || \
++    __TV_OS_VERSION_MAX_ALLOWED >= 180000 || TARGET_OS_VISION
++static bool UseLegacyMathOptionsForPhase5Family1(
++    id<MTLDevice> metalDevice,
++    MTLCompileOptions *options)
++{
++#if TARGET_OS_OSX && !TARGET_OS_MACCATALYST
++    if (angle::GetEnvironmentVar("ANGLE_PHASE5_ENABLE_METAL_FAMILY1") != "1")
++    {
++        return false;
++    }
++
++#    pragma clang diagnostic push
++#    pragma clang diagnostic ignored "-Wdeprecated-declarations"
++    const bool supportsMacFamily1 = [metalDevice supportsFamily:MTLGPUFamilyMac1];
++#    pragma clang diagnostic pop
++    const bool supportsMacFamily2 = [metalDevice supportsFamily:MTLGPUFamilyMac2];
++    if (!supportsMacFamily1 || supportsMacFamily2)
++    {
++        return false;
++    }
++
++    return ![options respondsToSelector:@selector(setMathMode:)] ||
++           ![options respondsToSelector:@selector(setMathFloatingPointFunctions:)];
++#else
++    (void)metalDevice;
++    (void)options;
++    return false;
++#endif
++}
++#endif
++
+ angle::ObjCPtr<id<MTLLibrary>> CreateShaderLibrary(
+     id<MTLDevice> metalDevice,
+     std::string_view source,
+@@ -914,7 +946,21 @@
+     __TV_OS_VERSION_MAX_ALLOWED >= 180000 || TARGET_OS_VISION
+         if (@available(macOS 15.0, iOS 18.0, *))
+         {
+-            if (disableFastMath)
++            const bool useFamily1LegacyMathFallback =
++                UseLegacyMathOptionsForPhase5Family1(metalDevice, options.get());
++            if (useFamily1LegacyMathFallback)
++            {
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wdeprecated-declarations"
++                options.get().fastMathEnabled = !disableFastMath;
++#pragma clang diagnostic pop
++                fprintf(stderr,
++                        "[ANGLE_PHASE5_METAL_INIT] math_options=legacy_fastMathEnabled "
++                        "family1_only=true fast_math=%s modern_setters=missing\n",
++                        disableFastMath ? "disabled" : "enabled");
++                fflush(stderr);
++            }
++            else if (disableFastMath)
+             {
+                 options.get().mathMode                   = MTLMathModeSafe;
+                 options.get().mathFloatingPointFunctions = MTLMathFloatingPointFunctionsPrecise;
+@@ -1424,6 +1470,23 @@
      switch (macFamily)
      {
          case 1:

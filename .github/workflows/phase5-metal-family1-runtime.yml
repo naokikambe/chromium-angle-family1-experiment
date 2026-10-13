@@ -30,7 +30,7 @@ on:
       runtime_patch_sha256:
         description: SHA-256 of the checked-in Phase 5 runtime patch
         required: true
-        default: 816622e659a0a46c9c68dfbcf63af59d7d69a81c39632fa4aa2460de6f57f491
+        default: 8cf28ad02dd132b653e93e85535dd7f9fd26571ff4b2ee7c5a0c27f73a720dcb
         type: string
 
 concurrency:
@@ -230,6 +230,13 @@ jobs:
             exit 1
           fi
           cat "$DIAG_DIR/native-query-policy.txt"
+          if ! python3 "$GITHUB_WORKSPACE/tests/phase5-metal-family1-math-options-policy.py" \
+              --mtl-utils "$ANGLE_ROOT/src/libANGLE/renderer/metal/mtl_utils.mm" \
+              > "$DIAG_DIR/math-options-policy.txt" 2>&1; then
+            cat "$DIAG_DIR/math-options-policy.txt"
+            exit 1
+          fi
+          cat "$DIAG_DIR/math-options-policy.txt"
           {
             printf 'SOURCE_REVISION=%s\n' "$(git rev-parse HEAD)"
             printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"
