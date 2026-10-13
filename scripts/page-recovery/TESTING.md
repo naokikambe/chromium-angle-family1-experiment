@@ -25,10 +25,11 @@ and bounds rejection before GUI-context inspection or output creation. These
 tests do not launch Chromium, validate a GPU, or establish Metal library loading.
 
 `python3 -m unittest -v test_webgl1_diagnostic_runner.py` checks the new
-diagnostic page's nine fixed stages, raw pre-finish RGB160 readback, WebGL-only
-source constraints, context-loss and bounded-state handling, exact nonce/document
-validation, diagnostic-only classification, fixture routing, and fresh-output/
-timeout guards. It compiles the embedded fixed JavaScript with
+diagnostic page's fifteen fixed stages, raw pre-finish RGB160 readback, WebGL-only
+source constraints, bounded vertex-input matrix/attribute-state allowlist,
+context-loss handling, exact nonce/document validation, diagnostic-only
+classification, fixture routing, and fresh-output/timeout guards. It compiles
+the embedded fixed JavaScript with
 `node --check` when Node.js is available. Tests use no browser, app bundle,
 profile, or GPU, and do not treat synthetic stage states as acceptance evidence.
 

@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import http.server
 import io
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -39,6 +40,12 @@ STAGE_NAMES = (
     "offscreen-fbo-clear",
     "offscreen-fbo-triangle",
     "single-sample-clear-vbo",
+    "single-sample-constant-point",
+    "single-sample-vbo-point-packed",
+    "single-sample-vbo-point-interleaved",
+    "single-sample-vbo-triangle-vec4-stride16",
+    "single-sample-vbo-triangle-vec2-subdata",
+    "single-sample-vbo-triangle-vec2-in-clip",
 )
 MAX_STAGE_COUNT = len(STAGE_NAMES)
 MAX_GL_ERRORS_PER_STAGE = 16
@@ -72,9 +79,13 @@ def diagnostic_page(nonce):
 <script>
 (() => {
   const nonce = __NONCE_JSON__;
-    const names = ["initial-triangle-raw-readback","default-clear","scissor-clear","vbo-triangle",
+  const names = ["initial-triangle-raw-readback","default-clear","scissor-clear","vbo-triangle",
     "uniform-color-triangle","constant-attribute-point",
-    "offscreen-fbo-clear","offscreen-fbo-triangle","single-sample-clear-vbo"];
+    "offscreen-fbo-clear","offscreen-fbo-triangle","single-sample-clear-vbo",
+    "single-sample-constant-point","single-sample-vbo-point-packed",
+    "single-sample-vbo-point-interleaved","single-sample-vbo-triangle-vec4-stride16",
+    "single-sample-vbo-triangle-vec2-subdata","single-sample-vbo-triangle-vec2-in-clip"];
+  const matrixNames=names.slice(9);
   const state = {nonce, diagnostic_only:true, context_ok:false, context_lost:false,
     stopped:false, stages:[], gl_version:null, glsl_version:null, error:null,
     context_attributes:null,sample_buffers:null,samples:null,
@@ -139,6 +150,12 @@ def diagnostic_page(nonce):
       (stage.after_finish_pixel ? ' after-finish=' + stage.after_finish_pixel.join(',') : '') +
       (stage.gl_errors.length ? ' GL_ERROR' : '');
     list.appendChild(item);
+  }
+  function addSkippedMatrixStages(reason) {
+    for (const name of matrixNames) {
+      addStage({name,status:'skipped',checks:{},gl_errors:[],prior_gl_errors:[],
+        pixel:null,expected_pixel:null,details:{reason}});
+    }
   }
   function stage(gl, name, operation) {
     if (state.stopped || contextLost(gl)) {
@@ -229,6 +246,77 @@ def diagnostic_page(nonce):
     gl.enableVertexAttribArray(location);
     gl.vertexAttribPointer(location,2,gl.FLOAT,false,0,0);
     return true;
+  }
+  function captureAttributeState(gl,location,expectedBuffer,result,expectations={}) {
+    const binding=gl.getVertexAttrib(location,gl.VERTEX_ATTRIB_ARRAY_BUFFER_BINDING);
+    const state={
+      enabled:gl.getVertexAttrib(location,gl.VERTEX_ATTRIB_ARRAY_ENABLED)===true,
+      size:gl.getVertexAttrib(location,gl.VERTEX_ATTRIB_ARRAY_SIZE),
+      type:gl.getVertexAttrib(location,gl.VERTEX_ATTRIB_ARRAY_TYPE),
+      normalized:gl.getVertexAttrib(location,gl.VERTEX_ATTRIB_ARRAY_NORMALIZED)===true,
+      stride:gl.getVertexAttrib(location,gl.VERTEX_ATTRIB_ARRAY_STRIDE),
+      buffer_binding_matches:binding===expectedBuffer,
+      offset:gl.getVertexAttribOffset(location,gl.VERTEX_ATTRIB_ARRAY_POINTER)
+    };
+    result.details.attribute_state=state;
+    result.checks.attribute_enabled=state.enabled===expectations.enabled;
+    for (const key of ['size','type','normalized','stride','buffer_binding_matches','offset']) {
+      if (Object.prototype.hasOwnProperty.call(expectations,key))
+        result.checks['attribute_'+key]=state[key]===expectations[key];
+    }
+    return state;
+  }
+  function matrixBuffer(gl,program,result,vertices,components,stride,offset,uploadPath) {
+    const location=gl.getAttribLocation(program,'a_position');
+    result.details.attribute_location=location;
+    result.checks.attribute_location_valid=location>=0;
+    if (location<0) return null;
+    const buffer=gl.createBuffer();
+    result.checks.buffer_created=Boolean(buffer);
+    if (!buffer) return null;
+    gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+    if (uploadPath==='bufferData-size+bufferSubData') {
+      gl.bufferData(gl.ARRAY_BUFFER,vertices.byteLength,gl.STATIC_DRAW);
+      gl.bufferSubData(gl.ARRAY_BUFFER,0,vertices);
+    } else {
+      gl.bufferData(gl.ARRAY_BUFFER,vertices,gl.STATIC_DRAW);
+    }
+    const bytes=gl.getBufferParameter(gl.ARRAY_BUFFER,gl.BUFFER_SIZE);
+    result.details.buffer_bytes=bytes;
+    result.details.upload_path=uploadPath;
+    result.checks.buffer_bytes_match=bytes===vertices.byteLength;
+    if (!result.checks.buffer_bytes_match) return null;
+    gl.enableVertexAttribArray(location);
+    gl.vertexAttribPointer(location,components,gl.FLOAT,false,stride,offset);
+    const state=captureAttributeState(gl,location,buffer,result,
+      {enabled:true,size:components,type:gl.FLOAT,normalized:false,stride,
+       buffer_binding_matches:true,offset});
+    result.checks.attribute_state_valid=Object.values(result.checks).every(value=>value===true);
+    return {location,buffer,state};
+  }
+  function drawMatrixTriangle(gl,result,vertices,components,stride,offset,uploadPath) {
+    resetDefault(gl,singleCanvas);
+    const vertex=components===4
+      ? 'attribute vec4 a_position; void main(){gl_Position=a_position;}'
+      : 'attribute vec2 a_position; void main(){gl_Position=vec4(a_position,0.0,1.0);}';
+    const program=compileProgram(gl,vertex,
+      'precision mediump float; void main(){gl_FragColor=vec4(0.0,1.0,0.0,1.0);}',result);
+    if (!program || !matrixBuffer(gl,program,result,vertices,components,stride,offset,uploadPath)) return;
+    gl.useProgram(program); gl.drawArrays(gl.TRIANGLES,0,3);
+    result.details.draw_call_issued=true; result.checks.draw_call_issued=true;
+    result.expected_pixel=[0,255,0,255]; result.pixel=pixelAt(gl,16,16);
+    result.checks.readback_matches=result.pixel.every((v,i)=>v===result.expected_pixel[i]);
+  }
+  function drawMatrixPoint(gl,result,vertices,stride,uploadPath) {
+    resetDefault(gl,singleCanvas);
+    const vertex='attribute vec2 a_position; void main(){gl_Position=vec4(a_position,0.0,1.0);gl_PointSize=8.0;}';
+    const program=compileProgram(gl,vertex,
+      'precision mediump float; void main(){gl_FragColor=vec4(1.0,1.0,0.0,1.0);}',result);
+    if (!program || !matrixBuffer(gl,program,result,vertices,2,stride,0,uploadPath)) return;
+    gl.useProgram(program); gl.drawArrays(gl.POINTS,0,1);
+    result.details.draw_call_issued=true; result.checks.draw_call_issued=true;
+    result.expected_pixel=[255,255,0,255]; result.pixel=pixelAt(gl,16,16);
+    result.checks.readback_matches=result.pixel.every((v,i)=>v===result.expected_pixel[i]);
   }
   function drawVbo(gl, result, colorSource, uniformColor, targetCanvas=canvas) {
     resetDefault(gl,targetCanvas);
@@ -364,6 +452,7 @@ def diagnostic_page(nonce):
         addStage({name:'single-sample-clear-vbo',status:'skipped',checks:{},
           gl_errors:[],prior_gl_errors:[],pixel:null,expected_pixel:null,
           details:{reason:'prior-context-loss-or-fatal-gl-error'}});
+        addSkippedMatrixStages('prior-context-loss-or-fatal-gl-error');
       } else {
       let single=null;
       try {
@@ -374,6 +463,7 @@ def diagnostic_page(nonce):
         addStage({name:'single-sample-clear-vbo',status:'failed',checks:{context_available:false},
           gl_errors:[],prior_gl_errors:[],pixel:null,expected_pixel:null,
           details:{context_unavailable:true,context_attributes_requested:{antialias:false}}});
+        addSkippedMatrixStages('single-sample-context-unavailable');
       } else {
         singleCanvas.addEventListener('webglcontextlost', event => {
           event.preventDefault(); state.context_lost=true; state.stopped=true;
@@ -405,6 +495,46 @@ def diagnostic_page(nonce):
           result.checks.draw_readback_matches=result.pixel.every(
             (v,i)=>v===result.expected_pixel[i]);
         });
+        stage(single,'single-sample-constant-point',result => {
+          resetDefault(single,singleCanvas);
+          const program=compileProgram(single,
+            'attribute vec2 a_position; void main(){gl_Position=vec4(a_position,0.0,1.0);gl_PointSize=8.0;}',
+            'precision mediump float; void main(){gl_FragColor=vec4(1.0,1.0,0.0,1.0);}',result);
+          if (!program) return;
+          const location=single.getAttribLocation(program,'a_position');
+          result.details.attribute_location=location;
+          result.checks.attribute_location_valid=location>=0;
+          if (location<0) return;
+          single.useProgram(program); single.disableVertexAttribArray(location);
+          single.vertexAttrib4f(location,1.0/32.0,1.0/32.0,0.0,1.0);
+          const state=captureAttributeState(single,location,null,result,{enabled:false});
+          const current=Array.from(single.getVertexAttrib(location,single.CURRENT_VERTEX_ATTRIB));
+          result.details.current_attribute=current;
+          result.checks.current_attribute_matches=current.length===4 &&
+            current[0]===1.0/32.0 && current[1]===1.0/32.0 && current[2]===0 && current[3]===1;
+          result.details.constant_attribute_set=true;
+          result.checks.constant_attribute_set=true;
+          single.drawArrays(single.POINTS,0,1);
+          result.details.draw_call_issued=true; result.checks.draw_call_issued=true;
+          result.expected_pixel=[255,255,0,255]; result.pixel=pixelAt(single,16,16);
+          result.checks.readback_matches=result.pixel.every((v,i)=>v===result.expected_pixel[i]);
+        });
+        stage(single,'single-sample-vbo-point-packed',result => drawMatrixPoint(single,result,
+          new Float32Array([1.0/32.0,1.0/32.0]),0,'bufferData-float32-array'));
+        stage(single,'single-sample-vbo-point-interleaved',result => drawMatrixPoint(single,result,
+          new Float32Array([1.0/32.0,1.0/32.0,0.5]),12,'bufferData-float32-interleaved'));
+        stage(single,'single-sample-vbo-triangle-vec4-stride16',result =>
+          drawMatrixTriangle(single,result,
+            new Float32Array([-1,-1,0,1, 3,-1,0,1, -1,3,0,1]),4,16,0,
+            'bufferData-float32-array'));
+        stage(single,'single-sample-vbo-triangle-vec2-subdata',result =>
+          drawMatrixTriangle(single,result,
+            new Float32Array([-1,-1,3,-1,-1,3]),2,0,0,
+            'bufferData-size+bufferSubData'));
+        stage(single,'single-sample-vbo-triangle-vec2-in-clip',result =>
+          drawMatrixTriangle(single,result,
+            new Float32Array([-0.75,-0.75, 0.75,-0.75, 0,0.75]),2,0,0,
+            'bufferData-float32-array'));
       }
       }
     }
@@ -545,6 +675,28 @@ def normalize_state(state, nonce):
                             elif isinstance(subkey,str) and isinstance(subvalue,str):
                                 sub[subkey[:64]]=subvalue[:MAX_SHADER_LOG]
                         stage["details"][key]=sub
+                    elif isinstance(value,dict) and key=="attribute_state":
+                        safe_state={}
+                        for subkey,subvalue in list(value.items())[:8]:
+                            if not isinstance(subkey,str):
+                                continue
+                            if subkey in ("enabled","normalized","buffer_binding_matches"):
+                                if isinstance(subvalue,bool):
+                                    safe_state[subkey]=subvalue
+                            elif (subkey in ("size","type","stride","offset") and
+                                  isinstance(subvalue,int) and not isinstance(subvalue,bool) and
+                                  -(2**31)<=subvalue<=2**31-1):
+                                safe_state[subkey]=subvalue
+                        stage["details"][key]=safe_state
+                    elif isinstance(value,list) and key=="current_attribute" and len(value)==4:
+                        def safe_component(item):
+                            if isinstance(item,bool) or not isinstance(item,(int,float)):
+                                return False
+                            if isinstance(item,int):
+                                return abs(item)<=2**31
+                            return math.isfinite(item) and abs(item)<=2**31
+                        if all(safe_component(item) for item in value):
+                            stage["details"][key]=value
             normalized["stages"].append(stage)
     raw_order=(isinstance(stages,list) and len(stages)==MAX_STAGE_COUNT and
         all(isinstance(item,dict) and isinstance(item.get("name"),str)
