@@ -8,6 +8,61 @@ test -f "$workflow"
 test -f "$patch"
 patch_sha256=$(shasum -a 256 "$patch" | awk '{print $1}')
 test "$patch_sha256" = 816622e659a0a46c9c68dfbcf63af59d7d69a81c39632fa4aa2460de6f57f491
+python3 - "$workflow" "$patch" scripts/verify-phase5-runtime-artifact.sh <<'PY'
+import hashlib
+import re
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+workflow_path, patch_path, verifier_path = map(Path, sys.argv[1:])
+workflow = workflow_path.read_text()
+verifier = verifier_path.read_text()
+patch_sha = hashlib.sha256(patch_path.read_bytes()).hexdigest()
+reviewed = re.search(r'\[\[ "\$patch_sha" == ([0-9a-f]{64}) \]\]', verifier)
+input_blocks = re.finditer(
+    r'(?m)^      runtime_patch_sha256:\n(?P<body>(?:^        .*\n)+)', workflow)
+inputs = next((block for block in input_blocks
+               if re.search(r'(?m)^        default: [0-9a-f]{64}$', block["body"])), None)
+default = re.search(r'(?m)^        default: ([0-9a-f]{64})$', inputs["body"]) if inputs else None
+if not reviewed or not default:
+    raise SystemExit("could not extract verifier reviewed hash or workflow default")
+if not (reviewed[1] == default[1] == patch_sha):
+    raise SystemExit(
+        "runtime patch hash pins diverge: "
+        f"verifier={reviewed[1]} workflow={default[1]} patch={patch_sha}")
+
+try:
+    function_start = verifier.index("manifest_value() {")
+    function_end = verifier.index("\n}\n\ncheck_sha256", function_start) + 2
+    guard_start = verifier.index("patch_sha=$(manifest_value RUNTIME_PATCH_SHA256)")
+    guard_end = verifier.index('check_sha256 "$artifact_dir/runtime-patch.diff"', guard_start)
+except ValueError as error:
+    raise SystemExit(f"could not extract verifier patch-hash guard: {error}")
+manifest_function = verifier[function_start:function_end]
+hash_guard = verifier[guard_start:guard_end]
+shell = """set -euo pipefail
+manifest=$1
+fail() { printf 'Phase 5 runtime artifact verification failed: %s\\n' \"$1\" >&2; exit 1; }
+""" + manifest_function + "\n" + hash_guard
+
+with tempfile.TemporaryDirectory(prefix="phase5-patch-manifest-") as directory:
+    manifest = Path(directory) / "ANGLE_RELEASE_MANIFEST"
+    for label, value, expected_exit in (
+            ("current hash accepted", patch_sha, 0),
+            ("previous hash rejected", "9b6c473781953bca65d612858a618d91fcce9e517e0dca3e5c18bc177b681727", 1)):
+        manifest.write_text(f"RUNTIME_PATCH_SHA256={value}\n")
+        result = subprocess.run(["bash", "-c", shell, "--", str(manifest)],
+                                text=True, capture_output=True, check=False)
+        if result.returncode != expected_exit:
+            raise SystemExit(
+                f"synthetic manifest {label} returned {result.returncode}; "
+                f"expected {expected_exit}: {result.stderr.strip()}")
+        if expected_exit and "runtime patch hash does not match" not in result.stderr:
+            raise SystemExit(f"synthetic manifest {label} missed the hash diagnostic")
+print("runtime patch contract: verifier/workflow/file hashes agree; current accepted and stale rejected")
+PY
 patch_paths=$(git apply --numstat "$patch" | awk '{print $3}' | LC_ALL=C sort)
 expected_patch_paths=$(printf '%s\n' \
   src/common/apple_platform_utils.mm \
