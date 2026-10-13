@@ -11,7 +11,9 @@ lifecycle, signing-plan policy, frozen-file checks, and bundle symlink handling.
 The persistent-cookie runner test verifies that one bounded navigation timeout
 is passed to both synthetic launch phases and recorded in context and phase
 results; out-of-range values are rejected before host or app inspection and
-before output creation.
+before output creation. Its loopback fixture regression also verifies that only
+the first seed response issues the synthetic cookie, so a restored seed page
+cannot reseed a later check that arrives without the cookie.
 The symlink regression verifies that internal links remain valid when the bundle
 root is reached through an aliased parent, while external and broken links are
 rejected. `sign_once.py` canonicalizes the bundle root before checking resolved

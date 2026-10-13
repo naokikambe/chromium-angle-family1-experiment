@@ -85,7 +85,6 @@ class CookieHandler(http.server.BaseHTTPRequestHandler):
         status, content_type, payload, set_cookie = 200, "text/html; charset=utf-8", b"", False
         if path == f"/{self.server.nonce}/seed.html":
             payload = page(self.server.nonce, "seed", False)
-            set_cookie = True
         elif path == f"/{self.server.nonce}/check.html":
             payload = page(self.server.nonce, "check", cookie_present)
             if not cookie_present:
@@ -97,6 +96,9 @@ class CookieHandler(http.server.BaseHTTPRequestHandler):
         else:
             status, content_type, payload = 404, "text/plain", b"not found"
         with self.server.events_lock:
+            if path == f"/{self.server.nonce}/seed.html" and not self.server.seed_cookie_issued:
+                set_cookie = True
+                self.server.seed_cookie_issued = True
             self.server.events.append({"time_unix": time.time(), "observed_at": timestamp(),
                                        "path": path, "status": status,
                                        "cookie_present": cookie_present})
@@ -120,6 +122,7 @@ class CookieServer(http.server.ThreadingHTTPServer):
         self.nonce = nonce
         self.cookie_name = "phase5_persistence_check"
         self.cookie_value = cookie_value or secrets.token_urlsafe(18)
+        self.seed_cookie_issued = False
         self.events = []
         self.events_lock = threading.Lock()
         super().__init__(("127.0.0.1", 0), CookieHandler)

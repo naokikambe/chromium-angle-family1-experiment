@@ -92,6 +92,8 @@ Chromium Safe Storageへのアクセス拒否や、非同期暗号化providerの
 
 `persistent_cookie_runner.py`は受入試験専用の新しいprofileを一つ作り、同じstock appを二度起動します。最初の起動ではfixtureが非機密のsynthetic cookieを設定し、通常終了後にSQLiteをread-onlyで調べて、cookieの平文欄が空で暗号化欄に値があり、有効期限が未来であることだけを記録します。二回目は同じprofileを使い、fixtureへの再送信とページのHTTP・DOM・JS・fetch・canvas・2D描画を確認します。cookie値・Keychain秘密値は記録しません。
 
+seed URLがbrowserのsession restore等で再表示されても、fixtureは最初のseed responseで一度だけcookieを発行します。以降のseed responseでは`Set-Cookie`を返さないため、復元されたseed tabがrestart後のcookie再送信を作り直すことはありません。
+
 このrunnerのCDP `Page.navigate` timeoutは`--navigation-timeout`（5〜120秒、既定60秒）で指定し、seedとrestartの両phaseに同じ値を使います。値はcontextとphase結果に記録され、timeoutは当該phaseの失敗です。timeoutを理由に追加起動やretryは行わず、正常に完了したseedの後だけ予定されたrestartを行います。これはpage targetを待つ`--startup-timeout`や、navigation後にDOM／JS／fetch状態を待つ`--page-wait-seconds`とは別です。このrunnerのstartup defaultは45秒で、`probe.py`のstartup default 12秒とは異なります。いずれの待機値も人の操作や観測がその長さ続く保証にはなりません。
 
 実機のGUIログインユーザーから実行します。stockのGPU既定値を使い、`--disable-gpu`も`--use-mock-keychain`も追加しません。実行前に必要なKeychain操作を明示的に承認してください。最初の起動で一致するSafe Storage promptが現れた場合、承認済みの一度だけ **Allow** を選びます。**Always Allow**は選びません。正常終了後の再起動でpromptが再び現れたら応答せず記録します。これは継続利用条件を満たさない結果です。

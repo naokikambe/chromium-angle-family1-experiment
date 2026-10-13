@@ -13,6 +13,7 @@ import threading
 import time
 import unittest
 from types import SimpleNamespace
+import urllib.request
 import zlib
 from unittest.mock import patch
 
@@ -306,6 +307,33 @@ class PersistentCookieTests(unittest.TestCase):
         self.assertFalse(any(argument.startswith("--log-net-log") for argument in command))
         self.assertNotIn("--v=1", command)
 
+    def test_seed_cookie_is_issued_once_and_restore_cannot_reseed(self):
+        server = persistence.CookieServer("e" * 32, cookie_value="synthetic-cookie-value")
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_port}/{server.nonce}"
+        try:
+            with urllib.request.urlopen(f"{base}/seed.html") as response:
+                first_seed = response.read()
+                first_set_cookie = response.headers.get("Set-Cookie")
+            with urllib.request.urlopen(f"{base}/seed.html") as response:
+                restored_seed = response.read()
+                restored_set_cookie = response.headers.get("Set-Cookie")
+            with urllib.request.urlopen(f"{base}/check.html") as response:
+                check_without_cookie = response.read()
+
+            self.assertIn(f"BODY_OK_{server.nonce}".encode(), first_seed)
+            self.assertIsNotNone(first_set_cookie)
+            self.assertTrue(first_set_cookie.startswith(f"{server.cookie_name}="))
+            self.assertIn(f"BODY_OK_{server.nonce}".encode(), restored_seed)
+            self.assertIsNone(restored_set_cookie)
+            self.assertIn(f"COOKIE_MISSING_{server.nonce}".encode(), check_without_cookie)
+            self.assertNotIn(f"BODY_OK_{server.nonce}".encode(), check_without_cookie)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
     def test_family1_run_reuses_same_argv_and_environment_for_seed_and_restart(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "synthetic-output"
@@ -443,6 +471,7 @@ class PersistentCookieTests(unittest.TestCase):
             def __init__(self):
                 self.nonce, self.cookie_name = nonce, cookie_name
                 self.cookie_value = "synthetic-cookie-value"
+                self.seed_cookie_issued = False
                 self.events, self.events_lock = [], threading.Lock()
 
         class FakeHandler(persistence.CookieHandler):
