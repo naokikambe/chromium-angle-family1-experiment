@@ -7,13 +7,14 @@ patch=${2:?runtime patch path}
 test -f "$workflow"
 test -f "$patch"
 patch_sha256=$(shasum -a 256 "$patch" | awk '{print $1}')
-test "$patch_sha256" = 9b6c473781953bca65d612858a618d91fcce9e517e0dca3e5c18bc177b681727
+test "$patch_sha256" = 816622e659a0a46c9c68dfbcf63af59d7d69a81c39632fa4aa2460de6f57f491
 patch_paths=$(git apply --numstat "$patch" | awk '{print $3}' | LC_ALL=C sort)
 expected_patch_paths=$(printf '%s\n' \
   src/common/apple_platform_utils.mm \
   src/libANGLE/Context.cpp \
   src/libANGLE/Display.cpp \
   src/libANGLE/renderer/metal/DisplayMtl.mm \
+  src/libANGLE/renderer/metal/mtl_utils.mm \
   src/libANGLE/validationEGL.cpp \
   src/libEGL/libEGL_autogen.cpp \
   src/libGLESv2/entry_points_egl_autogen.cpp | LC_ALL=C sort)
@@ -143,14 +144,17 @@ grep -F 'family1RuntimeOptIn && supportsFamily1' "$patch" >/dev/null
 grep -F 'supportsMacFamily1 && !supportsMacFamily2' "$patch" >/dev/null
 grep -F 'MTLGPUFamilyMacCatalyst1' "$patch" >/dev/null
 grep -F 'MTLGPUFamilyMacCatalyst2' "$patch" >/dev/null
-test "$(grep -Fc '#pragma clang diagnostic ignored "-Wdeprecated-declarations"' "$patch")" -eq 2
-test "$(grep -Fc '#pragma clang diagnostic push' "$patch")" -ge 2
-test "$(grep -Fc '#pragma clang diagnostic pop' "$patch")" -ge 2
+test "$(grep -Ec '#[[:space:]]*pragma clang diagnostic ignored "-Wdeprecated-declarations"' "$patch")" -eq 2
+test "$(grep -Ec '#[[:space:]]*pragma clang diagnostic push' "$patch")" -ge 2
+test "$(grep -Ec '#[[:space:]]*pragma clang diagnostic pop' "$patch")" -ge 2
 grep -F '#if TARGET_OS_MACCATALYST || TARGET_OS_OSX' "$patch" >/dev/null
 grep -F 'returnValue && num_config' "$patch" >/dev/null
 grep -F 'returnValue && value' "$patch" >/dev/null
-grep -F 'max_es_version=2.0 family=mac1' "$patch" >/dev/null
+! grep -F 'max_es_version=2.0 family=mac1' "$patch" >/dev/null
 grep -F 'max_es_version_gpu_family4_or1=' "$patch" >/dev/null
+grep -F 'angle::GetEnvironmentVar("ANGLE_PHASE5_ENABLE_METAL_FAMILY1") == "1"' "$patch" >/dev/null
+grep -F 'native_mac_family=1 mac1=true mac2=false' "$patch" >/dev/null
+grep -F 'src/libANGLE/renderer/metal/mtl_utils.mm' "$patch" >/dev/null
 grep -F 'eglInitialize_return_failure' "$patch" >/dev/null
 grep -F 'eglGetError_return=0x%04x' "$patch" >/dev/null
 grep -F '+__attribute__((constructor)) static void Phase5LogMetalLibraryLoaded()' "$patch" >/dev/null

@@ -333,21 +333,11 @@ index 71f0c61..bbc32e8 100644
 
          return angle::Result::Continue;
      }
-@@ -432,10 +511,24 @@ bool IsMetalDisplayAvailable()
+@@ -432,10 +511,14 @@ bool IsMetalDisplayAvailable()
      // FIXME: None of the feature conditions are checked for simulator support.
      return gl::Version(3, 0);
  #else
 -    if (supportsEitherGPUFamily(4, 1))
-+#pragma clang diagnostic push
-+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-+    const bool supportsMacFamily1 = [getMetalDevice() supportsFamily:MTLGPUFamilyMac1];
-+#pragma clang diagnostic pop
-+    const bool supportsMacFamily2 = [getMetalDevice() supportsFamily:MTLGPUFamilyMac2];
-+    if (supportsMacFamily1 && !supportsMacFamily2)
-+    {
-+        ERR() << "[ANGLE_PHASE5_METAL_INIT] max_es_version=2.0 family=mac1";
-+        return gl::Version(2, 0);
-+    }
 +    const bool supportsGpuFamily4Or1 = supportsEitherGPUFamily(4, 1);
 +    ERR() << "[ANGLE_PHASE5_METAL_INIT] max_es_version_gpu_family4_or1="
 +           << (supportsGpuFamily4Or1 ? "true" : "false");
@@ -359,6 +349,34 @@ index 71f0c61..bbc32e8 100644
      return gl::Version(2, 0);
  #endif
  }
+diff --git a/src/libANGLE/renderer/metal/mtl_utils.mm b/src/libANGLE/renderer/metal/mtl_utils.mm
+index 6912d1c..e712050 100644
+--- a/src/libANGLE/renderer/metal/mtl_utils.mm
++++ b/src/libANGLE/renderer/metal/mtl_utils.mm
+@@ -1423,6 +1423,23 @@ bool SupportsMacGPUFamily(id<MTLDevice> device, uint8_t macFamily)
+     switch (macFamily)
+     {
+         case 1:
++#    if TARGET_OS_OSX && !TARGET_OS_MACCATALYST
++            if (angle::GetEnvironmentVar("ANGLE_PHASE5_ENABLE_METAL_FAMILY1") == "1")
++            {
++#        pragma clang diagnostic push
++#        pragma clang diagnostic ignored "-Wdeprecated-declarations"
++                const bool supportsMacFamily1 = [device supportsFamily:MTLGPUFamilyMac1];
++#        pragma clang diagnostic pop
++                const bool supportsMacFamily2 = [device supportsFamily:MTLGPUFamilyMac2];
++                if (supportsMacFamily1 && !supportsMacFamily2)
++                {
++                    fprintf(stderr,
++                            "[ANGLE_PHASE5_METAL_INIT] native_mac_family=1 mac1=true mac2=false\n");
++                    fflush(stderr);
++                    return supportsMacFamily1;
++                }
++            }
++#    endif
+ #    if TARGET_OS_MACCATALYST && __IPHONE_OS_VERSION_MIN_REQUIRED < 160000
+             return [device supportsFamily:MTLGPUFamilyMacCatalyst1];
+ #    elif TARGET_OS_OSX && __MAC_OS_X_VERSION_MIN_REQUIRED < 130000
 diff --git a/src/libANGLE/validationEGL.cpp b/src/libANGLE/validationEGL.cpp
 index dd0a706..2f63e4c 100644
 --- a/src/libANGLE/validationEGL.cpp

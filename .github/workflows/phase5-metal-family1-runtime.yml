@@ -30,7 +30,7 @@ on:
       runtime_patch_sha256:
         description: SHA-256 of the checked-in Phase 5 runtime patch
         required: true
-        default: 9b6c473781953bca65d612858a618d91fcce9e517e0dca3e5c18bc177b681727
+        default: 816622e659a0a46c9c68dfbcf63af59d7d69a81c39632fa4aa2460de6f57f491
         type: string
 
 concurrency:
@@ -218,10 +218,18 @@ jobs:
               'src/libANGLE/Context.cpp' \
               'src/libANGLE/Display.cpp' \
               'src/libANGLE/renderer/metal/DisplayMtl.mm' \
+              'src/libANGLE/renderer/metal/mtl_utils.mm' \
               'src/libANGLE/validationEGL.cpp' \
               'src/libEGL/libEGL_autogen.cpp' \
               'src/libGLESv2/entry_points_egl_autogen.cpp' | LC_ALL=C sort)
           test "$(git status --short | sed 's/^.. //' | LC_ALL=C sort)" = "$expected_source_paths"
+          if ! python3 "$GITHUB_WORKSPACE/tests/phase5-metal-family1-native-query-policy.py" \
+              --mtl-utils "$ANGLE_ROOT/src/libANGLE/renderer/metal/mtl_utils.mm" \
+              > "$DIAG_DIR/native-query-policy.txt" 2>&1; then
+            cat "$DIAG_DIR/native-query-policy.txt"
+            exit 1
+          fi
+          cat "$DIAG_DIR/native-query-policy.txt"
           {
             printf 'SOURCE_REVISION=%s\n' "$(git rev-parse HEAD)"
             printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"
