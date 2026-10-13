@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import plistlib
 import re
+import stat
 import subprocess
 import sys
 
@@ -60,12 +61,16 @@ def unsigned(app, out):
             raise RuntimeError("Source must be wholly unsigned; preserve this target: " + str(path))
 
 
-def validate_links(app):
+def validate_links(app, require_cross_user_readable=False):
     app_root = Path(app).resolve(strict=True)
     for root, dirs, files in os.walk(app, followlinks=False):
         for name in dirs + files:
             path = Path(root) / name
             if path.is_symlink():
+                if require_cross_user_readable and not (path.lstat().st_mode & stat.S_IROTH):
+                    raise RuntimeError(
+                        "Bundle symlink is not readable by another GUI user; "
+                        "prepare a fresh copy with readable symlink modes: " + str(path))
                 resolved = path.resolve(strict=True)
                 if not resolved.is_relative_to(app_root):
                     raise RuntimeError("Bundle symlink points outside the source: " + str(path))
@@ -166,7 +171,7 @@ def prepare(args):
     unsigned(source, out)
     app = out / "Chromium.app"
     subprocess.run(["/usr/bin/ditto", str(source), str(app)], check=True)
-    validate_links(app)
+    validate_links(app, require_cross_user_readable=True)
     entitlements = out / "entitlements"
     entitlements.mkdir()
     mapping = {"application": "app-entitlements.plist", "renderer": "helper-renderer-entitlements.plist", "gpu": "helper-gpu-entitlements.plist"}
@@ -199,7 +204,7 @@ def execute(args):
         raise RuntimeError("Only a prepared plan in its original directory can execute")
     if app.is_symlink() or freeze_files(app) != plan["freeze"]:
         raise RuntimeError("The assembled app changed after preparation")
-    validate_links(app)
+    validate_links(app, require_cross_user_readable=True)
     entitlements = out / "entitlements"
     if {p.name: sha256(p) for p in entitlements.iterdir()} != plan["entitlements_hashes"]:
         raise RuntimeError("Entitlements changed after preparation")

@@ -276,6 +276,21 @@ class SigningTests(unittest.TestCase):
 
             sign_once.validate_links(alias_parent / app.name)
 
+    def test_cross_user_symlink_guard_accepts_readable_and_rejects_private_link(self):
+        if not hasattr(os, "lchmod"):
+            self.skipTest("platform does not expose lchmod for a symlink-mode regression")
+        with tempfile.TemporaryDirectory() as directory:
+            app = self.fake_app(Path(directory))
+            link = app / "Contents/LinkToMain"
+            link.symlink_to("MacOS/Chromium")
+
+            os.lchmod(link, 0o755)
+            sign_once.validate_links(app, require_cross_user_readable=True)
+
+            os.lchmod(link, 0o700)
+            with self.assertRaisesRegex(RuntimeError, "not readable by another GUI user"):
+                sign_once.validate_links(app, require_cross_user_readable=True)
+
     def test_broken_bundle_links_are_not_signed(self):
         with tempfile.TemporaryDirectory() as directory:
             app = self.fake_app(Path(directory))
