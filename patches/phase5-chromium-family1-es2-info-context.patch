@@ -1,0 +1,36 @@
+diff --git a/gpu/config/gpu_info_collector.cc b/gpu/config/gpu_info_collector.cc
+--- a/gpu/config/gpu_info_collector.cc
++++ b/gpu/config/gpu_info_collector.cc
+@@ -14,6 +14,7 @@
+
+ #include "base/base_paths.h"
+ #include "base/command_line.h"
++#include "base/environment.h"
+ #include "base/files/file_path.h"
+ #include "base/logging.h"
+ #include "base/metrics/histogram_functions.h"
+@@ -94,6 +95,24 @@
+   gl::GLContextAttribs attribs;
+   attribs.allow_es_version_fallback =
+       !features::ShouldFallbackToSWIfGLES3NotSupported();
++#if BUILDFLAG(IS_MAC)
++  // Only the explicit Family 1 Metal experiment may retry an actual ES2
++  // context for GPU information collection. Do not change advertised caps.
++  const base::CommandLine* command_line =
++      base::CommandLine::ForCurrentProcess();
++  auto environment = base::Environment::Create();
++  const auto family1_opt_in =
++      environment->GetVar("ANGLE_PHASE5_ENABLE_METAL_FAMILY1");
++  if (family1_opt_in && *family1_opt_in == "1" &&
++      command_line->GetSwitchValueASCII(switches::kUseGL) == "angle" &&
++      command_line->GetSwitchValueASCII(switches::kUseANGLE) == "metal" &&
++      command_line->HasSwitch(switches::kUseDynamicAngle) &&
++      command_line->GetSwitchValueASCII(switches::kDisableANGLEFeatures) ==
++          "requireGpuFamily2") {
++    attribs.allow_es_version_fallback = true;
++    LOG(INFO) << "[CHROMIUM_PHASE5_ES2_INFO] actual_es_version_fallback_enabled";
++  }
++#endif
+   scoped_refptr<gl::GLContext> context(
+       gl::init::CreateGLContext(nullptr, surface, attribs));
+   if (!context.get()) {
