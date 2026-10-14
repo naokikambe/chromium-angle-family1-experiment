@@ -105,7 +105,8 @@ jobs:
       XCODE16_COMPAT_PATCH_SHA256: 59b2cf4e7b5e963d6416d3eb02ab37292f50fbd43854debac313b13297b0eaaa
       DEPOT_TOOLS_REVISION: 0306e4682b4ac35287c726fa35a983157a625902
       DEPOT_TOOLS_UPDATE: "0"
-      APPROVED_BASE_REVISION: eb21b3b30fe0d062d5bf500d46d74a7a57ad56f5
+      # Current public counterpart; historical runs used their recorded revision.
+      APPROVED_BASE_REVISION: c252e32a2289564cd6a3cebff888cde3a9caebee
 
     steps:
       - name: Check out the approved experiment revision
@@ -359,7 +360,8 @@ jobs:
       ANGLE_REVISION: ${{ inputs.angle_revision }}
       ANGLE_BUILD_RUN_ID: ${{ inputs.angle_build_run_id }}
       DIAGNOSTIC_PATCH_SHA256: ${{ inputs.diagnostic_patch_sha256 }}
-      APPROVED_BASE_REVISION: eb21b3b30fe0d062d5bf500d46d74a7a57ad56f5
+      # Current public counterpart; historical runs used their recorded revision.
+      APPROVED_BASE_REVISION: c252e32a2289564cd6a3cebff888cde3a9caebee
 
     steps:
       - name: Check out the approved experiment revision

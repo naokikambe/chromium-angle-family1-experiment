@@ -6,7 +6,8 @@ on:
       target_ref:
         description: Approved branch baseline SHA to validate
         required: true
-        default: a3bb53b3e0f9e58aff547b26811643a967cdf5fa
+        # Current public counterpart; historical runs retain their recorded inputs.
+        default: 141b042f9cc4f510d11759ee8c2191705cec6f37
         type: string
       chromium_revision:
         description: Chromium source revision for source/deps and graph checks

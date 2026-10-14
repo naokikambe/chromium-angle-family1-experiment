@@ -38,7 +38,7 @@ MacBookAir6,1／Intel HD Graphics 5000で、公式の完全未署名・ビルド
 5. 完全未署名の公式原本から新規コピーを作り、同じ未署名状態のANGLE dylibを、固定版ソースが示す配置先へ組み込みます。ABI・依存・symlink・全Mach-Oの未署名状態を確認し、組み立て完了後に凍結します。署名済みstockへ追加して再署名する方法は使いません。
 6. `sign_once.py`の役割別policyと実対象の対応を確認し、Mac上の有効なApple Development identityで内側から初回署名します。receipt・署名要件・厳密な検証結果を保存します。署名失敗したコピーは証跡として保持し、そのコピーでやり直さず新しい未署名入力から作ります。
 7. 工程Aと同じKeychain環境・通常の保護設定でページと暗号化cookieの基準を再確認します。必要なANGLE/Metalの起動引数は固定版で有効なものだけを使い、診断用引数と運用用の実験設定を区別します。独自dylibのロード、ANGLE/Metal、Intel HD Graphics 5000を同じGPU PIDで対応付けます。SwiftShaderや別backendへのfallbackをFamily 1 Metal成功へ読み替えません。
-8. WebGL1のcontext作成・shader compile/link・draw・readbackをnonce付きfixtureで検証し、実GUIの結果と照合します。ES 3／WebGL2が使えるとは仮定せず、KOOVの要求機能との関係を確認します。
+8. WebGL1のcontext作成・shader compile/link・draw・readbackをnonce付きfixtureで検証し、実GUIの結果と照合します。[固定版のvertex input診断境界](phase5-vertex-input-diagnosis.md)を使い、定数attribute・VBO fetch・triangle clippingとsample条件を区別します。ES 3／WebGL2が使えるとは仮定せず、KOOVの要求機能との関係を確認します。
 
 **工程Cの開始条件：** 独自ANGLE版の署名・正常Keychain・ページ受入・暗号化cookie再起動が成立し、同一GPU PIDで独自ANGLE/MetalのロードとWebGL1 draw/readbackを確認していること。
 

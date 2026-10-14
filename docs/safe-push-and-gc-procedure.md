@@ -223,11 +223,13 @@ git -C "$CLEAN_REPO" config --local core.hooksPath "$CLEAN_HOOKS"
   old-to-new 対応表や private denial values を public config、hook、文書に複製
   しません。
 
-### Future implementation: restrictive pre-push hook
+### Restrictive pre-push implementation
 
-現在、次の制限を実装した専用 hook があるとはみなしません。push を許可する
-前提にするには、Parent が独立レビューする hook を別途実装し、synthetic
-repository fixture で検証する必要があります。Git の push 設定は
+`scripts/check-safe-push.py` は制限の実装です。`scripts/test_safe_push.py` は
+独立した架空 repository で検証します。実装があることだけで、ある clone の
+hook が導入・受入済みになったとは扱いません。Parent が diff と focused tests
+をレビューし、private wrapper と情報を設定し、実際の hook と dry-run を検証
+する必要があります。Git の push 設定は
 [`git-config`](https://git-scm.com/docs/git-config) の system/global/local
 precedence に従うため、effective configuration 全体を確認します。Hook は
 既存 privacy scan を維持し、以下を fail closed で拒否します。
@@ -253,7 +255,7 @@ branch protection を別途レビュー・承認します。
 
 ## 4. Push 前 validation と clean clone の有効化
 
-Real remote を変更せず、local-only synthetic repositories で future hook を
+Real remote を変更せず、local-only synthetic repositories で restrictive hook を
 検証します。Allowed の fast-forward 以外はすべて拒否されることを確認します。
 
 - clean history の既存 branch への fast-forward: 許可候補。
@@ -339,3 +341,36 @@ reflog には既定の保持期間があります ([`git gc`](https://git-scm.co
 
 この文書は推奨手順です。Clone、config/hook 更新、push、GC、または private
 evidence の操作を実施した記録ではありません。
+
+## Private metadata and wrapper contract
+
+The restrictive checker accepts `--metadata PRIVATE_METADATA --mapping PRIVATE_MAP`
+and the two pre-push arguments supplied by Git. Keep both files outside public Git.
+Metadata has exactly `clean_anchor`, `old_commits`, `old_commits_count`,
+`old_commits_sha256`, and `mapping_sha256`. The old list is nonempty, unique,
+lowercase SHA-40 strings; its checksum covers each entry plus LF in array order.
+The mapping is ASCII TSV with two SHA-40 fields per line and unique old-side keys.
+The denial set must equal every mapping key whose new value differs. An unchanged
+reviewed baseline is not a rewritten old commit. Validate the original reviewed
+map and reachability audit before deriving this representation; do not accept an
+intermediate preparation map as the final publication map.
+
+Use a dedicated private directory for reviewed checker/scanner copies and wrappers.
+The pre-push wrapper calls the checker with fixed private metadata/map paths and
+forwards Git's remote arguments and stdin. The checker invokes the existing privacy
+scanner for all introduced commits, including messages and author/committer data.
+Pre-commit and commit-msg wrappers retain the same scanner with an explicit repo
+root. Preserve their previous configuration before changing `core.hooksPath`.
+A missing dependency or unreadable private information must reject the operation.
+
+An up-to-date Git dry-run may supply no ref updates to a hook. The checker rejects
+empty input; separately exercise it with the reviewed existing ref's old/new IDs
+before interpreting a network dry-run. Tests and dry-run do not publish a ref.
+Client hooks can still be bypassed deliberately and do not replace server controls.
+
+When correcting obsolete workflow inputs, use verified current public counterparts
+and distinguish them from the revision actually used by historical runs. Do not
+copy the private mapping into workflow files or dispatch historical workflows as
+part of reference maintenance. Reference maintenance alone does not restore missing
+support scripts or establish workflow readiness. The scope of old-repository configuration changes
+and GC remains subject to the current Owner instruction.

@@ -45,7 +45,8 @@ jobs:
       EXPECTED_CHROMIUM_REVISION: ${{ inputs.expected_chromium_revision }}
       EXPECTED_ANGLE_REVISION: ${{ inputs.expected_angle_revision }}
       ANGLE_BUILD_RUN_ID: ${{ inputs.angle_build_run_id }}
-      APPROVED_BASE_REVISION: eb21b3b30fe0d062d5bf500d46d74a7a57ad56f5
+      # Current public counterpart; historical runs used their recorded revision.
+      APPROVED_BASE_REVISION: c252e32a2289564cd6a3cebff888cde3a9caebee
 
     steps:
       - name: Check out the approved experiment revision
