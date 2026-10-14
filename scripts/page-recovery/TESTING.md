@@ -143,7 +143,7 @@ remain separate acceptance conditions.
   Explicit stage prerequisites preserve the normal-Keychain acceptance criteria.
 - Verified that the existing runtime workflow pins a different input and references
   absent files; located its patch/verifier/static check at fixed history
-  `cc781c1063261ffbe227939ff607ecefb51f6b2b` for a future reviewed port.
+  `292c7e2bab8bd06e9cf2ec50d7d20a451393290d` for a future reviewed port.
 - Checked 31 local Markdown links and 1 shell block in five updated entry-point
   and handoff documents; whitespace checks passed.
 - Documentation only: no workflow dispatch, signing, Keychain changes, new device

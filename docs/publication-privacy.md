@@ -38,6 +38,13 @@ has been recognized. A parent must review the staged diff and artifact paths
 before publication. Do not add broad file, directory, or test exclusions to
 make a scan pass.
 
+After an approved history rewrite, audit maintained documentation links and
+repository SHA references against the reviewed old-to-new map. Use current
+source-tree counterparts where appropriate, but preserve historical CI
+provenance through run IDs and run records; explicitly distinguish a current
+counterpart from the ref actually executed by an old run. Keep the full mapping
+private. The privacy scanner does not detect obsolete SHA references.
+
 One exact labeled team-identifier exception covers the public Google signing
 identity used by Chromium's upstream code-signing fixture. It does not exempt
 team identifiers in other contexts, certificate identities, or any owner

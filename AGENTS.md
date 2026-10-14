@@ -115,4 +115,9 @@ must be replaced, the parent prepares and reviews a fresh clean checkout while
 preserving old work and evidence separately; never rewrite history or discard
 retained data without explicit owner approval. Review findings without
 echoing matched values. Do not add broad exclusions or allowlists to bypass
-the guard. The parent independently reviews staged content before publication.
+the guard. After an approved history rewrite, audit maintained documentation
+links and repository SHA references against the reviewed old-to-new map; use
+current source-tree counterparts where appropriate. Preserve historical CI
+provenance with run IDs and run records, and state clearly when a current
+counterpart was not the ref executed by an old run. Keep the full old-to-new
+map private. The parent independently reviews staged content before publication.

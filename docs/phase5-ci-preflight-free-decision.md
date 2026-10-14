@@ -35,8 +35,9 @@ countermeasure.
 
 Run [37698685164](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/37698685164)
 completed successfully on workflow commit `0aafa411070892750e8214bb46c373b1af70fda5`.
-The target experiment ref recorded by the run was
-`a3bb53b3e0f9e58aff547b26811643a967cdf5fa`.
+The run record preserves the target ref used for that historical execution.
+The current source-tree counterpart is `141b042f9cc4f510d11759ee8c2191705cec6f37`;
+it has the same source tree, but is not the ref executed by the historical run.
 
 | Measurement | Result |
 | --- | --- |
@@ -128,8 +129,10 @@ was enabled by this record.
 ## Exploratory executable follow-ups (2026-10-10)
 
 The following runs used workflow commit
-`e09be281ea0028ca1fce4fb3b26d0dd3c01ea969`, target ref
-`a3bb53b3e0f9e58aff547b26811643a967cdf5fa`, Chromium revision
+`e09be281ea0028ca1fce4fb3b26d0dd3c01ea969`. Their run records preserve the
+original target-ref provenance. The current same-source-tree counterpart is
+`141b042f9cc4f510d11759ee8c2191705cec6f37`; it was not the ref executed by
+those historical runs. They used Chromium revision
 `b510e9d7cd3a2fbd78d0ddc42234103206c5f78d`, ANGLE revision
 `e12217f3e133cb1029b050d893b1806d141483be`, and URLLoader diagnostic patch
 SHA-256 `1be36abf18ac58b94ff1421607be18152c0373a9f92b0aeeb14ad8e352a250c1`.
