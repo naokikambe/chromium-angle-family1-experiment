@@ -96,11 +96,14 @@ relationship, then terminate only that verified child.
 Never commit or publish personal or actual-device data: usernames, home paths,
 hostnames, non-loopback IP or MAC addresses, email addresses, serials, UDIDs,
 signing team or certificate identities, Keychain ACL or item results, raw
-device logs, profiles, cookies, authentication material, screenshots,
-recordings, or device receipts. The target hardware model and public upstream
-revision pins are allowed. Keep private evidence outside Git and out of CI
-artifacts, step summaries, and build logs. Use clearly synthetic placeholders
-in fixtures; never use real local values in tests.
+device logs, profiles, cookies, authentication material, passwords or
+passphrases, access/refresh/session tokens, API keys or client secrets, private
+keys, recovery codes, screenshots, recordings, or device receipts. Apply this
+rule to code, configuration, documentation, fixtures, commit messages, and CI
+artifacts, logs, and summaries. The target hardware model and public upstream
+revision pins are allowed. Keep private evidence outside Git and out of CI.
+Use clearly synthetic placeholders in fixtures; never use real local values in
+tests.
 
 Before commit or publication, inspect the staged diff and artifact paths,
 confirm Git author and committer names use the public account alias and emails
@@ -115,7 +118,10 @@ must be replaced, the parent prepares and reviews a fresh clean checkout while
 preserving old work and evidence separately; never rewrite history or discard
 retained data without explicit owner approval. Review findings without
 echoing matched values. Do not add broad exclusions or allowlists to bypass
-the guard. After an approved history rewrite, audit maintained documentation
+the guard. The focused scanner recognizes selected token and private-key
+formats and owner-supplied deny values; it cannot guarantee detection of
+arbitrary passwords, tokens, or other secrets. Manual staged-content review is
+still required. After an approved history rewrite, audit maintained documentation
 links and repository SHA references against the reviewed old-to-new map; use
 current source-tree counterparts where appropriate. Preserve historical CI
 provenance with run IDs and run records, and state clearly when a current

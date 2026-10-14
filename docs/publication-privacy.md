@@ -6,8 +6,11 @@ pins are technical inputs and may remain public. Do not publish usernames,
 home paths, hostnames, non-loopback IP or MAC addresses, email addresses,
 serials, UDIDs, signing team or certificate identities, Keychain ACL or item
 results, raw device logs, profiles, cookies, authentication material,
-screenshots, recordings, or device receipts. Keep that evidence outside Git and
-do not copy it into CI artifacts, step summaries, or build logs.
+passwords or passphrases, access/refresh/session tokens, API keys or client
+secrets, private keys, recovery codes, screenshots, recordings, or device
+receipts. Apply this rule to code, configuration, documentation, fixtures,
+commit messages, and CI artifacts, logs, and summaries. Keep that evidence
+outside Git and do not copy it into CI.
 
 Use clearly synthetic placeholders in source fixtures. Never use real local
 values in tests, even when a test is intended to verify the privacy scanner.
@@ -36,7 +39,10 @@ the hook fails closed by scanning the local branch's full reachable history.
 The checker is a focused guard, not proof that every possible personal datum
 has been recognized. A parent must review the staged diff and artifact paths
 before publication. Do not add broad file, directory, or test exclusions to
-make a scan pass.
+make a scan pass. It recognizes selected token and private-key formats and
+owner-supplied deny values, but cannot guarantee detection of arbitrary
+passwords, tokens, or other secrets. Manual review of staged content remains
+required.
 
 After an approved history rewrite, audit maintained documentation links and
 repository SHA references against the reviewed old-to-new map. Use current
