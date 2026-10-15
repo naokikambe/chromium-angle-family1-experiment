@@ -23,6 +23,7 @@ from typing import Any
 
 
 SCHEMA = "phase5-unsigned-cdp-probe-v2"
+MAX_WEBSOCKET_MESSAGE_BYTES = 64 * 1024 * 1024
 
 
 def safe_url_summary(value: Any) -> dict[str, Any] | None:
@@ -199,6 +200,11 @@ class WebSocket:
         self.sock = socket.create_connection((parsed.hostname, parsed.port or 80), timeout=3.0)
         self.sock.settimeout(0.5)
         self.event_log = event_log
+        self._recv_buffer = bytearray()
+        self._frame_state: dict[str, Any] | None = None
+        self._fragments: list[bytes] = []
+        self._fragment_opcode: int | None = None
+        self._fragment_bytes = 0
         key = base64.b64encode(os.urandom(16)).decode("ascii")
         host = parsed.hostname
         if parsed.port:
@@ -212,14 +218,16 @@ class WebSocket:
             "Sec-WebSocket-Version: 13\r\n\r\n"
         ).encode("ascii")
         self.sock.sendall(request)
-        response = b""
+        response = bytearray()
         while b"\r\n\r\n" not in response:
             chunk = self.sock.recv(4096)
             if not chunk:
                 raise RuntimeError("DevTools WebSocket handshake ended early")
-            response += chunk
+            response.extend(chunk)
+        header_end = response.index(b"\r\n\r\n") + 4
         if not response.startswith(b"HTTP/1.1 101"):
-            raise RuntimeError(f"DevTools WebSocket handshake failed: {response[:200]!r}")
+            raise RuntimeError(f"DevTools WebSocket handshake failed: {bytes(response[:200])!r}")
+        self._recv_buffer.extend(response[header_end:])
 
     def close(self) -> None:
         try:
@@ -244,35 +252,58 @@ class WebSocket:
         self._send_frame(0x1, json.dumps(value, separators=(",", ":")).encode("utf-8"))
 
     def _read_exact(self, length: int, deadline: float) -> bytes:
-        data = bytearray()
-        while len(data) < length:
+        while len(self._recv_buffer) < length:
             if time.monotonic() >= deadline:
                 raise TimeoutError("timed out reading DevTools WebSocket frame")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("timed out reading DevTools WebSocket frame")
             try:
-                chunk = self.sock.recv(length - len(data))
+                self.sock.settimeout(min(0.5, remaining))
+                chunk = self.sock.recv(max(4096, length - len(self._recv_buffer)))
             except socket.timeout:
                 continue
+            finally:
+                self.sock.settimeout(0.5)
             if not chunk:
                 raise RuntimeError("DevTools WebSocket closed")
-            data.extend(chunk)
-        return bytes(data)
+            self._recv_buffer.extend(chunk)
+        result = bytes(self._recv_buffer[:length])
+        del self._recv_buffer[:length]
+        return result
+
+    def _recv_frame(self, deadline: float) -> tuple[int, bool, bytes]:
+        state = self._frame_state
+        if state is None:
+            first, second = self._read_exact(2, deadline)
+            length_code = second & 0x7F
+            state = {"fin": bool(first & 0x80), "opcode": first & 0x0F,
+                     "masked": bool(second & 0x80),
+                     "length": length_code if length_code < 126 else None,
+                     "length_bytes": 2 if length_code == 126 else 8 if length_code == 127 else 0,
+                     "mask": b""}
+            self._frame_state = state
+        if state["length"] is None:
+            state["length"] = int.from_bytes(self._read_exact(state["length_bytes"], deadline), "big")
+            if state["length_bytes"] == 8 and state["length"] & (1 << 63):
+                raise RuntimeError("invalid DevTools WebSocket frame length")
+        length = state["length"]
+        if length > MAX_WEBSOCKET_MESSAGE_BYTES:
+            raise RuntimeError("DevTools WebSocket frame exceeds size limit")
+        if state["masked"] and not state["mask"]:
+            state["mask"] = self._read_exact(4, deadline)
+        payload = self._read_exact(length, deadline)
+        self._frame_state = None
+        if state["masked"]:
+            mask = state["mask"]
+            payload = bytes(byte ^ mask[index % 4] for index, byte in enumerate(payload))
+        return state["opcode"], state["fin"], payload
 
     def recv_message(self, deadline: float) -> Any:
-        fragments: list[bytes] = []
         while True:
-            header = self._read_exact(2, deadline)
-            first, second = header
-            opcode = first & 0x0F
-            masked = bool(second & 0x80)
-            length = second & 0x7F
-            if length == 126:
-                length = int.from_bytes(self._read_exact(2, deadline), "big")
-            elif length == 127:
-                length = int.from_bytes(self._read_exact(8, deadline), "big")
-            mask = self._read_exact(4, deadline) if masked else b""
-            payload = self._read_exact(length, deadline)
-            if masked:
-                payload = bytes(byte ^ mask[index % 4] for index, byte in enumerate(payload))
+            if time.monotonic() >= deadline:
+                raise TimeoutError("timed out reading DevTools WebSocket frame")
+            opcode, fin, payload = self._recv_frame(deadline)
             if opcode == 0x8:
                 raise RuntimeError("DevTools WebSocket sent close")
             if opcode == 0x9:
@@ -280,14 +311,26 @@ class WebSocket:
                 continue
             if opcode == 0xA:
                 continue
-            if opcode == 0x1:
-                fragments = [payload]
-            elif opcode == 0x0:
-                fragments.append(payload)
+            if opcode in (0x1, 0x2):
+                self._fragments = [payload]
+                self._fragment_opcode = opcode
+                self._fragment_bytes = len(payload)
+            elif opcode == 0x0 and self._fragment_opcode is not None:
+                self._fragment_bytes += len(payload)
+                if self._fragment_bytes > MAX_WEBSOCKET_MESSAGE_BYTES:
+                    raise RuntimeError("DevTools WebSocket message exceeds size limit")
+                self._fragments.append(payload)
             else:
                 continue
-            if first & 0x80:
-                return json.loads(b"".join(fragments).decode("utf-8"))
+            if fin:
+                assembled = b"".join(self._fragments)
+                message_opcode = self._fragment_opcode
+                self._fragments = []
+                self._fragment_opcode = None
+                self._fragment_bytes = 0
+                if message_opcode == 0x1:
+                    return json.loads(assembled.decode("utf-8"))
+                continue
 
 
 def command(
