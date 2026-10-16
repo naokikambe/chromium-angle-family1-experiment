@@ -19,6 +19,40 @@ class WebGL1DiagnosticRunnerTests(unittest.TestCase):
         self.assertEqual(launch["runtime_environment"], {runner.OPT_IN_ENV: "1"})
         self.assertNotIn("--use-mock-keychain", launch["argv"])
 
+    def test_existing_profile_can_be_reused_without_creating_or_changing_entries(self):
+        with tempfile.TemporaryDirectory(prefix="webgl1-diagnostic-profile-") as directory:
+            profile = Path(directory) / "dedicated-profile"
+            profile.mkdir(mode=0o700)
+            marker = profile / "synthetic-marker"
+            marker.write_text("fixture-only")
+            before = sorted(path.name for path in profile.iterdir())
+
+            resolved = runner.validate_profile_dir(profile)
+            launch = runner.family1_launch_configuration(Path("/synthetic/Chromium"), resolved)
+
+            self.assertEqual(resolved, profile.absolute())
+            self.assertIn(f"--user-data-dir={profile.absolute()}", launch["argv"])
+            self.assertEqual(sorted(path.name for path in profile.iterdir()), before)
+
+            with self.assertRaises(ValueError):
+                runner.validate_profile_dir(profile, profile / "diagnostic-output")
+
+    def test_profile_dir_requires_existing_real_directory(self):
+        with tempfile.TemporaryDirectory(prefix="webgl1-diagnostic-profile-guards-") as directory:
+            root = Path(directory)
+            missing = root / "missing"
+            plain_file = root / "plain-file"
+            plain_file.write_text("fixture-only")
+            target = root / "target"
+            target.mkdir(mode=0o700)
+            symlink = root / "directory-link"
+            symlink.symlink_to(target, target_is_directory=True)
+
+            for invalid in (missing, plain_file, symlink):
+                with self.subTest(invalid=invalid.name):
+                    with self.assertRaises(ValueError):
+                        runner.validate_profile_dir(invalid)
+
     def test_page_has_bounded_ordered_real_webgl_stages_without_fallbacks(self):
         nonce = "a" * 32
         html = runner.diagnostic_page(nonce).decode("utf-8")

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Capture bounded, stage-by-stage WebGL1 diagnostics on a fresh profile.
+"""Capture bounded, stage-by-stage WebGL1 diagnostics on a dedicated profile.
 
 This diagnostic runner is separate from webgl1_runner.py's acceptance fixture.
 Its results can locate a failure boundary but never establish WebGL or product
-acceptance. It does not modify or sign the app bundle.
+acceptance. It does not modify or sign the app bundle. An existing dedicated
+test profile can be explicitly reused with --profile-dir.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ import json
 import math
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 import threading
@@ -59,6 +61,26 @@ def timestamp():
 
 def validate_options(startup_timeout, navigation_timeout, observe_seconds):
     accepted_runner.validate_options(startup_timeout, navigation_timeout, observe_seconds)
+
+
+def validate_profile_dir(profile_dir, output_dir=None):
+    """Resolve an optional, already-created dedicated profile without creating it."""
+    if profile_dir is None:
+        return None
+    profile = Path(profile_dir).expanduser().absolute()
+    if profile.is_symlink() or not profile.is_dir():
+        raise ValueError("profile-dir must be an existing, non-symlink directory")
+    profile_stat = profile.stat()
+    if profile_stat.st_uid != os.getuid() or stat.S_IMODE(profile_stat.st_mode) & 0o077:
+        raise ValueError("profile-dir must be owned by the current user and private")
+    if output_dir is not None:
+        output = Path(output_dir).expanduser().absolute()
+        if profile == output or profile in output.parents:
+            raise ValueError("diagnostic output must be outside the reused profile")
+    if any((profile / name).exists() or (profile / name).is_symlink()
+           for name in ("SingletonLock", "SingletonSocket")):
+        raise ValueError("profile-dir appears to be in use")
+    return profile
 
 
 def family1_launch_configuration(executable, profile):
@@ -755,6 +777,7 @@ def run(args):
     output=Path(args.out).expanduser().absolute()
     if output.exists():
         raise FileExistsError("output directory already exists; choose a new diagnostic directory")
+    requested_profile=validate_profile_dir(getattr(args,"profile_dir",None),output)
     context=probe.mac_context()
     app,executable,info=probe.app_executable(args.app)
     if info.get("CFBundleIdentifier")!="org.chromium.Chromium":
@@ -764,7 +787,9 @@ def run(args):
     if verified.returncode!=0:
         raise RuntimeError("strict deep codesign verification failed before browser launch")
     output.mkdir(parents=True,exist_ok=False,mode=0o700)
-    profile=output/"profile"; profile.mkdir(mode=0o700)
+    profile=requested_profile or output/"profile"
+    if requested_profile is None:
+        profile.mkdir(mode=0o700)
     nonce=uuid.uuid4().hex; launch=family1_launch_configuration(executable,profile)
     main_hash_before=probe.sha256(executable)
     context_record={"context":context,"app":str(app),"bundle_identifier":info.get("CFBundleIdentifier"),
@@ -774,6 +799,7 @@ def run(args):
         "runtime_environment":launch["runtime_environment"],
         "startup_timeout_seconds":args.startup_timeout,"navigation_timeout_seconds":args.navigation_timeout,
         "observe_seconds":args.observe_seconds,"raw_netlog_enabled":False,"diagnostic_only":True,
+        "profile_reused":requested_profile is not None,
         "acceptance_runner_unchanged":"webgl1_runner.py","gui_confirmation_required":True,
         "same_gpu_pid_library_review_required":True}
     probe.write_json(output/"context.json",context_record); probe.write_json(output/"launch.json",launch)
@@ -869,6 +895,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--app",required=True)
     parser.add_argument("--out",required=True,help="New diagnostic directory; existing directories are refused")
+    parser.add_argument("--profile-dir",help="Reuse an existing dedicated test profile without creating a profile")
     parser.add_argument("--startup-timeout",type=int,default=45)
     parser.add_argument("--navigation-timeout",type=int,default=60)
     parser.add_argument("--observe-seconds",type=int,default=20)
