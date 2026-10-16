@@ -1,14 +1,16 @@
 # 実機作業の一括引き継ぎ：stock復旧から独自ANGLE・KOOVまで
 
-MacBookAir6,1／Intel HD Graphics 5000で、公式の完全未署名・ビルド済みChromiumへFamily 1対応ANGLEを組み込み、Apple Developmentで初回署名した実験アプリにより、通常Keychainでページ描画とKOOVの画面・基本操作を成立させてください。今回の委任はstock復旧からANGLE・KOOVまでを含みます。工程ごとに次の指示を求めず、開始条件を満たしたら次へ進んでください。
+対象Macで、公式の完全未署名・ビルド済みChromiumへFamily 1対応ANGLEを組み込み、Apple Developmentで初回署名した実験アプリにより、通常Keychainでページ描画とKOOVの画面・基本操作を成立させてください。今回の委任はstock復旧からANGLE・KOOVまでを含みます。工程ごとに次の指示を求めず、開始条件を満たしたら次へ進んでください。
 
 ## 開始と引き継ぐ判断
 
 リポジトリは `naokikambe/chromium-angle-family1-experiment`、ブランチは `phase5-page-recovery`。対象MacのGUIログインユーザーで実施します。最新checkout・HEAD・dirty状態・適用指示を確認し、既存変更を保全して最新版を取得してください。実機の最新調査レポート、runbook、証跡一覧、保留中の同意回答を確認します。実機固有の詳細は公開文書へ転載しません。
 
-現行S0・GPU無効化の測定範囲では原因特定完了の報告を受領済みです。Safe Storage項目の保存済み信頼条件との不一致と未応答の承認待ちがHTTP開始前の停止に対応し、拒否・APIエラー返却後に開始した要求は描画まで成功しました。mockの3件は実GUI確認済みです。拒否やmockは正常な暗号化利用の復旧ではありません。
+### 現在の公開チェックポイント
 
-現在の未完了は、Allow試行のAPI返却、候補appの署名信頼エラーと有効identityの確認、通常Keychain・通常GPUのstock受入です。追加Allow一回の保留中の回答を確認し、使用済みの同意を再利用しないでください。別の未応答試行のsampleをAllow試行の証拠に転用しません。10月5日の適用範囲は未確定であり、証跡照合は並行します。
+通常GUIユーザーのstock標準設定では、専用profileで暗号化cookieを保存し、再起動後に再送できることを一度確認しました。この結果だけでは、新規3 profileでの検証は成立していません。同じ試行内でのKeychain API返却値との直接相関も未完了です。
+
+候補fixtureではページ読み込み、fetch、2D canvasが成功しました。先行するDevTools capture timeoutの後に、DevTools view／surface captureの診断が成功しました。candidate seed cookieは暗号化保存され平文欄は空でしたが、確認時には期限切れで、再起動後の復号・再送は未成立です。WebGL VBO triangleのdraw/readback受入は未達で、KOOV検証は未開始です。
 
 優先する指示はこの一括プロンプトです。[stock復旧の詳細](phase5-normal-keychain-handoff.md)は工程Aに適用します。同文書の「stockまで」という委任境界は、この一括指示では工程B・Cまで拡張します。Keychain操作への同意は拡張しません。
 
@@ -37,7 +39,7 @@ MacBookAir6,1／Intel HD Graphics 5000で、公式の完全未署名・ビルド
 4. 必要な `libEGL.dylib`／`libGLESv2.dylib`をx86_64でビルドします。revision・patch hash・GN args・toolchain・deployment target・build log・artifact hash・依存・install nameを保存し、対象OSと整合することを確認します。CIやクラウドを使う場合も秘密鍵は持ち込まず、成果物をMacで検証します。既存の無関係なrunをcancelせず、concurrencyで他作業を止めない実行枠を選びます。全体Chromiumビルドは必要な差分が判明した場合だけ具体化します。
 5. 完全未署名の公式原本から新規コピーを作り、同じ未署名状態のANGLE dylibを、固定版ソースが示す配置先へ組み込みます。ABI・依存・symlink・全Mach-Oの未署名状態を確認し、組み立て完了後に凍結します。署名済みstockへ追加して再署名する方法は使いません。
 6. `sign_once.py`の役割別policyと実対象の対応を確認し、Mac上の有効なApple Development identityで内側から初回署名します。receipt・署名要件・厳密な検証結果を保存します。署名失敗したコピーは証跡として保持し、そのコピーでやり直さず新しい未署名入力から作ります。
-7. 工程Aと同じKeychain環境・通常の保護設定でページと暗号化cookieの基準を再確認します。必要なANGLE/Metalの起動引数は固定版で有効なものだけを使い、診断用引数と運用用の実験設定を区別します。独自dylibのロード、ANGLE/Metal、Intel HD Graphics 5000を同じGPU PIDで対応付けます。SwiftShaderや別backendへのfallbackをFamily 1 Metal成功へ読み替えません。
+7. 工程Aと同じKeychain環境・通常の保護設定でページと暗号化cookieの基準を再確認します。必要なANGLE/Metalの起動引数は固定版で有効なものだけを使い、診断用引数と運用用の実験設定を区別します。独自dylibのロード、ANGLE/Metal、対象GPUを同じGPU PIDで対応付けます。SwiftShaderや別backendへのfallbackをFamily 1 Metal成功へ読み替えません。
 8. WebGL1のcontext作成・shader compile/link・draw・readbackをnonce付きfixtureで検証し、実GUIの結果と照合します。[固定版のvertex input診断境界](phase5-vertex-input-diagnosis.md)を使い、定数attribute・VBO fetch・triangle clippingとsample条件を区別します。ES 3／WebGL2が使えるとは仮定せず、KOOVの要求機能との関係を確認します。
 
 **工程Cの開始条件：** 独自ANGLE版の署名・正常Keychain・ページ受入・暗号化cookie再起動が成立し、同一GPU PIDで独自ANGLE/MetalのロードとWebGL1 draw/readbackを確認していること。
