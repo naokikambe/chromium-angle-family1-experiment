@@ -12,6 +12,8 @@
 
 候補fixtureではページ読み込み、fetch、2D canvasが成功しました。先行するDevTools capture timeoutの後に、DevTools view／surface captureの診断が成功しました。candidate seed cookieは暗号化保存され平文欄は空でしたが、確認時には期限切れで、再起動後の復号・再送は未成立です。WebGL VBO triangleのdraw/readback受入は未達で、KOOV検証は未開始です。
 
+直近に承認された候補cookie・再起動・vertex診断の連続試験は、起動前の署名検証で停止しました。private manifestとの実行ファイル／ライブラリhash一致は確認しましたが、現在の `codesign --verify --deep --strict` は `CSSMERR_TP_NOT_TRUSTED` を返します。この試験ではapp、証明書、trust設定、Keychainを変更せず、起動もprofile作成もしていません。署名信頼を読み取り専用で解決し、同じ未変更候補が必須検査を通ってから再開します。
+
 優先する指示はこの一括プロンプトです。[stock復旧の詳細](phase5-normal-keychain-handoff.md)は工程Aに適用します。同文書の「stockまで」という委任境界は、この一括指示では工程B・Cまで拡張します。Keychain操作への同意は拡張しません。
 
 ## 委任する操作と確認が必要な変更
