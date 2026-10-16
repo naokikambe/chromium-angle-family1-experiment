@@ -187,6 +187,17 @@ class WebGL1DiagnosticRunnerTests(unittest.TestCase):
         self.assertFalse(snapshot["document_ok"])
         self.assertFalse(snapshot["state"]["state_valid"])
 
+    def test_state_wait_ignores_provisional_marker_and_waits_for_terminal_nonce(self):
+        nonce="c"*32
+        self.assertFalse(runner.diagnostic_state_ready({},nonce))
+        self.assertFalse(runner.diagnostic_state_ready(
+            {"js_marker":"WEBGL1_DIAGNOSTIC_PENDING","state":{"error":"invalid-state"}},nonce))
+        for status in ("COMPLETE","INCOMPLETE","ERROR"):
+            snapshot={"js_marker":f"WEBGL1_DIAGNOSTIC_{status}_{nonce}"}
+            self.assertTrue(runner.diagnostic_state_ready(snapshot,nonce))
+            self.assertFalse(runner.diagnostic_state_ready(
+                {"js_marker":f"WEBGL1_DIAGNOSTIC_{status}_{'d'*32}"},nonce))
+
     def test_current_attribute_normalization_rejects_unsafe_numbers(self):
         nonce="b"*32
         for component in (2**4000,float("nan"),float("inf"),True):

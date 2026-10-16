@@ -10,9 +10,9 @@
 
 通常GUIユーザーのstock標準設定では、専用profileで暗号化cookieを保存し、再起動後に再送できることを一度確認しました。この結果だけでは、新規3 profileでの検証は成立していません。同じ試行内でのKeychain API返却値との直接相関も未完了です。
 
-候補fixtureではページ読み込み、fetch、2D canvasが成功しました。先行するDevTools capture timeoutの後に、DevTools view／surface captureの診断が成功しました。candidate seed cookieは暗号化保存され平文欄は空でしたが、確認時には期限切れで、再起動後の復号・再送は未成立です。WebGL VBO triangleのdraw/readback受入は未達で、KOOV検証は未開始です。
+変更・再署名していない候補appは、host側の厳格署名検査とprivate manifest hash照合に通りました。通常GUIユーザーの新規専用profileでcookie seed／同一profile再起動を行い、暗号化保存・平文欄空・有効期限・再起動後のfixture再送を確認しました。HTTP、JS、fetch、2D canvas、正常終了も両起動で成立しています。
 
-直近に承認された候補cookie・再起動・vertex診断の連続試験は、起動前の署名検証で停止しました。private manifestとの実行ファイル／ライブラリhash一致は確認しましたが、現在の `codesign --verify --deep --strict` は `CSSMERR_TP_NOT_TRUSTED` を返します。この試験ではapp、証明書、trust設定、Keychainを変更せず、起動もprofile作成もしていません。署名信頼を読み取り専用で解決し、同じ未変更候補が必須検査を通ってから再開します。
+同じprofileで実施した3回目のCDP vertex診断はHTTP 200と15段階ページのscreenshotを得ましたが、runnerがJS開始前の一時的な`invalid-state`を終端扱いしたため、構造化state取得は未完了でした。screenshot上ではsingle-sample VBO pointの2配置が通る一方、default／FBO／single-sampleのtriangle系はclip内triangleを含めて失敗しています。これは一般的なVBO fetchやMSAAだけの失敗とは限りませんが、構造化証跡での再確認が必要です。runnerの待機条件を修正し、focused test 14件を通しました。WebGL draw/readback受入は未達で、KOOV検証は未開始です。
 
 優先する指示はこの一括プロンプトです。[stock復旧の詳細](phase5-normal-keychain-handoff.md)は工程Aに適用します。同文書の「stockまで」という委任境界は、この一括指示では工程B・Cまで拡張します。Keychain操作への同意は拡張しません。
 

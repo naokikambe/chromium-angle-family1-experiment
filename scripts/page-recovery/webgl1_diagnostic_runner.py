@@ -763,6 +763,16 @@ def read_state(cdp, nonce, expected_url):
             "js_marker":value.get("js_marker"),"state":normalize_state(value.get("state"),nonce)}
 
 
+def diagnostic_state_ready(snapshot, nonce):
+    """Wait for the fixture's terminal marker, not its provisional empty state."""
+    if not isinstance(snapshot,dict):
+        return False
+    marker=snapshot.get("js_marker")
+    return marker in (f"WEBGL1_DIAGNOSTIC_COMPLETE_{nonce}",
+                      f"WEBGL1_DIAGNOSTIC_INCOMPLETE_{nonce}",
+                      f"WEBGL1_DIAGNOSTIC_ERROR_{nonce}")
+
+
 def diagnostic_classification(state, nonce, document_ok=False, main_hash_unchanged=True):
     """Every outcome remains diagnostic; stage success is never acceptance."""
     if (main_hash_unchanged is True and document_ok is True and
@@ -835,7 +845,7 @@ def run(args):
                 while time.monotonic()<deadline:
                     try:
                         snapshot=read_state(cdp,nonce,url)
-                        if snapshot["state"].get("context_ok") or snapshot["state"].get("error"):
+                        if diagnostic_state_ready(snapshot,nonce):
                             result["state_observed_at"]=timestamp(); break
                     except Exception as exc:
                         result["errors"].append(f"runtime-evaluate:{type(exc).__name__}")
