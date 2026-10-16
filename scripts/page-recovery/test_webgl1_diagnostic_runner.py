@@ -65,10 +65,13 @@ class WebGL1DiagnosticRunnerTests(unittest.TestCase):
                     "single-sample-vbo-triangle-vec4-stride16",
                     "single-sample-vbo-triangle-vec2-subdata",
                     "single-sample-vbo-triangle-vec2-in-clip",
-                    "single-sample-vbo-points-vec2-in-clip")
+                    "single-sample-vbo-points-vec2-in-clip",
+                    "single-sample-vbo-point-vec2-in-clip-first-0",
+                    "single-sample-vbo-point-vec2-in-clip-first-1",
+                    "single-sample-vbo-point-vec2-in-clip-first-2")
         positions = [html.index(f'"{name}"') for name in expected]
         self.assertEqual(positions, sorted(positions))
-        self.assertEqual(len(expected), 16)
+        self.assertEqual(len(expected), 19)
         call_positions=[html.index(f"stage(gl,'{name}'") for name in expected[:8]]
         call_positions += [html.index(f"stage(single,'{name}'") for name in expected[8:]]
         self.assertEqual(call_positions, sorted(call_positions))
@@ -91,7 +94,13 @@ class WebGL1DiagnosticRunnerTests(unittest.TestCase):
                          "new Float32Array([1.0/32.0,1.0/32.0,0.5])",
                          "new Float32Array([-1,-1,0,1, 3,-1,0,1, -1,3,0,1])",
                          "new Float32Array([-0.75,-0.75, 0.75,-0.75, 0,0.75])",
-                         "gl_PointSize=8.0"):
+                         "gl_PointSize=8.0",
+                         "function drawMatrixPointAt(gl,result,vertices,first,x,y)",
+                         "drawMatrixPointAt(single,result,inClipVec2Vertices,0,4,4)",
+                         "drawMatrixPointAt(single,result,inClipVec2Vertices,1,28,4)",
+                         "drawMatrixPointAt(single,result,inClipVec2Vertices,2,16,28)",
+                         "setDrawParameters(gl,result,'POINTS',first,1)",
+                         "gl.drawArrays(gl.POINTS,first,1)"):
             self.assertIn(required,html)
         self.assertIn("addSkippedMatrixStages('single-sample-context-unavailable')",html)
         self.assertIn("addSkippedMatrixStages('prior-context-loss-or-fatal-gl-error')",html)
@@ -204,7 +213,7 @@ class WebGL1DiagnosticRunnerTests(unittest.TestCase):
              "stopped":False,"diagnostic_complete":True,"stages":stages}
         normalized=runner.normalize_state(raw,nonce)
         self.assertTrue(normalized["diagnostic_complete"])
-        self.assertEqual(normalized["stage_count"],16)
+        self.assertEqual(normalized["stage_count"],19)
         details=normalized["stages"][0]["details"]
         self.assertEqual(details["draw_parameters"],parameters)
         self.assertEqual(details["raster_state"],raster)

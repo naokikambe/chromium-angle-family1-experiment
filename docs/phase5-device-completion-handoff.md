@@ -12,8 +12,11 @@
 
 変更・再署名していない候補appは、host側の厳格署名検査とprivate manifest hash照合に通りました。通常GUIユーザーの新規専用profileでcookie seed／同一profile再起動を行い、暗号化保存・平文欄空・有効期限・再起動後のfixture再送を確認しました。HTTP、JS、fetch、2D canvas、正常終了も両起動で成立しています。
 
-同じprofileで実施した3回目のCDP vertex診断はHTTP 200と15段階ページのscreenshotを得ましたが、runnerがJS開始前の一時的な`invalid-state`を終端扱いしたため、構造化state取得は未完了でした。screenshot上ではsingle-sample VBO pointの2配置が通る一方、default／FBO／single-sampleのtriangle系はclip内triangleを含めて失敗しています。これは一般的なVBO fetchやMSAAだけの失敗とは限りません。terminal markerを待つ修正のfocused test 14件は通過済みで、続く診断拡張後の現行focused suite 15件も通過しています。WebGL draw/readback受入は未達で、KOOV検証は未開始です。
-次回の固定診断は16段階とし、各段階のdraw mode／first／countとbounded raster stateを記録します。16段階目ではclip内triangleと同じ3頂点vec2 VBO・upload・attribute descriptorを使い、`drawArrays(POINTS, 0, 3)`で描く対照を追加します。これは点描画とtriangle assembly/raster経路を分けるための将来の診断であり、実行結果ではありません。現時点でVBO triangleのdraw/readback受入は成立していません。
+以前の15段階CDP診断はscreenshotのみ取得し、runnerがJS開始前の一時状態を終端扱いしたため構造化stateを残せませんでした。その後の修正版16段階診断は、変更していない候補appと専用profileでHTTP 200、nonceに対応する完全なstate、全16段階を記録しました。私的証跡の照合では、同じGPU processに独自`libEGL`・`libGLESv2`とMetalがmapされ、実行前後のapp／library hashと厳格な署名検証も一致しています。
+
+16段階診断ではdefault／scissor clearとFBO clearが通り、single-sample canvasのconstant pointとpacked／interleavedの1頂点VBO pointも期待pixelを返しました。一方、default／FBO／single-sample triangleと、clip内三角形と同じ3頂点vec2 VBOを用いた`POINTS count=3`は期待pixelを返しませんでした。失敗段階はshader compile/link、attribute／buffer state、draw発行が記録され、GL errorはありません。画面取得でもdefault canvasは黒、比較canvasには3点が見えました。これはWebGL draw/readback受入ではなく、原因を一意に特定する証拠でもありません。
+
+今回の`POINTS count=3`は第3頂点位置のpixelだけを読むため、複数頂点fetch、特定index／位置、count依存の挙動を分けられません。診断runnerを19段階へ拡張し、同じvec2 VBOを`first=0/1/2`, `count=1`で個別描画して各頂点中心を読む3段階を加えました。この19段階版はまだ実機で動かしていません。通常GUIユーザーのstock完全受入（通常GPUのページ描画、同一試行のKeychain API相関、独立profile3件）は未成立のままで、独立検証ユーザーでの成功に置き換えません。WebGL draw/readback受入は未達、工程Bは未完了、KOOV検証は未開始です。
 
 優先する指示はこの一括プロンプトです。[stock復旧の詳細](phase5-normal-keychain-handoff.md)は工程Aに適用します。同文書の「stockまで」という委任境界は、この一括指示では工程B・Cまで拡張します。Keychain操作への同意は拡張しません。
 
