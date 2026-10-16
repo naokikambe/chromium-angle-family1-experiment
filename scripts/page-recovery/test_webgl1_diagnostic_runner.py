@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Focused synthetic checks for the non-acceptance WebGL diagnostic runner."""
 from pathlib import Path
+import copy
 import shutil
 import subprocess
 import tempfile
@@ -63,9 +64,11 @@ class WebGL1DiagnosticRunnerTests(unittest.TestCase):
                     "single-sample-vbo-point-packed", "single-sample-vbo-point-interleaved",
                     "single-sample-vbo-triangle-vec4-stride16",
                     "single-sample-vbo-triangle-vec2-subdata",
-                    "single-sample-vbo-triangle-vec2-in-clip")
+                    "single-sample-vbo-triangle-vec2-in-clip",
+                    "single-sample-vbo-points-vec2-in-clip")
         positions = [html.index(f'"{name}"') for name in expected]
         self.assertEqual(positions, sorted(positions))
+        self.assertEqual(len(expected), 16)
         call_positions=[html.index(f"stage(gl,'{name}'") for name in expected[:8]]
         call_positions += [html.index(f"stage(single,'{name}'") for name in expected[8:]]
         self.assertEqual(call_positions, sorted(call_positions))
@@ -108,6 +111,8 @@ class WebGL1DiagnosticRunnerTests(unittest.TestCase):
         self.assertIn("if (state.stopped || contextLost(gl))",html)
         self.assertIn("diagnostic_only:true", html)
         self.assertIn("draw_call_issued", html)
+        self.assertIn("details.draw_parameters={mode:null,first:null,count:null}",html)
+        self.assertIn("captureRasterState(gl)",html)
         self.assertNotIn("draw_ok", html)
         self.assertNotIn("getContext('2d'", html)
         self.assertNotIn("getContext(\"webgl2\"", html)
@@ -143,7 +148,14 @@ class WebGL1DiagnosticRunnerTests(unittest.TestCase):
                            "pixel":[0,255,0,255], "expected_pixel":[0,255,0,255],
                            "before_finish_pixel":[0,160,0,255],
                            "after_finish_pixel":[0,160,0,255],
-                           "details":{"vertex_shader":{"compile_ok":True,
+                           "details":{"draw_parameters":{"mode":None,"first":None,"count":None},
+                                   "raster_state":{"viewport":[0,0,32,32],
+                                       "scissor_enabled":False,"scissor_box":[0,0,32,32],
+                                       "cull_enabled":False,"front_face":2305,"cull_mode":1029,
+                                       "depth_enabled":False,"depth_func":513,
+                                       "depth_write_mask":True,"stencil_enabled":False,
+                                       "blend_enabled":False,"sample_buffers":0,"samples":0},
+                                   "vertex_shader":{"compile_ok":True,
                               "info_log":"x"*6000}, "array_buffer_bytes":24,
                                    "untrusted_large_integer":2**100,
                                    "attribute_state":{"enabled":True,"size":2,"type":5126,
@@ -176,6 +188,52 @@ class WebGL1DiagnosticRunnerTests(unittest.TestCase):
         self.assertNotIn("accepted", runner.diagnostic_classification(normalized, nonce, True).lower())
         self.assertEqual(runner.diagnostic_classification(normalized,nonce,True,False),
                          "WEBGL1_DIAGNOSTIC_CAPTURE_INCOMPLETE")
+
+    def test_draw_and_raster_metadata_is_allowlisted_bounded_and_malformed_safe(self):
+        nonce="d"*32
+        raster={"viewport":[0,0,32,32],"scissor_enabled":False,"scissor_box":[0,0,32,32],
+            "cull_enabled":False,"front_face":2305,"cull_mode":1029,"depth_enabled":False,
+            "depth_func":513,"depth_write_mask":True,"stencil_enabled":False,
+            "blend_enabled":False,"sample_buffers":0,"samples":0}
+        parameters={"mode":"POINTS","first":0,"count":3}
+        stages=[{"name":name,"status":"passed","checks":{"ok":True},
+            "gl_errors":[],"prior_gl_errors":[],"details":{"draw_parameters":parameters,
+            "raster_state":raster,"untrusted_large_integer":2**100}} for name in runner.STAGE_NAMES]
+        stages[1]["details"]["draw_parameters"]={"mode":None,"first":None,"count":None}
+        raw={"nonce":nonce,"diagnostic_only":True,"context_ok":True,"context_lost":False,
+             "stopped":False,"diagnostic_complete":True,"stages":stages}
+        normalized=runner.normalize_state(raw,nonce)
+        self.assertTrue(normalized["diagnostic_complete"])
+        self.assertEqual(normalized["stage_count"],16)
+        details=normalized["stages"][0]["details"]
+        self.assertEqual(details["draw_parameters"],parameters)
+        self.assertEqual(details["raster_state"],raster)
+        self.assertNotIn("untrusted_large_integer",details)
+        self.assertEqual(normalized["stages"][1]["details"]["draw_parameters"],
+                         {"mode":None,"first":None,"count":None})
+
+        malformed=copy.deepcopy(raw)
+        malformed["stages"][0]["details"]["draw_parameters"]["count"]=runner.MAX_DRAW_VERTEX_COUNT+1
+        malformed["stages"][0]["details"]["raster_state"]["viewport"]=[0,0,10**9,32]
+        malformed_normalized=runner.normalize_state(malformed,nonce)
+        sanitized=malformed_normalized["stages"][0]["details"]
+        self.assertNotIn("draw_parameters",sanitized)
+        self.assertNotIn("raster_state",sanitized)
+        self.assertFalse(malformed_normalized["diagnostic_complete"])
+
+        malformed["stages"][0]["details"]["draw_parameters"]={"mode":[],"first":False,"count":3}
+        malformed["stages"][0]["details"]["raster_state"]={**raster,"extra":"discard"}
+        sanitized=runner.normalize_state(malformed,nonce)["stages"][0]["details"]
+        self.assertNotIn("draw_parameters",sanitized)
+        self.assertNotIn("raster_state",sanitized)
+
+        for enum_key in ("front_face","cull_mode","depth_func"):
+            with self.subTest(enum_key=enum_key):
+                malformed_enum=copy.deepcopy(raw)
+                malformed_enum["stages"][0]["details"]["raster_state"][enum_key]=9999
+                enum_normalized=runner.normalize_state(malformed_enum,nonce)
+                self.assertNotIn("raster_state",enum_normalized["stages"][0]["details"])
+                self.assertFalse(enum_normalized["diagnostic_complete"])
 
     def test_malformed_cdp_value_is_incomplete_not_an_exception(self):
         class FakeCdp:

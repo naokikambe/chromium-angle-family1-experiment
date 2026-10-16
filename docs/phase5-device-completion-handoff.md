@@ -12,7 +12,8 @@
 
 変更・再署名していない候補appは、host側の厳格署名検査とprivate manifest hash照合に通りました。通常GUIユーザーの新規専用profileでcookie seed／同一profile再起動を行い、暗号化保存・平文欄空・有効期限・再起動後のfixture再送を確認しました。HTTP、JS、fetch、2D canvas、正常終了も両起動で成立しています。
 
-同じprofileで実施した3回目のCDP vertex診断はHTTP 200と15段階ページのscreenshotを得ましたが、runnerがJS開始前の一時的な`invalid-state`を終端扱いしたため、構造化state取得は未完了でした。screenshot上ではsingle-sample VBO pointの2配置が通る一方、default／FBO／single-sampleのtriangle系はclip内triangleを含めて失敗しています。これは一般的なVBO fetchやMSAAだけの失敗とは限りませんが、構造化証跡での再確認が必要です。runnerの待機条件を修正し、focused test 14件を通しました。WebGL draw/readback受入は未達で、KOOV検証は未開始です。
+同じprofileで実施した3回目のCDP vertex診断はHTTP 200と15段階ページのscreenshotを得ましたが、runnerがJS開始前の一時的な`invalid-state`を終端扱いしたため、構造化state取得は未完了でした。screenshot上ではsingle-sample VBO pointの2配置が通る一方、default／FBO／single-sampleのtriangle系はclip内triangleを含めて失敗しています。これは一般的なVBO fetchやMSAAだけの失敗とは限りません。terminal markerを待つ修正のfocused test 14件は通過済みで、続く診断拡張後の現行focused suite 15件も通過しています。WebGL draw/readback受入は未達で、KOOV検証は未開始です。
+次回の固定診断は16段階とし、各段階のdraw mode／first／countとbounded raster stateを記録します。16段階目ではclip内triangleと同じ3頂点vec2 VBO・upload・attribute descriptorを使い、`drawArrays(POINTS, 0, 3)`で描く対照を追加します。これは点描画とtriangle assembly/raster経路を分けるための将来の診断であり、実行結果ではありません。現時点でVBO triangleのdraw/readback受入は成立していません。
 
 優先する指示はこの一括プロンプトです。[stock復旧の詳細](phase5-normal-keychain-handoff.md)は工程Aに適用します。同文書の「stockまで」という委任境界は、この一括指示では工程B・Cまで拡張します。Keychain操作への同意は拡張しません。
 

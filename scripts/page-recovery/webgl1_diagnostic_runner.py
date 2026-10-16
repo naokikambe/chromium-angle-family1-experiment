@@ -48,11 +48,14 @@ STAGE_NAMES = (
     "single-sample-vbo-triangle-vec4-stride16",
     "single-sample-vbo-triangle-vec2-subdata",
     "single-sample-vbo-triangle-vec2-in-clip",
+    "single-sample-vbo-points-vec2-in-clip",
 )
 MAX_STAGE_COUNT = len(STAGE_NAMES)
 MAX_GL_ERRORS_PER_STAGE = 16
 MAX_SHADER_LOG = 4096
 MAX_HTTP_EVENTS = 32
+MAX_DRAW_VERTEX_COUNT = 1_000_000
+MAX_RASTER_COORDINATE = 1_000_000
 
 
 def timestamp():
@@ -106,7 +109,8 @@ def diagnostic_page(nonce):
     "offscreen-fbo-clear","offscreen-fbo-triangle","single-sample-clear-vbo",
     "single-sample-constant-point","single-sample-vbo-point-packed",
     "single-sample-vbo-point-interleaved","single-sample-vbo-triangle-vec4-stride16",
-    "single-sample-vbo-triangle-vec2-subdata","single-sample-vbo-triangle-vec2-in-clip"];
+    "single-sample-vbo-triangle-vec2-subdata","single-sample-vbo-triangle-vec2-in-clip",
+    "single-sample-vbo-points-vec2-in-clip"];
   const matrixNames=names.slice(9);
   const state = {nonce, diagnostic_only:true, context_ok:false, context_lost:false,
     stopped:false, stages:[], gl_version:null, glsl_version:null, error:null,
@@ -164,6 +168,11 @@ def diagnostic_page(nonce):
     return Array.from(pixel);
   }
   function addStage(stage) {
+    if (!stage.details || typeof stage.details !== 'object') stage.details={};
+    if (!Object.prototype.hasOwnProperty.call(stage.details,'draw_parameters'))
+      stage.details.draw_parameters={mode:null,first:null,count:null};
+    if (!Object.prototype.hasOwnProperty.call(stage.details,'raster_state'))
+      stage.details.raster_state=null;
     state.stages.push(stage);
     const item = document.createElement('li');
     item.textContent = stage.name + ': ' + stage.status +
@@ -179,6 +188,23 @@ def diagnostic_page(nonce):
         pixel:null,expected_pixel:null,details:{reason}});
     }
   }
+  function captureRasterState(gl) {
+    const viewport=Array.from(gl.getParameter(gl.VIEWPORT)||[]);
+    const scissorBox=Array.from(gl.getParameter(gl.SCISSOR_BOX)||[]);
+    return {
+      viewport:viewport.slice(0,4),scissor_enabled:gl.isEnabled(gl.SCISSOR_TEST),
+      scissor_box:scissorBox.slice(0,4),cull_enabled:gl.isEnabled(gl.CULL_FACE),
+      front_face:gl.getParameter(gl.FRONT_FACE),cull_mode:gl.getParameter(gl.CULL_FACE_MODE),
+      depth_enabled:gl.isEnabled(gl.DEPTH_TEST),depth_func:gl.getParameter(gl.DEPTH_FUNC),
+      depth_write_mask:gl.getParameter(gl.DEPTH_WRITEMASK),
+      stencil_enabled:gl.isEnabled(gl.STENCIL_TEST),blend_enabled:gl.isEnabled(gl.BLEND),
+      sample_buffers:gl.getParameter(gl.SAMPLE_BUFFERS),samples:gl.getParameter(gl.SAMPLES)
+    };
+  }
+  function setDrawParameters(gl,result,mode,first,count) {
+    result.details.draw_parameters={mode,first,count};
+    result.details.raster_state=captureRasterState(gl);
+  }
   function stage(gl, name, operation) {
     if (state.stopped || contextLost(gl)) {
       addStage({name,status:'skipped',checks:{},gl_errors:[],prior_gl_errors:[],
@@ -186,7 +212,7 @@ def diagnostic_page(nonce):
       return;
     }
     const result = {name,status:'failed',checks:{},gl_errors:[],prior_gl_errors:[],
-      pixel:null,expected_pixel:null,details:{}};
+      pixel:null,expected_pixel:null,details:{draw_parameters:{mode:null,first:null,count:null}}};
     const prior = drainErrors(gl);
     result.prior_gl_errors = prior.errors;
     if (prior.truncated) result.details.prior_errors_truncated=true;
@@ -200,6 +226,7 @@ def diagnostic_page(nonce):
       return;
     }
     try {
+      result.details.raster_state=captureRasterState(gl);
       operation(result);
       gl.finish();
     } catch (error) {
@@ -324,7 +351,8 @@ def diagnostic_page(nonce):
     const program=compileProgram(gl,vertex,
       'precision mediump float; void main(){gl_FragColor=vec4(0.0,1.0,0.0,1.0);}',result);
     if (!program || !matrixBuffer(gl,program,result,vertices,components,stride,offset,uploadPath)) return;
-    gl.useProgram(program); gl.drawArrays(gl.TRIANGLES,0,3);
+    gl.useProgram(program); setDrawParameters(gl,result,'TRIANGLES',0,3);
+    gl.drawArrays(gl.TRIANGLES,0,3);
     result.details.draw_call_issued=true; result.checks.draw_call_issued=true;
     result.expected_pixel=[0,255,0,255]; result.pixel=pixelAt(gl,16,16);
     result.checks.readback_matches=result.pixel.every((v,i)=>v===result.expected_pixel[i]);
@@ -335,9 +363,24 @@ def diagnostic_page(nonce):
     const program=compileProgram(gl,vertex,
       'precision mediump float; void main(){gl_FragColor=vec4(1.0,1.0,0.0,1.0);}',result);
     if (!program || !matrixBuffer(gl,program,result,vertices,2,stride,0,uploadPath)) return;
-    gl.useProgram(program); gl.drawArrays(gl.POINTS,0,1);
+    gl.useProgram(program); setDrawParameters(gl,result,'POINTS',0,1);
+    gl.drawArrays(gl.POINTS,0,1);
     result.details.draw_call_issued=true; result.checks.draw_call_issued=true;
     result.expected_pixel=[255,255,0,255]; result.pixel=pixelAt(gl,16,16);
+    result.checks.readback_matches=result.pixel.every((v,i)=>v===result.expected_pixel[i]);
+  }
+  function drawMatrixPoints(gl,result,vertices,components,stride,offset,uploadPath) {
+    resetDefault(gl,singleCanvas);
+    const vertex=components===2
+      ? 'attribute vec2 a_position; void main(){gl_Position=vec4(a_position,0.0,1.0);gl_PointSize=8.0;}'
+      : 'attribute vec4 a_position; void main(){gl_Position=a_position;gl_PointSize=8.0;}';
+    const program=compileProgram(gl,vertex,
+      'precision mediump float; void main(){gl_FragColor=vec4(1.0,1.0,0.0,1.0);}',result);
+    if (!program || !matrixBuffer(gl,program,result,vertices,components,stride,offset,uploadPath)) return;
+    gl.useProgram(program); setDrawParameters(gl,result,'POINTS',0,3);
+    gl.drawArrays(gl.POINTS,0,3);
+    result.details.draw_call_issued=true; result.checks.draw_call_issued=true;
+    result.expected_pixel=[255,255,0,255]; result.pixel=pixelAt(gl,16,28);
     result.checks.readback_matches=result.pixel.every((v,i)=>v===result.expected_pixel[i]);
   }
   function drawVbo(gl, result, colorSource, uniformColor, targetCanvas=canvas) {
@@ -353,7 +396,7 @@ def diagnostic_page(nonce):
       if (location === null) return;
       gl.uniform4f(location,0,0,1,1);
     }
-    gl.drawArrays(gl.TRIANGLES,0,3);
+    setDrawParameters(gl,result,'TRIANGLES',0,3); gl.drawArrays(gl.TRIANGLES,0,3);
     result.details.draw_call_issued = true;
     result.checks.draw_call_issued = true;
     result.expected_pixel = uniformColor ? [0,0,255,255] : [0,255,0,255];
@@ -401,7 +444,8 @@ def diagnostic_page(nonce):
           'precision mediump float; void main(){gl_FragColor=vec4(0.0,160.0/255.0,0.0,1.0);}',result);
         if (!program || !vbo(gl,program,result)) return;
         gl.viewport(0,0,canvas.width,canvas.height);
-        gl.useProgram(program); gl.drawArrays(gl.TRIANGLES,0,3);
+        gl.useProgram(program); setDrawParameters(gl,result,'TRIANGLES',0,3);
+        gl.drawArrays(gl.TRIANGLES,0,3);
         result.details.draw_call_issued=true; result.checks.draw_call_issued=true;
         result.expected_pixel=[0,160,0,255];
         let pixel=new Uint8Array(4);
@@ -417,13 +461,15 @@ def diagnostic_page(nonce):
           (v,i)=>v===result.expected_pixel[i]);
       });
       stage(gl,'default-clear',result => {
-        resetDefault(gl); result.expected_pixel=[255,0,0,255];
+        resetDefault(gl); result.details.raster_state=captureRasterState(gl);
+        result.expected_pixel=[255,0,0,255];
         gl.clearColor(1,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
         result.pixel=pixelAt(gl,48,48);
         result.checks.readback_matches=result.pixel.every((v,i)=>v===result.expected_pixel[i]);
       });
       stage(gl,'scissor-clear',result => {
         resetDefault(gl); gl.enable(gl.SCISSOR_TEST); gl.scissor(47,47,2,2);
+        result.details.raster_state=captureRasterState(gl);
         gl.clearColor(0,0,1,1); gl.clear(gl.COLOR_BUFFER_BIT); gl.disable(gl.SCISSOR_TEST);
         result.expected_pixel=[0,0,255,255]; result.pixel=pixelAt(gl,48,48);
         result.checks.readback_matches=result.pixel.every((v,i)=>v===result.expected_pixel[i]);
@@ -446,13 +492,14 @@ def diagnostic_page(nonce):
         gl.vertexAttrib4f(location,1.0/96.0,1.0/96.0,0.0,1.0);
         result.details.constant_attribute_set=true;
         result.checks.constant_attribute_set=true;
-        gl.drawArrays(gl.POINTS,0,1);
+        setDrawParameters(gl,result,'POINTS',0,1); gl.drawArrays(gl.POINTS,0,1);
         result.details.draw_call_issued=true; result.checks.draw_call_issued=true;
         result.expected_pixel=[255,255,0,255]; result.pixel=pixelAt(gl,48,48);
         result.checks.readback_matches=result.pixel.every((v,i)=>v===result.expected_pixel[i]);
       });
       stage(gl,'offscreen-fbo-clear',result => {
         resetDefault(gl); const target=createOffscreen(gl,result); if (!target) return;
+        result.details.raster_state=captureRasterState(gl);
         result.expected_pixel=[255,0,255,255]; gl.clearColor(1,0,1,1);
         gl.clear(gl.COLOR_BUFFER_BIT); result.pixel=pixelAt(gl,8,8);
         result.checks.readback_matches=result.pixel.every((v,i)=>v===result.expected_pixel[i]);
@@ -464,7 +511,8 @@ def diagnostic_page(nonce):
         const program=compileProgram(gl,vertex,
           'precision mediump float; void main(){gl_FragColor=vec4(0.0,1.0,1.0,1.0);}',result);
         if (!program || !vbo(gl,program,result)) return;
-        gl.useProgram(program); gl.drawArrays(gl.TRIANGLES,0,3);
+        gl.useProgram(program); setDrawParameters(gl,result,'TRIANGLES',0,3);
+        gl.drawArrays(gl.TRIANGLES,0,3);
         result.details.draw_call_issued=true; result.checks.draw_call_issued=true;
         result.expected_pixel=[0,255,255,255]; result.pixel=pixelAt(gl,8,8);
         result.checks.readback_matches=result.pixel.every((v,i)=>v===result.expected_pixel[i]);
@@ -511,7 +559,8 @@ def diagnostic_page(nonce):
           const program=compileProgram(single,vertex,
             'precision mediump float; void main(){gl_FragColor=vec4(0.0,1.0,0.0,1.0);}',result);
           if (!program || !vbo(single,program,result)) return;
-          single.useProgram(program); single.drawArrays(single.TRIANGLES,0,3);
+          single.useProgram(program); setDrawParameters(single,result,'TRIANGLES',0,3);
+          single.drawArrays(single.TRIANGLES,0,3);
           result.details.draw_call_issued=true; result.checks.draw_call_issued=true;
           result.expected_pixel=[0,255,0,255]; result.pixel=pixelAt(single,16,16);
           result.checks.draw_readback_matches=result.pixel.every(
@@ -536,7 +585,7 @@ def diagnostic_page(nonce):
             current[0]===1.0/32.0 && current[1]===1.0/32.0 && current[2]===0 && current[3]===1;
           result.details.constant_attribute_set=true;
           result.checks.constant_attribute_set=true;
-          single.drawArrays(single.POINTS,0,1);
+          setDrawParameters(single,result,'POINTS',0,1); single.drawArrays(single.POINTS,0,1);
           result.details.draw_call_issued=true; result.checks.draw_call_issued=true;
           result.expected_pixel=[255,255,0,255]; result.pixel=pixelAt(single,16,16);
           result.checks.readback_matches=result.pixel.every((v,i)=>v===result.expected_pixel[i]);
@@ -553,9 +602,12 @@ def diagnostic_page(nonce):
           drawMatrixTriangle(single,result,
             new Float32Array([-1,-1,3,-1,-1,3]),2,0,0,
             'bufferData-size+bufferSubData'));
+        const inClipVec2Vertices=new Float32Array([-0.75,-0.75, 0.75,-0.75, 0,0.75]);
         stage(single,'single-sample-vbo-triangle-vec2-in-clip',result =>
-          drawMatrixTriangle(single,result,
-            new Float32Array([-0.75,-0.75, 0.75,-0.75, 0,0.75]),2,0,0,
+          drawMatrixTriangle(single,result,inClipVec2Vertices,2,0,0,
+            'bufferData-float32-array'));
+        stage(single,'single-sample-vbo-points-vec2-in-clip',result =>
+          drawMatrixPoints(single,result,inClipVec2Vertices,2,0,0,
             'bufferData-float32-array'));
       }
       }
@@ -643,6 +695,7 @@ def normalize_state(state, nonce):
         normalized[name]=(value if isinstance(value,int) and not isinstance(value,bool)
                           and 0<=value<=1024 else None)
     known=set(STAGE_NAMES)
+    metadata_complete=True
     stages=state.get("stages")
     if isinstance(stages,list):
         for raw in stages[:MAX_STAGE_COUNT]:
@@ -697,6 +750,44 @@ def normalize_state(state, nonce):
                             elif isinstance(subkey,str) and isinstance(subvalue,str):
                                 sub[subkey[:64]]=subvalue[:MAX_SHADER_LOG]
                         stage["details"][key]=sub
+                    elif isinstance(value,dict) and key=="draw_parameters":
+                        allowed={"mode","first","count"}
+                        mode=value.get("mode")
+                        first=value.get("first")
+                        count=value.get("count")
+                        if (set(value)==allowed and
+                            (mode is None and first is None and count is None or
+                             mode in ("POINTS","TRIANGLES") and
+                             isinstance(first,int) and not isinstance(first,bool) and
+                             0<=first<=MAX_DRAW_VERTEX_COUNT and
+                             isinstance(count,int) and not isinstance(count,bool) and
+                             0<=count<=MAX_DRAW_VERTEX_COUNT)):
+                            stage["details"][key]={"mode":mode,"first":first,"count":count}
+                    elif value is None and key=="raster_state":
+                        stage["details"][key]=None
+                    elif isinstance(value,dict) and key=="raster_state":
+                        bool_keys=("scissor_enabled","cull_enabled","depth_enabled",
+                                   "depth_write_mask","stencil_enabled","blend_enabled")
+                        valid_enums={"front_face":{0x0900,0x0901},
+                                     "cull_mode":{0x0404,0x0405,0x0408},
+                                     "depth_func":set(range(0x0200,0x0208))}
+                        enum_keys=tuple(valid_enums)
+                        vector_keys=("viewport","scissor_box")
+                        expected=set(bool_keys+enum_keys+vector_keys+("sample_buffers","samples"))
+                        valid=set(value)==expected and all(type(value.get(k)) is bool for k in bool_keys)
+                        valid=valid and all(type(value.get(k)) is int and value[k] in choices
+                            for k,choices in valid_enums.items())
+                        for vector_key in vector_keys:
+                            vector=value.get(vector_key)
+                            valid=valid and isinstance(vector,list) and len(vector)==4 and all(
+                                isinstance(item,int) and not isinstance(item,bool) and
+                                -MAX_RASTER_COORDINATE<=item<=MAX_RASTER_COORDINATE for item in vector)
+                        for sample_key in ("sample_buffers","samples"):
+                            sample_value=value.get(sample_key)
+                            valid=valid and isinstance(sample_value,int) and not isinstance(sample_value,bool) and 0<=sample_value<=1024
+                        if valid:
+                            stage["details"][key]={name:(list(value[name]) if name in vector_keys else value[name])
+                                for name in expected}
                     elif isinstance(value,dict) and key=="attribute_state":
                         safe_state={}
                         for subkey,subvalue in list(value.items())[:8]:
@@ -719,6 +810,8 @@ def normalize_state(state, nonce):
                             return math.isfinite(item) and abs(item)<=2**31
                         if all(safe_component(item) for item in value):
                             stage["details"][key]=value
+            metadata_complete=metadata_complete and "draw_parameters" in stage["details"] and \
+                "raster_state" in stage["details"]
             normalized["stages"].append(stage)
     raw_order=(isinstance(stages,list) and len(stages)==MAX_STAGE_COUNT and
         all(isinstance(item,dict) and isinstance(item.get("name"),str)
@@ -728,7 +821,7 @@ def normalize_state(state, nonce):
         and state.get("diagnostic_complete") is True
         and normalized["context_ok"] and not normalized["context_lost"]
         and not normalized["stopped"] and normalized["error"] is None
-        and len(normalized["stages"])==MAX_STAGE_COUNT
+        and metadata_complete and len(normalized["stages"])==MAX_STAGE_COUNT
         and [item["name"] for item in normalized["stages"]]==list(STAGE_NAMES))
     normalized["completed_stage_count"]=len(normalized["stages"])
     normalized["stage_count"]=MAX_STAGE_COUNT
