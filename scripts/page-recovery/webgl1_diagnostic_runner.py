@@ -52,6 +52,9 @@ STAGE_NAMES = (
     "single-sample-vbo-point-vec2-in-clip-first-0",
     "single-sample-vbo-point-vec2-in-clip-first-1",
     "single-sample-vbo-point-vec2-in-clip-first-2",
+    "single-sample-vbo-point-vec2-in-clip-first-0-centerline",
+    "single-sample-vbo-point-vec2-in-clip-first-1-centerline",
+    "single-sample-vbo-point-vec2-in-clip-first-2-centerline",
 )
 MAX_STAGE_COUNT = len(STAGE_NAMES)
 MAX_GL_ERRORS_PER_STAGE = 16
@@ -116,7 +119,10 @@ def diagnostic_page(nonce):
     "single-sample-vbo-points-vec2-in-clip",
     "single-sample-vbo-point-vec2-in-clip-first-0",
     "single-sample-vbo-point-vec2-in-clip-first-1",
-    "single-sample-vbo-point-vec2-in-clip-first-2"];
+    "single-sample-vbo-point-vec2-in-clip-first-2",
+    "single-sample-vbo-point-vec2-in-clip-first-0-centerline",
+    "single-sample-vbo-point-vec2-in-clip-first-1-centerline",
+    "single-sample-vbo-point-vec2-in-clip-first-2-centerline"];
   const matrixNames=names.slice(9);
   const state = {nonce, diagnostic_only:true, context_ok:false, context_lost:false,
     stopped:false, stages:[], gl_version:null, glsl_version:null, error:null,
@@ -634,6 +640,12 @@ def diagnostic_page(nonce):
           drawMatrixPointAt(single,result,inClipVec2Vertices,1,28,4));
         stage(single,'single-sample-vbo-point-vec2-in-clip-first-2',result =>
           drawMatrixPointAt(single,result,inClipVec2Vertices,2,16,28));
+        stage(single,'single-sample-vbo-point-vec2-in-clip-first-0-centerline',result =>
+          drawMatrixPointAt(single,result,inClipVec2Vertices,0,4,16));
+        stage(single,'single-sample-vbo-point-vec2-in-clip-first-1-centerline',result =>
+          drawMatrixPointAt(single,result,inClipVec2Vertices,1,28,16));
+        stage(single,'single-sample-vbo-point-vec2-in-clip-first-2-centerline',result =>
+          drawMatrixPointAt(single,result,inClipVec2Vertices,2,16,16));
       }
       }
     }

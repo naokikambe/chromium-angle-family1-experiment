@@ -1,6 +1,6 @@
 # Vertex input diagnosis at the pinned ANGLE revision
 
-Use the 19-stage diagnostic runner on an unchanged, hash-verified candidate. This
+Use the 22-stage diagnostic runner on an unchanged, hash-verified candidate. This
 is a decision guide, not device acceptance. Match pixels, GL errors, actual context
 attributes, owner GUI observations, and custom-library/Metal samples to the same
 trial and GPU process. Keep all device evidence private.
@@ -23,7 +23,7 @@ a distinct Metal storage mode. Do not infer an internal path from the API name.
 | Clear/readback fails | Framebuffer, render pass, synchronization, or readback; do not infer vertex failure |
 | Single-sample constant point succeeds but both VBO points fail | Enabled attribute descriptor, buffer upload/binding, format conversion, or vertex fetch |
 | Packed and interleaved VBO points differ | Recorded stride/offset and source conversion conditions; confirm buffer bounds before changing code |
-| A single VBO point succeeds but a three-point draw using the same in-clip vec2 buffer fails | Compare `POINTS` draws with `first=0`, `1`, and `2`, each with `count=1`, and read the corresponding vertex center. An index-specific failure narrows the boundary to that selected vertex or position; individual successes with a failing multi-point draw leave count-dependent submission/state as a candidate. |
+| A single VBO point succeeds but a three-point draw using the same in-clip vec2 buffer fails | Compare `POINTS` draws with `first=0`, `1`, and `2`, each with `count=1`; read both each intended vertex center and the corresponding x position on the NDC `y=0` centerline. An index-specific failure narrows the boundary to that selected vertex or position; centerline-only pixels suggest a vertical fetch/transform discrepancy; individual successes with a failing multi-point draw leave count-dependent submission/state as a candidate. |
 | VBO points succeed but triangles fail | Primitive assembly, translated position, clipping, culling, rasterization, or triangle pipeline state |
 | vec4/stride16 succeeds while vec2 fails | Format/component expansion and descriptor differences; shader translation remains a hypothesis |
 | In-clip triangle succeeds while oversized triangle fails | Clip-space transformation and triangle clipping; verify winding and reset state |

@@ -14,9 +14,9 @@
 
 以前の15段階CDP診断はscreenshotのみ取得し、runnerがJS開始前の一時状態を終端扱いしたため構造化stateを残せませんでした。その後の修正版16段階診断は、変更していない候補appと専用profileでHTTP 200、nonceに対応する完全なstate、全16段階を記録しました。私的証跡の照合では、同じGPU processに独自`libEGL`・`libGLESv2`とMetalがmapされ、実行前後のapp／library hashと厳格な署名検証も一致しています。
 
-16段階診断ではdefault／scissor clearとFBO clearが通り、single-sample canvasのconstant pointとpacked／interleavedの1頂点VBO pointも期待pixelを返しました。一方、default／FBO／single-sample triangleと、clip内三角形と同じ3頂点vec2 VBOを用いた`POINTS count=3`は期待pixelを返しませんでした。失敗段階はshader compile/link、attribute／buffer state、draw発行が記録され、GL errorはありません。画面取得でもdefault canvasは黒、比較canvasには3点が見えました。これはWebGL draw/readback受入ではなく、原因を一意に特定する証拠でもありません。
+16段階診断ではdefault／scissor clearとFBO clearが通り、single-sample canvasのconstant pointとpacked／interleavedの1頂点VBO pointも期待pixelを返しました。一方、default／FBO／single-sample triangleと、clip内三角形と同じ3頂点vec2 VBOを用いた`POINTS count=3`は期待pixelを返しませんでした。失敗段階はshader compile/link、attribute／buffer state、draw発行が記録され、GL errorはありません。画面取得ではdefault canvasは黒、比較canvasの3点は意図した上下2段ではなく同じ水平行に見えました。これはY座標のfetch／変換差を調べる候補ですが、pixel列挙で裏付けるまで原因とは扱いません。WebGL draw/readback受入も未達です。
 
-今回の`POINTS count=3`は第3頂点位置のpixelだけを読むため、複数頂点fetch、特定index／位置、count依存の挙動を分けられません。診断runnerを19段階へ拡張し、同じvec2 VBOを`first=0/1/2`, `count=1`で個別描画して各頂点中心を読む3段階を加えました。この19段階版はまだ実機で動かしていません。通常GUIユーザーのstock完全受入（通常GPUのページ描画、同一試行のKeychain API相関、独立profile3件）は未成立のままで、独立検証ユーザーでの成功に置き換えません。WebGL draw/readback受入は未達、工程Bは未完了、KOOV検証は未開始です。
+今回の`POINTS count=3`は第3頂点位置のpixelだけを読むため、複数頂点fetch、特定index／位置、count依存の挙動を分けられません。診断runnerを22段階へ拡張し、同じvec2 VBOを`first=0/1/2`, `count=1`で個別描画し、各頂点の期待中心と同じX座標の`y=0`中心線を読む6段階を加えました。横一列に見えた画面をこのpixel検査で切り分ける設計です。この22段階版はまだ実機で動かしていません。通常GUIユーザーのstock完全受入（通常GPUのページ描画、同一試行のKeychain API相関、独立profile3件）は未成立のままで、独立検証ユーザーでの成功に置き換えません。WebGL draw/readback受入は未達、工程Bは未完了、KOOV検証は未開始です。
 
 優先する指示はこの一括プロンプトです。[stock復旧の詳細](phase5-normal-keychain-handoff.md)は工程Aに適用します。同文書の「stockまで」という委任境界は、この一括指示では工程B・Cまで拡張します。Keychain操作への同意は拡張しません。
 

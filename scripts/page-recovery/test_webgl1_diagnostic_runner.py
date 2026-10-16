@@ -68,10 +68,13 @@ class WebGL1DiagnosticRunnerTests(unittest.TestCase):
                     "single-sample-vbo-points-vec2-in-clip",
                     "single-sample-vbo-point-vec2-in-clip-first-0",
                     "single-sample-vbo-point-vec2-in-clip-first-1",
-                    "single-sample-vbo-point-vec2-in-clip-first-2")
+                    "single-sample-vbo-point-vec2-in-clip-first-2",
+                    "single-sample-vbo-point-vec2-in-clip-first-0-centerline",
+                    "single-sample-vbo-point-vec2-in-clip-first-1-centerline",
+                    "single-sample-vbo-point-vec2-in-clip-first-2-centerline")
         positions = [html.index(f'"{name}"') for name in expected]
         self.assertEqual(positions, sorted(positions))
-        self.assertEqual(len(expected), 19)
+        self.assertEqual(len(expected), 22)
         call_positions=[html.index(f"stage(gl,'{name}'") for name in expected[:8]]
         call_positions += [html.index(f"stage(single,'{name}'") for name in expected[8:]]
         self.assertEqual(call_positions, sorted(call_positions))
@@ -99,6 +102,9 @@ class WebGL1DiagnosticRunnerTests(unittest.TestCase):
                          "drawMatrixPointAt(single,result,inClipVec2Vertices,0,4,4)",
                          "drawMatrixPointAt(single,result,inClipVec2Vertices,1,28,4)",
                          "drawMatrixPointAt(single,result,inClipVec2Vertices,2,16,28)",
+                         "drawMatrixPointAt(single,result,inClipVec2Vertices,0,4,16)",
+                         "drawMatrixPointAt(single,result,inClipVec2Vertices,1,28,16)",
+                         "drawMatrixPointAt(single,result,inClipVec2Vertices,2,16,16)",
                          "setDrawParameters(gl,result,'POINTS',first,1)",
                          "gl.drawArrays(gl.POINTS,first,1)"):
             self.assertIn(required,html)
@@ -213,7 +219,7 @@ class WebGL1DiagnosticRunnerTests(unittest.TestCase):
              "stopped":False,"diagnostic_complete":True,"stages":stages}
         normalized=runner.normalize_state(raw,nonce)
         self.assertTrue(normalized["diagnostic_complete"])
-        self.assertEqual(normalized["stage_count"],19)
+        self.assertEqual(normalized["stage_count"],22)
         details=normalized["stages"][0]["details"]
         self.assertEqual(details["draw_parameters"],parameters)
         self.assertEqual(details["raster_state"],raster)
