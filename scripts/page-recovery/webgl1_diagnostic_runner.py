@@ -923,7 +923,7 @@ def run(args):
     if info.get("CFBundleIdentifier")!="org.chromium.Chromium":
         raise RuntimeError("WebGL diagnostic runner accepts only an org.chromium.Chromium bundle")
     verified=subprocess.run(["/usr/bin/codesign","--verify","--deep","--strict","--verbose=4",str(app)],
-        capture_output=True,text=True,timeout=60)
+        capture_output=True,text=True,timeout=180)
     if verified.returncode!=0:
         raise RuntimeError("strict deep codesign verification failed before browser launch")
     output.mkdir(parents=True,exist_ok=False,mode=0o700)
