@@ -31,7 +31,7 @@ MacBookAir6,1で、正しく初回署名したstock Chromiumの正常なKeychain
 
 ### 現在の阻害要因を先に切り分ける
 
-担当者報告では、通常KeychainのAllow試行はHTTP streamへ進まず、同じ試行のAPI返却は未観測です。後続の未応答試行にはKeychain待機stackがありますが、先のAllow試行の待機証拠へ転用しません。候補appの署名検証には信頼エラーがあり、有効な署名identityも見つかっていません。以下を同じ作業単位で進めます。
+過去の担当報告では、通常KeychainのAllow試行はHTTP streamへ進まず、同じ試行のAPI返却は未観測でした。後続の未応答試行にはKeychain待機stackがありますが、先のAllow試行の待機証拠へ転用しません。過去に記録された候補appの署名trust errorとidentity検索0件はsandbox実行経路の結果で、現在の署名不成立を示しません。引継ぎ手順に沿ったホスト経路の読み取り比較で厳格署名検証とidentity可視性を確認し、app・Keychain・trust・証明書は変更していません。通常GUIユーザーでのSafe Storage API返却、暗号化利用、通常GPUでの独立profile試験は別途成立が必要です。以下はその未完了境界から進めます。
 
 1. **署名とidentityを読み取り専用で診断する。** 正確な検証コマンド・stderr・検証時刻・macOS時刻、appの署名情報・DR・封印した内容の整合性、署名証明書の公開情報（期限・issuer・chain）、ユーザーのKeychain検索一覧とlock状態、実行ユーザー・起動経路、identity検索の範囲を対応付けます。`CSSMERR_TP_NOT_TRUSTED`から、再署名やファイル改変を原因と断定しません。identity 0件だけで秘密鍵が存在しないとも断定しません。証明書期限、chainの不足、信頼設定、検索範囲、実行権限のどれが確認できたかを区別し、失敗した部品も特定します。秘密鍵は取得・出力しません。
 
