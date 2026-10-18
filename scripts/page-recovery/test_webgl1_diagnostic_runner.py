@@ -71,10 +71,16 @@ class WebGL1DiagnosticRunnerTests(unittest.TestCase):
                     "single-sample-vbo-point-vec2-in-clip-first-2",
                     "single-sample-vbo-point-vec2-in-clip-first-0-centerline",
                     "single-sample-vbo-point-vec2-in-clip-first-1-centerline",
-                    "single-sample-vbo-point-vec2-in-clip-first-2-centerline")
+                    "single-sample-vbo-point-vec2-in-clip-first-2-centerline",
+                    "single-sample-vbo-y-component-to-x-first-0",
+                    "single-sample-vbo-y-component-to-x-first-1",
+                    "single-sample-vbo-y-component-to-x-first-2",
+                    "single-sample-vbo-x-component-to-y-first-0",
+                    "single-sample-vbo-x-component-to-y-first-1",
+                    "single-sample-vbo-x-component-to-y-first-2")
         positions = [html.index(f'"{name}"') for name in expected]
         self.assertEqual(positions, sorted(positions))
-        self.assertEqual(len(expected), 22)
+        self.assertEqual(len(expected), 28)
         call_positions=[html.index(f"stage(gl,'{name}'") for name in expected[:8]]
         call_positions += [html.index(f"stage(single,'{name}'") for name in expected[8:]]
         self.assertEqual(call_positions, sorted(call_positions))
@@ -83,6 +89,9 @@ class WebGL1DiagnosticRunnerTests(unittest.TestCase):
         self.assertIn("0.0,160.0/255.0,0.0,1.0",html)
         self.assertIn("gl.vertexAttrib4f(location,1.0/96.0,1.0/96.0,0.0,1.0)",html)
         self.assertIn("gl.disableVertexAttribArray(location)",html)
+        self.assertIn("drawMatrixScalarComponentPointAt(single,result,inClipVec2Vertices,0,4,'x',4,16)",html)
+        self.assertIn("drawMatrixScalarComponentPointAt(single,result,inClipVec2Vertices,0,0,'y',16,4)",html)
+        self.assertIn("matrixBuffer(gl,program,result,vertices,1,8,offset,'bufferData-float32-array')",html)
         initial_draw=html.index("stage(gl,'initial-triangle-raw-readback'")
         viewport=html.index("gl.viewport(0,0,canvas.width,canvas.height)",initial_draw)
         draw=html.index("gl.drawArrays(gl.TRIANGLES,0,3)",initial_draw)
@@ -219,7 +228,7 @@ class WebGL1DiagnosticRunnerTests(unittest.TestCase):
              "stopped":False,"diagnostic_complete":True,"stages":stages}
         normalized=runner.normalize_state(raw,nonce)
         self.assertTrue(normalized["diagnostic_complete"])
-        self.assertEqual(normalized["stage_count"],22)
+        self.assertEqual(normalized["stage_count"],28)
         details=normalized["stages"][0]["details"]
         self.assertEqual(details["draw_parameters"],parameters)
         self.assertEqual(details["raster_state"],raster)

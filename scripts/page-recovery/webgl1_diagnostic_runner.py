@@ -55,6 +55,12 @@ STAGE_NAMES = (
     "single-sample-vbo-point-vec2-in-clip-first-0-centerline",
     "single-sample-vbo-point-vec2-in-clip-first-1-centerline",
     "single-sample-vbo-point-vec2-in-clip-first-2-centerline",
+    "single-sample-vbo-y-component-to-x-first-0",
+    "single-sample-vbo-y-component-to-x-first-1",
+    "single-sample-vbo-y-component-to-x-first-2",
+    "single-sample-vbo-x-component-to-y-first-0",
+    "single-sample-vbo-x-component-to-y-first-1",
+    "single-sample-vbo-x-component-to-y-first-2",
 )
 MAX_STAGE_COUNT = len(STAGE_NAMES)
 MAX_GL_ERRORS_PER_STAGE = 16
@@ -122,7 +128,13 @@ def diagnostic_page(nonce):
     "single-sample-vbo-point-vec2-in-clip-first-2",
     "single-sample-vbo-point-vec2-in-clip-first-0-centerline",
     "single-sample-vbo-point-vec2-in-clip-first-1-centerline",
-    "single-sample-vbo-point-vec2-in-clip-first-2-centerline"];
+    "single-sample-vbo-point-vec2-in-clip-first-2-centerline",
+    "single-sample-vbo-y-component-to-x-first-0",
+    "single-sample-vbo-y-component-to-x-first-1",
+    "single-sample-vbo-y-component-to-x-first-2",
+    "single-sample-vbo-x-component-to-y-first-0",
+    "single-sample-vbo-x-component-to-y-first-1",
+    "single-sample-vbo-x-component-to-y-first-2"];
   const matrixNames=names.slice(9);
   const state = {nonce, diagnostic_only:true, context_ok:false, context_lost:false,
     stopped:false, stages:[], gl_version:null, glsl_version:null, error:null,
@@ -408,6 +420,23 @@ def diagnostic_page(nonce):
     result.expected_pixel=[255,255,0,255]; result.pixel=pixelAt(gl,x,y);
     result.checks.readback_matches=result.pixel.every((v,i)=>v===result.expected_pixel[i]);
   }
+  function drawMatrixScalarComponentPointAt(gl,result,vertices,first,offset,outputAxis,x,y) {
+    resetDefault(gl,singleCanvas);
+    const vertex=outputAxis==='x'
+      ? 'attribute float a_component; void main(){gl_Position=vec4(a_component,0.0,0.0,1.0);gl_PointSize=8.0;}'
+      : 'attribute float a_component; void main(){gl_Position=vec4(0.0,a_component,0.0,1.0);gl_PointSize=8.0;}';
+    const program=compileProgram(gl,vertex,
+      'precision mediump float; void main(){gl_FragColor=vec4(1.0,1.0,0.0,1.0);}',result);
+    if (!program || !matrixBuffer(gl,program,result,vertices,1,8,offset,'bufferData-float32-array')) return;
+    gl.useProgram(program); setDrawParameters(gl,result,'POINTS',first,1);
+    gl.drawArrays(gl.POINTS,first,1);
+    result.details.vertex_index=first;
+    result.details.source_component_offset=offset;
+    result.details.output_axis=outputAxis;
+    result.details.draw_call_issued=true; result.checks.draw_call_issued=true;
+    result.expected_pixel=[255,255,0,255]; result.pixel=pixelAt(gl,x,y);
+    result.checks.readback_matches=result.pixel.every((v,i)=>v===result.expected_pixel[i]);
+  }
   function drawVbo(gl, result, colorSource, uniformColor, targetCanvas=canvas) {
     resetDefault(gl,targetCanvas);
     const vertex = 'attribute vec2 a_position; void main(){gl_Position=vec4(a_position,0.0,1.0);}';
@@ -646,6 +675,18 @@ def diagnostic_page(nonce):
           drawMatrixPointAt(single,result,inClipVec2Vertices,1,28,16));
         stage(single,'single-sample-vbo-point-vec2-in-clip-first-2-centerline',result =>
           drawMatrixPointAt(single,result,inClipVec2Vertices,2,16,16));
+        stage(single,'single-sample-vbo-y-component-to-x-first-0',result =>
+          drawMatrixScalarComponentPointAt(single,result,inClipVec2Vertices,0,4,'x',4,16));
+        stage(single,'single-sample-vbo-y-component-to-x-first-1',result =>
+          drawMatrixScalarComponentPointAt(single,result,inClipVec2Vertices,1,4,'x',4,16));
+        stage(single,'single-sample-vbo-y-component-to-x-first-2',result =>
+          drawMatrixScalarComponentPointAt(single,result,inClipVec2Vertices,2,4,'x',28,16));
+        stage(single,'single-sample-vbo-x-component-to-y-first-0',result =>
+          drawMatrixScalarComponentPointAt(single,result,inClipVec2Vertices,0,0,'y',16,4));
+        stage(single,'single-sample-vbo-x-component-to-y-first-1',result =>
+          drawMatrixScalarComponentPointAt(single,result,inClipVec2Vertices,1,0,'y',16,28));
+        stage(single,'single-sample-vbo-x-component-to-y-first-2',result =>
+          drawMatrixScalarComponentPointAt(single,result,inClipVec2Vertices,2,0,'y',16,16));
       }
       }
     }
@@ -992,7 +1033,7 @@ def run(args):
                 result["http_document_200"]=any(event.get("method")=="Network.responseReceived"
                     and event.get("type")=="Document" and event.get("status")==200 for event in cdp.events)
                 try:
-                    image=cdp.call("Page.captureScreenshot",{"format":"png"},timeout=5)
+                    image=cdp.call("Page.captureScreenshot",{"format":"png"},timeout=20)
                     (output/"diagnostic-page.png").write_bytes(base64.b64decode(image["data"]))
                 except Exception as exc:
                     result["errors"].append(f"screenshot:{type(exc).__name__}")
