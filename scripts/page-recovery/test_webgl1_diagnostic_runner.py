@@ -92,6 +92,9 @@ class WebGL1DiagnosticRunnerTests(unittest.TestCase):
         self.assertIn("drawMatrixScalarComponentPointAt(single,result,inClipVec2Vertices,0,4,'x',4,16)",html)
         self.assertIn("drawMatrixScalarComponentPointAt(single,result,inClipVec2Vertices,0,0,'y',16,4)",html)
         self.assertIn("matrixBuffer(gl,program,result,vertices,1,8,offset,'bufferData-float32-array')",html)
+        scalar_helper=html.split("function drawMatrixScalarComponentPointAt",1)[1].split("function drawVbo",1)[0]
+        self.assertEqual(scalar_helper.count("attribute float a_position;"),2)
+        self.assertNotIn("a_component",scalar_helper)
         initial_draw=html.index("stage(gl,'initial-triangle-raw-readback'")
         viewport=html.index("gl.viewport(0,0,canvas.width,canvas.height)",initial_draw)
         draw=html.index("gl.drawArrays(gl.TRIANGLES,0,3)",initial_draw)

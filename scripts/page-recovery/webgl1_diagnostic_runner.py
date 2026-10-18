@@ -423,8 +423,8 @@ def diagnostic_page(nonce):
   function drawMatrixScalarComponentPointAt(gl,result,vertices,first,offset,outputAxis,x,y) {
     resetDefault(gl,singleCanvas);
     const vertex=outputAxis==='x'
-      ? 'attribute float a_component; void main(){gl_Position=vec4(a_component,0.0,0.0,1.0);gl_PointSize=8.0;}'
-      : 'attribute float a_component; void main(){gl_Position=vec4(0.0,a_component,0.0,1.0);gl_PointSize=8.0;}';
+      ? 'attribute float a_position; void main(){gl_Position=vec4(a_position,0.0,0.0,1.0);gl_PointSize=8.0;}'
+      : 'attribute float a_position; void main(){gl_Position=vec4(0.0,a_position,0.0,1.0);gl_PointSize=8.0;}';
     const program=compileProgram(gl,vertex,
       'precision mediump float; void main(){gl_FragColor=vec4(1.0,1.0,0.0,1.0);}',result);
     if (!program || !matrixBuffer(gl,program,result,vertices,1,8,offset,'bufferData-float32-array')) return;
