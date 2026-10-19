@@ -44,9 +44,9 @@ owner-supplied deny values, but cannot guarantee detection of arbitrary
 passwords, tokens, or other secrets. Manual review of staged content remains
 required.
 
-After an approved history rewrite, audit maintained documentation links and
-repository SHA references against the reviewed old-to-new map. Use current
-source-tree counterparts where appropriate, but preserve historical CI
+When a reviewed old-to-new map is available after an approved history rewrite,
+audit maintained documentation links and repository SHA references against it.
+Use current source-tree counterparts where appropriate, but preserve historical CI
 provenance through run IDs and run records; explicitly distinguish a current
 counterpart from the ref actually executed by an old run. Keep the full mapping
 private. The privacy scanner does not detect obsolete SHA references.
@@ -57,8 +57,17 @@ team identifiers in other contexts, certificate identities, or any owner
 identity. The source and tests keep this exception exact; never add a private
 team identifier to it.
 
-In a fresh reviewed clone, enable the tracked hooks with
-`git config --local core.hooksPath .githooks`. The parent may install the same
-reviewed scanner in a private stable hook directory to protect multiple
-worktrees, including preserved pre-cleanup checkouts. Such a directory and any
-owner deny values remain local and are never committed.
+For this branch, the Owner-approved replacement policy in
+[safe-push-and-gc-procedure.md](safe-push-and-gc-procedure.md) additionally
+requires a fixed approved anchor, single-parent history after that anchor,
+and rejection of all post-anchor merges. The private old-SHA list/map is no
+longer a publication prerequisite. This does not repeat the old-SHA audit.
+New remote branches are forbidden by the restrictive checker even though the
+privacy scanner can inspect their full reachable history.
+
+The tracked `.githooks` provide privacy scans only. Install dedicated reviewed
+copies and wrappers in a durable owner-only directory outside public Git,
+separate from old checkouts' hooks. Keep origin pushes disabled and use the
+integrity-checked launcher for publication. Missing hooks or guard data must
+stop that launcher before push. Never store required guard files in a
+temporary directory or share them with preserved old repositories.

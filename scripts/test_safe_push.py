@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
-import hashlib
 import importlib.util
-import json
+import io
 import os
+import types
 import subprocess
 import sys
 import tempfile
@@ -36,18 +36,15 @@ class SafePushTests(unittest.TestCase):
         self.anchor = self.head()
         self.git("update-ref", "refs/remotes/origin/phase5-page-recovery", self.anchor)
         self.candidate = self.commit_child("clean continuation")
-        self.denied = self.commit_child("synthetic denied ancestry", parent=self.anchor)
-        # Create a descendant that merges denied history after a clean anchor.
+        self.side = self.commit_child("synthetic side branch", parent=self.anchor)
+        # Both parents are valid descendants; every merge must still be rejected.
         tree = self.git("rev-parse", f"{self.candidate}^{{tree}}")
         self.merged = subprocess.check_output(
             ["git", "-C", str(self.repo), "-c", "user.name=Synthetic-User",
              "-c", "user.email=123+synthetic-user@users.noreply.github.com",
-             "commit-tree", tree, "-p", self.candidate, "-p", self.denied],
+             "commit-tree", tree, "-p", self.candidate, "-p", self.side],
             input=b"synthetic merge\n", text=False).decode().strip()
         self.git("update-ref", "refs/remotes/origin/phase5-page-recovery", self.anchor)
-        self.metadata = self.repo.parent / "metadata.json"
-        self.mapping = self.repo.parent / "mapping.tsv"
-        self.write_metadata([self.denied])
 
     def tearDown(self) -> None:
         self.temp.cleanup()
@@ -70,82 +67,44 @@ class SafePushTests(unittest.TestCase):
         self.git("commit", "-qam", message)
         return self.head()
 
-    def write_metadata(self, denied: list[str]) -> None:
-        target = self.candidate
-        self.mapping.write_text("".join(f"{old}\t{target}\n" for old in denied), encoding="ascii")
-        value = {
-            "clean_anchor": self.anchor,
-            "old_commits": denied,
-            "old_commits_count": len(denied),
-            "old_commits_sha256": hashlib.sha256(("\n".join(denied) + "\n").encode()).hexdigest(),
-            "mapping_sha256": hashlib.sha256(self.mapping.read_bytes()).hexdigest(),
-        }
-        self.metadata.write_text(json.dumps(value), encoding="utf-8")
-
     def input(self, local: str, remote: str | None = None, local_ref: str = safe_push.BRANCH,
               remote_ref: str = safe_push.BRANCH) -> bytes:
         return f"{local_ref} {local} {remote_ref} {remote or self.anchor}\n".encode()
 
     def check(self, data: bytes, *, url: str = safe_push.CANONICAL_URL) -> None:
-        safe_push.validate(self.repo, "origin", url, data, self.metadata, self.mapping)
+        safe_push.validate(self.repo, "origin", url, data, anchor=self.anchor)
 
     def test_allowed_fast_forward(self) -> None:
         self.check(self.input(self.candidate))
 
-    def test_old_ancestry_hidden_in_merged_descendant_rejected(self) -> None:
+    def test_merge_rejected_even_when_anchor_and_remote_are_ancestors(self) -> None:
         with self.assertRaises(RuntimeError):
             self.check(self.input(self.merged))
         with self.assertRaises(RuntimeError):
-            self.check(self.input(self.merged, remote=self.denied))
+            self.check(self.input(self.merged, remote=self.side))
 
-    def test_missing_and_corrupt_metadata_rejected(self) -> None:
-        self.metadata.unlink()
-        with self.assertRaises((OSError, RuntimeError)):
-            self.check(self.input(self.candidate))
-        self.write_metadata([self.denied])
-        payload = json.loads(self.metadata.read_text())
-        payload["old_commits_sha256"] = "b" * 64
-        self.metadata.write_text(json.dumps(payload))
-        with self.assertRaises(RuntimeError):
-            self.check(self.input(self.candidate))
+    def test_wrong_or_missing_anchor_rejected(self) -> None:
+        for anchor in (self.side, "f" * 40, safe_push.ZERO):
+            with self.subTest(anchor="synthetic"), self.assertRaises(RuntimeError):
+                safe_push.validate(self.repo, "origin", safe_push.CANONICAL_URL,
+                                   self.input(self.candidate), anchor=anchor)
 
-    def test_missing_corrupt_and_semantically_invalid_mapping_rejected(self) -> None:
-        self.mapping.unlink()
-        with self.assertRaises(OSError):
-            self.check(self.input(self.candidate))
-        self.write_metadata([self.denied])
-        self.mapping.write_text("x\ty\n", encoding="ascii")
+    def test_remote_merge_followed_by_linear_commit_rejected(self) -> None:
+        tree = self.git("rev-parse", f"{self.candidate}^{{tree}}")
+        child = subprocess.check_output(
+            ["git", "-C", str(self.repo), "commit-tree", tree, "-p", self.merged],
+            input=b"synthetic linear child of merge\n").decode().strip()
         with self.assertRaises(RuntimeError):
-            self.check(self.input(self.candidate))
-        self.write_metadata([self.denied])
-        payload = json.loads(self.metadata.read_text())
-        payload["old_commits"] = []
-        payload["old_commits_count"] = 0
-        payload["old_commits_sha256"] = hashlib.sha256(b"").hexdigest()
-        self.metadata.write_text(json.dumps(payload), encoding="utf-8")
+            self.check(self.input(child, remote=self.merged))
         with self.assertRaises(RuntimeError):
-            self.check(self.input(self.candidate))
-        self.write_metadata([self.denied])
-        payload = json.loads(self.metadata.read_text())
-        payload["old_commits_count"] += 1
-        self.metadata.write_text(json.dumps(payload), encoding="utf-8")
-        with self.assertRaises(RuntimeError):
-            self.check(self.input(self.candidate))
+            self.check(self.input(child))
 
-    def test_zero_metadata_count_and_mapping_denial_mismatch_rejected(self) -> None:
-        self.write_metadata([self.denied])
-        payload = json.loads(self.metadata.read_text())
-        payload["old_commits_count"] = 0
-        self.metadata.write_text(json.dumps(payload), encoding="utf-8")
-        with self.assertRaises(RuntimeError):
-            self.check(self.input(self.candidate))
-        self.write_metadata([self.denied])
-        self.mapping.write_text(f"{self.candidate}\t{self.anchor}\n", encoding="ascii")
-        payload = json.loads(self.metadata.read_text())
-        payload["mapping_sha256"] = hashlib.sha256(self.mapping.read_bytes()).hexdigest()
-        self.metadata.write_text(json.dumps(payload), encoding="utf-8")
-        with self.assertRaises(RuntimeError):
-            self.check(self.input(self.candidate))
+    def test_canonical_url_remote_and_linear_continuation_pass(self) -> None:
+        result = safe_push.validate(self.repo, safe_push.CANONICAL_URL, safe_push.CANONICAL_URL,
+                                    self.input(self.candidate), anchor=self.anchor)
+        self.assertEqual(result, (safe_push.BRANCH, self.candidate, self.anchor))
+        second = self.commit_child("second clean continuation", parent=self.candidate)
+        self.check(self.input(second, remote=self.candidate))
 
     def test_creation_deletion_other_ref_tag_and_non_ff_rejected(self) -> None:
         zero = safe_push.ZERO
@@ -156,7 +115,7 @@ class SafePushTests(unittest.TestCase):
             self.input(self.candidate, remote_ref="refs/tags/release"),
             self.input(self.candidate, local_ref="refs/tags/release"),
             self.input(self.anchor, remote=self.candidate),
-            self.input(self.denied),
+            self.input(self.side, remote=self.candidate),
         ]
         for case in cases:
             with self.subTest(case=case.decode().strip()):
@@ -172,7 +131,7 @@ class SafePushTests(unittest.TestCase):
             self.check(b"")
         with self.assertRaises(RuntimeError):
             safe_push.validate(self.repo, "upstream", safe_push.CANONICAL_URL,
-                               self.input(self.candidate), self.metadata, self.mapping)
+                               self.input(self.candidate), anchor=self.anchor)
 
     def test_history_override_environment_rejected(self) -> None:
         for name in ("GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_OBJECT_DIRECTORY",
@@ -223,14 +182,15 @@ class SafePushTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(b"nothing", result.stderr.lower())
 
-    def gate_process(self, local_sha: str) -> subprocess.CompletedProcess[bytes]:
-        return subprocess.run(
-            [sys.executable, str(MODULE_PATH), "--repo", str(self.repo),
-             "--metadata", str(self.metadata), "--mapping", str(self.mapping),
-             "origin", safe_push.CANONICAL_URL],
-            input=self.input(local_sha), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            check=False, timeout=120,
-        )
+    def gate_process(self, local_sha: str) -> subprocess.CompletedProcess:
+        # The production CLI has no anchor override. Only this synthetic in-process
+        # fixture substitutes its public trust root before invoking the real main.
+        argv = [str(MODULE_PATH), "--repo", str(self.repo), "origin", safe_push.CANONICAL_URL]
+        stdin = types.SimpleNamespace(buffer=io.BytesIO(self.input(local_sha)))
+        with patch.object(safe_push, "APPROVED_ANCHOR", self.anchor), \
+             patch.object(sys, "argv", argv), patch.object(sys, "stdin", stdin):
+            rc = safe_push.main()
+        return subprocess.CompletedProcess(argv, rc)
 
     def test_main_replays_scanner_across_introduced_commits(self) -> None:
         self.assertEqual(self.gate_process(self.candidate).returncode, 0)

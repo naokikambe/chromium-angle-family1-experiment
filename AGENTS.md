@@ -121,9 +121,30 @@ echoing matched values. Do not add broad exclusions or allowlists to bypass
 the guard. The focused scanner recognizes selected token and private-key
 formats and owner-supplied deny values; it cannot guarantee detection of
 arbitrary passwords, tokens, or other secrets. Manual staged-content review is
-still required. After an approved history rewrite, audit maintained documentation
-links and repository SHA references against the reviewed old-to-new map; use
+still required. When a reviewed map is available after an approved history rewrite,
+audit maintained documentation links and repository SHA references against it; use
 current source-tree counterparts where appropriate. Preserve historical CI
 provenance with run IDs and run records, and state clearly when a current
 counterpart was not the ref executed by an old run. Keep the full old-to-new
 map private. The parent independently reviews staged content before publication.
+
+## Authorized branch publication policy
+
+On 2026-10-20 the Owner explicitly removed the requirement to compare this
+branch against a private old-SHA list or old-to-new map. Missing historical
+map data no longer blocks publication under this replacement policy. Pin the
+approved public anchor to `49b69c78861750b34ec533dfaa1fdbe3469fe9f2`; both the
+remote tip and candidate must descend from it, and every reachable commit
+after it must have exactly one parent. Reject all post-anchor merges, not
+just merges known to contain old history. Permit only a fast-forward update
+of the existing `phase5-page-recovery` branch in the designated repository.
+Do not create branches/tags, delete refs, force push, or import old Git data.
+This change trusts the approved anchor; it does not repeat the historical
+old-SHA audit or prove the anchor safe again.
+
+Keep ordinary origin pushes disabled permanently. Publish only through the
+reviewed, integrity-checked launcher and dedicated durable private hooks
+described in `docs/safe-push-and-gc-procedure.md`. Missing or corrupt guard
+files must prevent invoking push. Existing staged, message, and introduced-
+commit privacy checks and parent review remain required. Do not change the
+old shared Git or mirrors, delete refs, or run GC in this scope.
