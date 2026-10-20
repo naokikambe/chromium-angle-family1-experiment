@@ -24,6 +24,7 @@ import urllib.parse
 import uuid
 
 import probe
+import keychain_histogram
 
 
 FAMILY1_BROWSER_ARGUMENTS = (
@@ -175,6 +176,26 @@ return {url:location.href,title:document.title,body:document.body.innerText,rect
             "rect": value.get("rect"), "value": value}
 
 
+def capture_keychain_histogram(profile, events, launch_pid):
+    """Query only the reviewed OSCrypt histogram on this browser process."""
+    from webgl1_runner import browser_websocket_url
+
+    url = browser_websocket_url(profile)
+    browser_cdp = probe.CDP(url, events)
+    try:
+        return keychain_histogram.capture(browser_cdp, launch_pid, profile)
+    finally:
+        browser_cdp.ws.close()
+
+
+def keychain_histogram_acceptance(first, second):
+    """Report the separate two-phase normal-Keychain evidence requirement."""
+    if all(phase.get("keychain_histogram", {}).get("status") == "verified_found"
+           for phase in (first, second)):
+        return "VERIFIED_FOUND_BOTH_PHASES"
+    return "INCOMPLETE_OR_NOT_FOUND"
+
+
 def browser_command(executable, profile, browser_arguments=()):
     return [str(executable), "--no-first-run", "--no-default-browser-check", "--disable-sync",
             "--disable-background-networking", "--enable-logging=stderr", "--remote-debugging-address=127.0.0.1",
@@ -263,6 +284,19 @@ def launch_phase(executable, profile, out, server, phase, startup_timeout,
             if observe_seconds:
                 print(f"Observe {phase} page now for {observe_seconds} seconds.", flush=True)
                 time.sleep(observe_seconds)
+            try:
+                histogram = capture_keychain_histogram(profile, events, process.pid)
+            except Exception as exc:
+                histogram = {"schema": "phase5-oscrypt-keychain-histogram-v1",
+                              "histogram": keychain_histogram.HISTOGRAM,
+                              "source_revision": keychain_histogram.SOURCE_REVISION,
+                              "observed_at": timestamp(), "launch_pid": process.pid,
+                              "profile": str(profile), "browser_pid": None,
+                              "status": "unavailable", "found": None,
+                              "bucket_counts": None,
+                              "error": f"{type(exc).__name__}: {exc}"}
+            result["keychain_histogram"] = histogram
+            probe.write_json(out / "keychain-histogram.json", histogram)
         except Exception as exc:
             result["errors"].append(f"{type(exc).__name__}: {exc}")
         finally:
@@ -326,7 +360,8 @@ def run(args):
         if not (first.get("returncode") == 0 and first.get("http_document_200") and first.get("document_ok") and first.get("js_ok")
                 and first.get("fetch_ok") and first.get("canvas_ok") and first.get("visual_patch_ok") and expected_seed):
             result = {"classification": "SEED_PHASE_FAILED", "phase1": first,
-                      "cookie_storage": {"checked": False}, "phase2": None}
+                      "cookie_storage": {"checked": False}, "phase2": None,
+                      "keychain_histogram_acceptance": keychain_histogram_acceptance(first, {})}
             with server.events_lock:
                 result["server_events"] = list(server.events)
         else:
@@ -347,7 +382,8 @@ def run(args):
                 and second.get("fetch_ok") and second.get("canvas_ok") and second.get("visual_patch_ok")
                 and second.get("cookie_ok") and resumed) else "PERSISTENT_COOKIE_FAIL",
                 "phase1": first, "cookie_storage": cookie_storage, "phase2": second,
-                "server_events": events, "restart_cookie_received": resumed}
+                "server_events": events, "restart_cookie_received": resumed,
+                "keychain_histogram_acceptance": keychain_histogram_acceptance(first, second)}
         with server.events_lock:
             probe.write_json(output / "server-events.json", list(server.events))
     finally:

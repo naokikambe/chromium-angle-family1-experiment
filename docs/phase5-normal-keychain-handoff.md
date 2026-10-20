@@ -99,4 +99,41 @@ Allow Onceは現在のアクセスへの応答であり、後続の別プロセ�
 
 現行S0の原因特定完了は保持します。次工程の未完了を、原因不明への後戻りとは表現しません。
 
+## Read-only OSCrypt histogram observation
+
+The persistent cookie runner records a read-only observation of Chromium's
+`OSCrypt.Mac.FindGenericPasswordResult` histogram once during each launch,
+before it requests `Browser.close`. It queries only that exact histogram from
+the browser-root CDP endpoint and records the endpoint's browser PID alongside
+the launched PID. A mismatch, missing histogram, malformed buckets, or CDP
+failure is recorded as `unavailable` with a diagnostic. Such a measurement
+cannot support a pass.
+
+The mapping is pinned to Chromium revision
+[`82303c21a18acdc256c6264cd2ed0e1588df99d4`'s Keychain lookup](https://github.com/chromium/chromium/blob/82303c21a18acdc256c6264cd2ed0e1588df99d4/components/os_crypt/common/keychain_password_mac.mm): enum value `0` means
+`PasswordFound`, `1` means `PasswordNotFound`, and `2` means `Error`. The
+capture labels an observation `verified_found` only when the validated
+histogram contains samples exclusively in the bucket `[0, 1)`, and its reported
+sample sum is zero. The total count and sample sum must agree with the bucket
+counts. Only the three pinned enum bucket ranges are accepted. Samples in
+other enum buckets are `verified_other`; they do not establish that an existing
+password was found. Empty, overlapping, malformed, or mixed found/other
+bucket results remain unavailable.
+
+Each phase writes `keychain-histogram.json` and embeds the same summary in its
+phase result. The record includes the source revision, observation timestamp,
+profile binding, and PID binding. It does not collect Keychain item values,
+passwords, cookies, or unrelated histograms. The histogram is emitted during
+Chromium's deferred cleanup after the generic-password lookup returns, so this
+observation measures the process-wide histogram at capture time; it does not
+identify a particular item or prove that any later cookie decryption used that
+lookup result. The capture is supplemental evidence and does not change the
+runner's persistent-cookie classification. The overall result separately
+reports whether both phases have verified-found observations, so a missing or
+other observation cannot satisfy the normal-Keychain acceptance requirement.
+
+The fixture tests use synthetic CDP replies and temporary synthetic
+`DevToolsActivePort` files only. They do not connect to Chromium or access
+macOS Keychain.
+
 有効な既存結果は再利用し、一試験ごとに次の指示を求めず分岐に従って続行してください。中間報告を行っても作業は続けます。必須のオーナー入力・実行資源がなく、他に進められる作業も尽きた場合は、満たした条件・残条件・阻害要因・必要な操作とその後の続行手順を一つの報告にまとめてください。時間切れや回答待ちは完了としません。
