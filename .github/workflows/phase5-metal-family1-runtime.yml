@@ -30,7 +30,7 @@ on:
       runtime_patch_sha256:
         description: SHA-256 of the checked-in Phase 5 runtime patch
         required: true
-        default: 8cf28ad02dd132b653e93e85535dd7f9fd26571ff4b2ee7c5a0c27f73a720dcb
+        default: 98c5b573da41d8f0a3d64d6a4352c25adbf89ca823c47b8fa56178cf9f1c1f4b
         type: string
 
 concurrency:
@@ -214,10 +214,13 @@ jobs:
           git apply --unidiff-zero --check -- "$GITHUB_WORKSPACE/$RUNTIME_PATCH_PATH"
           git apply --unidiff-zero -- "$GITHUB_WORKSPACE/$RUNTIME_PATCH_PATH"
           expected_source_paths=$(printf '%s\n' \
+              'include/GLSLANG/ShaderLang.h' \
+              'src/compiler/translator/msl/EmitMetal.cpp' \
               'src/common/apple_platform_utils.mm' \
               'src/libANGLE/Context.cpp' \
               'src/libANGLE/Display.cpp' \
               'src/libANGLE/renderer/metal/DisplayMtl.mm' \
+              'src/libANGLE/renderer/metal/ShaderMtl.mm' \
               'src/libANGLE/renderer/metal/mtl_utils.mm' \
               'src/libANGLE/validationEGL.cpp' \
               'src/libEGL/libEGL_autogen.cpp' \
@@ -237,6 +240,12 @@ jobs:
             exit 1
           fi
           cat "$DIAG_DIR/math-options-policy.txt"
+          if ! python3 "$GITHUB_WORKSPACE/tests/phase5-metal-family1-vertex-unpack-policy.py" \
+              --source-root "$ANGLE_ROOT" > "$DIAG_DIR/vertex-unpack-policy.txt" 2>&1; then
+            cat "$DIAG_DIR/vertex-unpack-policy.txt"
+            exit 1
+          fi
+          cat "$DIAG_DIR/vertex-unpack-policy.txt"
           {
             printf 'SOURCE_REVISION=%s\n' "$(git rev-parse HEAD)"
             printf 'RUNTIME_PATCH_PATH=%s\n' "$RUNTIME_PATCH_PATH"

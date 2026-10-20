@@ -26,9 +26,11 @@ Ownerは旧SHA一覧との照合必須を取り下げ、固定した承認済み
 
 28段階診断では、vec2位置VBOのY成分を独立scalar attributeとしてX出力へ写す3段階はすべて期待pixelを返しました。X成分をY出力へ写す段階は、非ゼロY位置の2段階で失敗し、Y=0の段階は通りました。Y属性の読み出し自体より、頂点のY出力・補正経路を次の調査対象とします。全段階のstateとCDP画面取得は成立し、同じGPU processの独自ANGLE／Metal mapping、実行前後のhashと厳格署名も照合しました。実画面のオーナー観察報告は別途照合が必要です。WebGL triangle/readbackの受入は未達で、原因はまだ確定していません。
 
-固定ANGLE版のソースでは、vertex shaderの末尾で`gl_Position.y`へdriver uniformの`flipXY`を`unpackSnorm4x8`した第4成分を掛けます。このdecodeとY補正を分けるため、架空入力だけを使う[単独Metal診断](phase5-metal-flip-probe.md)を準備しました。準備・コンパイルだけでは実行や受入を意味しません。
+固定ANGLE版ではvertex末尾のY補正にpacked snormのdecodeを使います。[単独Metal診断](phase5-metal-flip-probe.md)の比較から、vertex側builtin経路を避ける修正候補へ進んでいます。実験opt-inが有効なnative Mac Family 1のvertex shaderだけで、明示的な符号拡張・除算・clampへ置き換えます。適用条件・数値・offline MSLのfocused検証は、ANGLE全体のbuildや実WebGL draw/readbackの受入を意味しません。
 
 再開前に報告されたsandbox経路のidentity検索0件と署名trust errorは、現在の署名不成立を示す結果ではありません。引継ぎ手順に沿って実行経路を分けて読み取り検証し、候補の厳格署名検証と署名identityの可視性を確認しました。証明書名、Keychain項目、ユーザー、実行PIDその他の端末固有情報や生証跡は公開文書へ記録しません。通常GUIユーザーのstock完全受入（通常GPUのページ描画、同一試行のKeychain API相関、独立profile3件）は未成立のままで、独立検証ユーザーでの成功に置き換えません。WebGL draw/readback受入は未達、工程Bは未完了、KOOV検証は未開始です。
+
+私的証跡は必要ファイル単位で永続領域へ保全します。古い受入記録の一部に元manifest・個別receiptの欠落があるため、checkpointの要約だけで来歴や同一試行の相関を再受入しません。残存証拠との照合または新しい試行による再確認が必要です。app・profile・cookie DBを公開Gitへコピーしません。
 
 優先する指示はこの一括プロンプトです。[stock復旧の詳細](phase5-normal-keychain-handoff.md)は工程Aに適用します。同文書の「stockまで」という委任境界は、この一括指示では工程B・Cまで拡張します。Keychain操作への同意は拡張しません。
 
@@ -53,7 +55,7 @@ Ownerは旧SHA一覧との照合必須を取り下げ、固定した承認済み
 
 1. 受入済みstockのsnapshot・Chromium revision・DEPSのANGLE pinを固定します。snapshot 1689422を継続する場合はChromium `82303c21a18acdc256c6264cd2ed0e1588df99d4`、ANGLE `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`を実入力と照合します。別入力へ変更する必要があれば理由を示し、署名アダプターを対応版で検証して工程Aの基準を取り直します。
 2. 過去のFamily 1 runtimeパッチを固定履歴から回収し、対象ANGLE版へ移植します。旧artifactのrevisionやworkflow既定値を流用しません。Family 1の明示的な実験オプトイン、実機能力に合ったES／Metal機能境界、Family 2以上の既存動作を保持します。架空のFeature名や未対応機能を有効にして通しません。
-3. 現在の `.github/workflows/phase5-metal-family1-runtime.yml`は別のChrome／ANGLE版を固定し、現ブランチにないパッチ・検証スクリプトを参照しています。そのままdispatchしません。必要な実装・検証を復元／更新するか、対象revisionを固定した専用ビルド経路を作ります。必要最小限の履歴集約後の内容同一な公開snapshot `292c7e2bab8bd06e9cf2ec50d7d20a451393290d`には `patches/phase5-metal-family1-runtime.patch`、`scripts/verify-phase5-runtime-artifact.sh`、`tests/phase5-metal-family1-runtime-static.sh`があります。復元後は現在の入力と実装に合わせて検証してください。
+3. 現行の `.github/workflows/phase5-metal-family1-runtime.yml`はsnapshot 1689422のChromium／DEPS ANGLEに固定したビルド経路です。runtime patch・verifier・workflow入力のhash一致、対象版へのpatch適用、native query／math option／vertex unpackのpolicy検証を確認してからdispatchします。旧workflowや歴史的実行refをそのまま使いません。CI成功も未署名artifactの生成までで、実機受入は別に行います。
 4. 必要な `libEGL.dylib`／`libGLESv2.dylib`をx86_64でビルドします。revision・patch hash・GN args・toolchain・deployment target・build log・artifact hash・依存・install nameを保存し、対象OSと整合することを確認します。CIやクラウドを使う場合も秘密鍵は持ち込まず、成果物をMacで検証します。既存の無関係なrunをcancelせず、concurrencyで他作業を止めない実行枠を選びます。全体Chromiumビルドは必要な差分が判明した場合だけ具体化します。
 5. 完全未署名の公式原本から新規コピーを作り、同じ未署名状態のANGLE dylibを、固定版ソースが示す配置先へ組み込みます。ABI・依存・symlink・全Mach-Oの未署名状態を確認し、組み立て完了後に凍結します。署名済みstockへ追加して再署名する方法は使いません。
 6. `sign_once.py`の役割別policyと実対象の対応を確認し、Mac上の有効なApple Development identityで内側から初回署名します。receipt・署名要件・厳密な検証結果を保存します。署名失敗したコピーは証跡として保持し、そのコピーでやり直さず新しい未署名入力から作ります。

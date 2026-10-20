@@ -711,3 +711,80 @@ index dc03843..dc639e5 100644
              {
                  ANGLE_EGL_VALIDATE(thread, CreateContext, validDisplay, EGLContext, validDisplay,
                                     configPacked, share_contextPacked, attrib_listPacked);
+diff --git a/include/GLSLANG/ShaderLang.h b/include/GLSLANG/ShaderLang.h
+--- a/include/GLSLANG/ShaderLang.h
++++ b/include/GLSLANG/ShaderLang.h
+@@ -90,0 +91,3 @@
++
++    // Experimental native Mac Family 1 vertex-only packed snorm workaround.
++    bool emulateUnpackSnorm4x8 = false;
+diff --git a/src/compiler/translator/msl/EmitMetal.cpp b/src/compiler/translator/msl/EmitMetal.cpp
+--- a/src/compiler/translator/msl/EmitMetal.cpp
++++ b/src/compiler/translator/msl/EmitMetal.cpp
+@@ -206,0 +207 @@
++    bool mEmulateUnpackSnorm4x8             = false;
+@@ -234 +235,2 @@
+-      mInjectAsmStatementIntoLoopBodies(compileOptions.metal.injectAsmStatementIntoLoopBodies)
++      mInjectAsmStatementIntoLoopBodies(compileOptions.metal.injectAsmStatementIntoLoopBodies),
++      mEmulateUnpackSnorm4x8(compileOptions.metal.emulateUnpackSnorm4x8)
+@@ -1933 +1935,4 @@
+-    const char *name = GetOperatorString(op, resultType, &argType, nullptr, nullptr);
++    const char *name =
++        mEmulateUnpackSnorm4x8 && op == TOperator::EOpUnpackSnorm4x8
++            ? "ANGLE_phase5::unpackSnorm4x8"
++            : GetOperatorString(op, resultType, &argType, nullptr, nullptr);
+@@ -2365 +2370,4 @@
+-                const char *opName = GetOperatorString(op, retType, argType0, argType1, argType2);
++                const char *opName =
++                    mEmulateUnpackSnorm4x8 && op == TOperator::EOpUnpackSnorm4x8
++                        ? "ANGLE_phase5::unpackSnorm4x8"
++                        : GetOperatorString(op, retType, argType0, argType1, argType2);
+@@ -2838,0 +2847,17 @@
++    if (compileOptions.metal.emulateUnpackSnorm4x8)
++    {
++        // Preserve GLSL snorm semantics without the native vertex-stage builtin.
++        out << R"phase5(
++namespace ANGLE_phase5
++{
++using namespace metal;
++inline float4 unpackSnorm4x8(uint u)
++{
++    int4 b = int4(as_type<int>(u << 24) >> 24, as_type<int>(u << 16) >> 24,
++                  as_type<int>(u << 8) >> 24, as_type<int>(u) >> 24);
++    return max(float4(b) / 127.0f, float4(-1.0f));
++}
++}
++)phase5";
++    }
++
+diff --git a/src/libANGLE/renderer/metal/ShaderMtl.mm b/src/libANGLE/renderer/metal/ShaderMtl.mm
+--- a/src/libANGLE/renderer/metal/ShaderMtl.mm
++++ b/src/libANGLE/renderer/metal/ShaderMtl.mm
+@@ -13,0 +14 @@
++#include "common/system_utils.h"
+@@ -23,0 +25,21 @@
++static bool UsePhase5VertexUnpackSnorm4x8(gl::ShaderType shaderType, id<MTLDevice> metalDevice)
++{
++#if TARGET_OS_OSX && !TARGET_OS_MACCATALYST
++    if (shaderType != gl::ShaderType::Vertex ||
++        angle::GetEnvironmentVar("ANGLE_PHASE5_ENABLE_METAL_FAMILY1") != "1")
++    {
++        return false;
++    }
++#    pragma clang diagnostic push
++#    pragma clang diagnostic ignored "-Wdeprecated-declarations"
++    const bool supportsMacFamily1 = [metalDevice supportsFamily:MTLGPUFamilyMac1];
++#    pragma clang diagnostic pop
++    const bool supportsMacFamily2 = [metalDevice supportsFamily:MTLGPUFamilyMac2];
++    return supportsMacFamily1 && !supportsMacFamily2;
++#else
++    (void)shaderType;
++    (void)metalDevice;
++    return false;
++#endif
++}
++
+@@ -80,0 +103,3 @@
++    options->metal.emulateUnpackSnorm4x8 =
++        UsePhase5VertexUnpackSnorm4x8(mState.getShaderType(), displayMtl->getMetalDevice());
++

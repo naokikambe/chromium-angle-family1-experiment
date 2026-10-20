@@ -7,7 +7,7 @@ patch=${2:?runtime patch path}
 test -f "$workflow"
 test -f "$patch"
 patch_sha256=$(shasum -a 256 "$patch" | awk '{print $1}')
-test "$patch_sha256" = 8cf28ad02dd132b653e93e85535dd7f9fd26571ff4b2ee7c5a0c27f73a720dcb
+test "$patch_sha256" = 98c5b573da41d8f0a3d64d6a4352c25adbf89ca823c47b8fa56178cf9f1c1f4b
 python3 - "$workflow" "$patch" scripts/verify-phase5-runtime-artifact.sh <<'PY'
 import hashlib
 import re
@@ -65,10 +65,13 @@ print("runtime patch contract: verifier/workflow/file hashes agree; current acce
 PY
 patch_paths=$(git apply --numstat "$patch" | awk '{print $3}' | LC_ALL=C sort)
 expected_patch_paths=$(printf '%s\n' \
+  include/GLSLANG/ShaderLang.h \
+  src/compiler/translator/msl/EmitMetal.cpp \
   src/common/apple_platform_utils.mm \
   src/libANGLE/Context.cpp \
   src/libANGLE/Display.cpp \
   src/libANGLE/renderer/metal/DisplayMtl.mm \
+  src/libANGLE/renderer/metal/ShaderMtl.mm \
   src/libANGLE/renderer/metal/mtl_utils.mm \
   src/libANGLE/validationEGL.cpp \
   src/libEGL/libEGL_autogen.cpp \
@@ -199,7 +202,7 @@ grep -F 'family1RuntimeOptIn && supportsFamily1' "$patch" >/dev/null
 grep -F 'supportsMacFamily1 && !supportsMacFamily2' "$patch" >/dev/null
 grep -F 'MTLGPUFamilyMacCatalyst1' "$patch" >/dev/null
 grep -F 'MTLGPUFamilyMacCatalyst2' "$patch" >/dev/null
-test "$(grep -Ec '#[[:space:]]*pragma clang diagnostic ignored "-Wdeprecated-declarations"' "$patch")" -eq 4
+test "$(grep -Ec '#[[:space:]]*pragma clang diagnostic ignored "-Wdeprecated-declarations"' "$patch")" -eq 5
 test "$(grep -Ec '#[[:space:]]*pragma clang diagnostic push' "$patch")" -ge 2
 test "$(grep -Ec '#[[:space:]]*pragma clang diagnostic pop' "$patch")" -ge 2
 grep -F '#if TARGET_OS_MACCATALYST || TARGET_OS_OSX' "$patch" >/dev/null
@@ -214,6 +217,9 @@ grep -F 'respondsToSelector:@selector(setMathFloatingPointFunctions:)' "$patch" 
 grep -F 'options.get().fastMathEnabled = !disableFastMath;' "$patch" >/dev/null
 grep -F 'math_options=legacy_fastMathEnabled' "$patch" >/dev/null
 grep -F 'math-options-policy.py' "$workflow" >/dev/null
+grep -F 'vertex-unpack-policy.py' "$workflow" >/dev/null
+grep -F 'UsePhase5VertexUnpackSnorm4x8' "$patch" >/dev/null
+grep -F 'bool emulateUnpackSnorm4x8 = false;' "$patch" >/dev/null
 grep -F 'native_mac_family=1 mac1=true mac2=false' "$patch" >/dev/null
 grep -F 'src/libANGLE/renderer/metal/mtl_utils.mm' "$patch" >/dev/null
 grep -F 'eglInitialize_return_failure' "$patch" >/dev/null

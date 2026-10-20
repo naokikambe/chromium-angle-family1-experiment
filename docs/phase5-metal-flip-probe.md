@@ -9,3 +9,5 @@
 コンパイルにはFoundationとMetal framework、ARC、C++17を使います。コンパイルだけではGPU診断は動きません。実行形式は`metal-flip-probe --run --out NEW_PRIVATE_JSON`で、既存出力は上書きせず、新規JSONをowner-onlyで作ります。新しいGPU processとMetal compiler/cacheの使用は伴います。ウィンドウ・prompt操作はありません。各command bufferの待機上限は10秒です。
 
 `completed`は診断処理の終了だけを示します。親はdecodeの有限値・CPU参照との一致、各render結果、両fast math設定をレビューします。不一致、compile失敗、command失敗、timeoutはいずれも受入ではありません。単独診断が通っても、ANGLEが実際に生成したMSL・uniform値・binding・viewportの照合が残ります。実機結果・画像・識別情報はGitやCIへ掲載しません。
+
+単独比較の次の候補は、builtinのvertex側使用だけを避けるscalar helperです。適用は実験opt-inとnative Mac Family 1のvertex shaderに限定し、computeや他GPUの経路を一律に変更しません。[固定入力build手順](phase5-angle-snapshot-build.md)のfocused検証と実ANGLEの再build・draw/readbackを経て判断します。単独診断の終了やscalar helperのoffline compileを、ブラウザーでの修復成功へ読み替えません。
