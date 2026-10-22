@@ -8,6 +8,8 @@
 
 [公式ダウンロードページ](https://www.koov.io/downloads) は現行PC版をChrome/Edgeからインストールする手順を案内している。[現在の公式要件](https://koov-support.sonyged.com/hc/ja/articles/115000925707) はmacOS 14以降と最新版Chrome/Edgeを示す。古い移行告知のmacOS 13要件よりも現在の要件を確認する。実験Chromiumでの動作は別途実測する。
 
+KOOV公式PC版のOS要件はmacOS 14以降である。ANGLE受入後に実験ChromiumでPWAやソフトウェア動作を試す場合、その結果はこの実験での探索的確認であり、ベンダーサポートや公式要件への適合を意味しない。
+
 調査時の公式ページは、対応するChrome UAに対して [公開PWA manifest](https://www.koov.io/manifests/add_home_screen_manifest.json) を参照した。その`id`と`start_url`は`/app/welcome`、`display`は`standalone`だった。公開ページのinstallボタンは`beforeinstallprompt`に応答し、インストールの承諾後に`/app/welcome`へ進む。サーバーが指定する条件では、通常タブの`/app`を制限する処理もある。このため、URLを通常タブで開いた結果だけでは、正しいKOOV起動方式の成否を判定できない。
 
 工程Cでは、実験Chromiumの専用profileから公式ページでPWAを新規に準備し、そのprofileに登録された実際のWeb App IDを記録して起動する。歴史的な`kpmcfooelenggiklfmbljpognolignpg`と一致するとは仮定しない。対象Chromiumソースには`--app-id`処理があるが、登録済みアプリの存在やChrome Apps廃止の判定を伴う。引数の存在は、旧KOOVの起動成功を保証しない。
