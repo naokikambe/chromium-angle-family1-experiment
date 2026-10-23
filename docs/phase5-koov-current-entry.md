@@ -6,19 +6,19 @@
 
 [公式の移行告知](https://www.koov.io/notices/487) は、旧Windows/macOS/ChromeOS版のアクセス終了を2026年3月31日としている。旧App IDやランチャーを、そのまま現行版の起動入力とみなさない。
 
-[公式ダウンロードページ](https://www.koov.io/downloads) は現行PC版をChrome/Edgeからインストールする手順を案内している。[現在の公式要件](https://koov-support.sonyged.com/hc/ja/articles/115000925707) はmacOS 14以降と最新版Chrome/Edgeを示す。古い移行告知のmacOS 13要件よりも現在の要件を確認する。実験Chromiumでの動作は別途実測する。
+[公式ダウンロードページ](https://www.koov.io/downloads) はPC版について最新版Chrome/Edgeでの利用を案内し、macOSでは「アプリをインストール」後にFinderでLogic LabのアイコンをDockまたはApplicationsへ移す手順を示している。[現在の公式要件](https://koov-support.sonyged.com/hc/ja/articles/115000925707) はmacOS 14以降と最新版Chrome/Edgeである。古い移行告知のmacOS 13要件を現行要件として使わない。実験Chromiumが公式ページに認識され、インストール導線を利用できるかは別途実測し、browserやOSの判定を偽装しない。
 
-KOOV公式PC版のOS要件はmacOS 14以降である。ANGLE受入後に実験ChromiumでPWAやソフトウェア動作を試す場合、その結果はこの実験での探索的確認であり、ベンダーサポートや公式要件への適合を意味しない。
+KOOV公式PC版のOS要件はmacOS 14以降である。公式ページのインストール結果がPWA形式かFinder配置型のアプリかを事前に断定せず、対象版の実際の登録・起動方式を確認する。ANGLE受入後に実験Chromiumで試す場合、その結果はこの実験での探索的確認であり、ベンダーサポートや公式要件への適合を意味しない。
 
-調査時の公式ページは、対応するChrome UAに対して [公開PWA manifest](https://www.koov.io/manifests/add_home_screen_manifest.json) を参照した。その`id`と`start_url`は`/app/welcome`、`display`は`standalone`だった。公開ページのinstallボタンは`beforeinstallprompt`に応答し、インストールの承諾後に`/app/welcome`へ進む。サーバーが指定する条件では、通常タブの`/app`を制限する処理もある。このため、URLを通常タブで開いた結果だけでは、正しいKOOV起動方式の成否を判定できない。
+以前の調査では、公式ページがChrome向けに公開PWA manifestを参照し、`/app/welcome`を起動先とするstandalone表示を指定していた。現行ダウンロードページはMac上のFinder配置手順も案内するため、この記録だけで現在の起動方式やApp IDを確定しない。通常タブの`/app`を開いただけでは、正しいKOOV起動方式の成否を判定できない。
 
-工程Cでは、実験Chromiumの専用profileから公式ページでPWAを新規に準備し、そのprofileに登録された実際のWeb App IDを記録して起動する。歴史的な`kpmcfooelenggiklfmbljpognolignpg`と一致するとは仮定しない。対象Chromiumソースには`--app-id`処理があるが、登録済みアプリの存在やChrome Apps廃止の判定を伴う。引数の存在は、旧KOOVの起動成功を保証しない。
+工程Cでは、実験Chromiumの新しい専用profileから公式ダウンロードページを開き、対象版で表示されるインストール導線を確認する。インストールできた場合だけ、Finderまたはprofileに登録された実際のアプリ名・ID・起動方法を私的証跡へ記録し、同じprofileから起動する。歴史的な`kpmcfooelenggiklfmbljpognolignpg`と一致するとは仮定しない。対象Chromiumソースの`--app-id`処理や過去のmanifestだけから、登録済みアプリの存在や現行アプリの起動成功を推測しない。ページが対象browserを拒否した場合は、UA偽装やOS要件回避をせず、その互換境界を記録する。
 
 [固定版の起動処理](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/chrome/browser/ui/startup/startup_browser_creator.cc) を、実際にインストールされたアプリ方式と照合する。開発・旧検証用の別ホストを本番入力へ転用せず、HTTP認証の要求を埋め込み値で回避しない。
 
 ## 工程Cへ進む前の条件
 
-stockの署名・通常Keychain・通常GPU・独立profile3件・暗号化cookie再起動と、独自ANGLE版の同じ受入、同じGPU PIDでの独自ANGLE/Metalロード、WebGL1 context・draw・readbackを成立させる。PWA入力を確認したことを、KOOVの実画面や操作の受入へ数えない。
+独自ANGLE版の署名・正常Keychain・ページ描画・暗号化cookie再起動、同じGPU PIDでの独自ANGLE/Metalロード、WebGL1 context・draw・readbackを成立させる。stockの通常GPU・独立profile3件の受入は別の未完了項目として追跡し、KOOV試験で置き換えない。インストール入力を確認したことも、KOOVの実画面や操作の受入へ数えない。
 
 オーナーの認証入力と実画面の観察時間を用意する。既存profile・作品・資格情報は複製せず、新規の非機密テスト作品だけを使う。アカウントに既存作品が表示されても編集や移行の対象としない。新しいGUIユーザーやKeychainが必要なら、対象・影響・復帰方法への個別同意を得る。
 
