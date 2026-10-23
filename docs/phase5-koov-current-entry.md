@@ -30,6 +30,12 @@ KOOV公式PC版のOS要件はmacOS 14以降である。公式ページのイン�
 
 判定では、resource request／range応答、container・codec認識、decoder初期化、decoded frameの生成、動画面の合成・表示を順に分ける。受信・metadata・frameのいずれかが進まない場合と、frameは生成されるが画面が黒い場合を別の故障境界として扱う。KOOVのWebGL描画や3D操作の結果は動画再生の受入に流用しない。
 
+### 2026-10-24 fixture A/Bの結果
+
+提示されたMP4を埋め込んだloopback配信ページを、既存のstock版とFamily 1 ANGLE版の試験profileで確認した。両版とも再生を要求した後、30秒間`readyState=0`、`networkState=2`、動画寸法0、buffered range 0のままだった。動画要素は`loadstart`、`waiting`、`stalled`を出し、要素のエラーはなかった。CDP NetworkとResource Timingには動画のmedia request／responseやresource entryが記録されなかった。各ページから別途送ったHEAD-only要求はHTTP 200、`Content-Type: application/mp4`となり、CDPにも記録された。この診断では動画本文を保存していない。
+
+両版とも`canPlayType("video/mp4")`は`maybe`、H.264 baselineのqueryは空だった。Media domainにはdecoderやdecoded frameのpropertyが現れず、player error eventのerrors一覧も空だった。MP4の実codecは未確認である。stock版とANGLE版に観測上の差はなかったが、decoder初期化やframe合成より前で止まっているため、ANGLEが原因とも、ANGLE動画描画が正常とも判定できない。次は実際のmedia GET／range応答、container／codec、decoder初期化を確認してから動画面の合成経路を調べる。
+
 ## 一続きの確認と記録
 
 1. 実験appの実パス・version・署名・profile・全引数と環境変数、登録されたPWA ID、起動したBrowser/GPU PIDを固定する。
