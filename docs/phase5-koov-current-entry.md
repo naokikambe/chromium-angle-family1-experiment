@@ -36,6 +36,8 @@ KOOV公式PC版のOS要件はmacOS 14以降である。公式ページのイン�
 
 両版とも`canPlayType("video/mp4")`は`maybe`、H.264 baseline／highとAACのqueryは空だった。`MediaSource.isTypeSupported()`もMP4/H.264/AACをfalse、WebM VP8/VP9をtrueと返した。Media domainにはdecoderやdecoded frameのpropertyが現れず、player error eventのerrors一覧も空だった。MP4の実codecは未確認だが、試験した両appはH.264/AAC対応を示さないため、提供MP4がそのcodecなら再生不能を説明できる。stock版とANGLE版に観測上の差はなかった。ただしdecoder初期化やframe合成より前で止まっているため、ANGLEが原因とも、ANGLE動画描画が正常とも判定できない。次は実際のmedia GET／range応答、container／codec、decoder初期化を確認してから動画面の合成経路を調べる。
 
+後続のローカル合成VP8試験でも、両試験tabは`visibilityState=hidden`のまま、`readyState=0`、`networkState=2`、動画寸法0、decoded frame 0で、media requestは記録されなかった。stock tabは`Page.bringToFront`とactive lifecycle指定後もhiddenだった。したがってこの実行環境では、可視GUIでの動画再生をまだ試せていない。codec capabilityのqueryは確認できたが、動画再生の受入やGET／decode／composite経路の判定には数えない。続行には既存の試験Chromium windowが前面表示された状態での再試験が必要である。
+
 ## 一続きの確認と記録
 
 1. 実験appの実パス・version・署名・profile・全引数と環境変数、登録されたPWA ID、起動したBrowser/GPU PIDを固定する。
