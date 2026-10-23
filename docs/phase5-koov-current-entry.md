@@ -34,7 +34,7 @@ KOOV公式PC版のOS要件はmacOS 14以降である。公式ページのイン�
 
 提示されたMP4を埋め込んだloopback配信ページを、既存のstock版とFamily 1 ANGLE版の試験profileで確認した。両版とも再生を要求した後、30秒間`readyState=0`、`networkState=2`、動画寸法0、buffered range 0のままだった。動画要素は`loadstart`、`waiting`、`stalled`を出し、要素のエラーはなかった。CDP NetworkとResource Timingには動画のmedia request／responseやresource entryが記録されなかった。各ページから別途送ったHEAD-only要求はHTTP 200、`Content-Type: application/mp4`となり、CDPにも記録された。この診断では動画本文を保存していない。
 
-両版とも`canPlayType("video/mp4")`は`maybe`、H.264 baselineのqueryは空だった。Media domainにはdecoderやdecoded frameのpropertyが現れず、player error eventのerrors一覧も空だった。MP4の実codecは未確認である。stock版とANGLE版に観測上の差はなかったが、decoder初期化やframe合成より前で止まっているため、ANGLEが原因とも、ANGLE動画描画が正常とも判定できない。次は実際のmedia GET／range応答、container／codec、decoder初期化を確認してから動画面の合成経路を調べる。
+両版とも`canPlayType("video/mp4")`は`maybe`、H.264 baseline／highとAACのqueryは空だった。`MediaSource.isTypeSupported()`もMP4/H.264/AACをfalse、WebM VP8/VP9をtrueと返した。Media domainにはdecoderやdecoded frameのpropertyが現れず、player error eventのerrors一覧も空だった。MP4の実codecは未確認だが、試験した両appはH.264/AAC対応を示さないため、提供MP4がそのcodecなら再生不能を説明できる。stock版とANGLE版に観測上の差はなかった。ただしdecoder初期化やframe合成より前で止まっているため、ANGLEが原因とも、ANGLE動画描画が正常とも判定できない。次は実際のmedia GET／range応答、container／codec、decoder初期化を確認してから動画面の合成経路を調べる。
 
 ## 一続きの確認と記録
 
