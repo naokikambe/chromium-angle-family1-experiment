@@ -32,11 +32,13 @@ KOOV公式PC版のOS要件はmacOS 14以降である。公式ページのイン�
 
 ### 2026-10-24 fixture A/Bの結果
 
-提示されたMP4を埋め込んだloopback配信ページを、既存のstock版とFamily 1 ANGLE版の試験profileで確認した。両版とも再生を要求した後、30秒間`readyState=0`、`networkState=2`、動画寸法0、buffered range 0のままだった。動画要素は`loadstart`、`waiting`、`stalled`を出し、要素のエラーはなかった。CDP NetworkとResource Timingには動画のmedia request／responseやresource entryが記録されなかった。各ページから別途送ったHEAD-only要求はHTTP 200、`Content-Type: application/mp4`となり、CDPにも記録された。この診断では動画本文を保存していない。
+最初のfixture実行では、可視状態が`hidden`で動画のGETが記録されず、別途のHEAD-only要求だけがHTTP 200、`Content-Type: application/mp4`を返した。その後、既存profileを使い、可視状態で提供MP4を埋め込んだページを再試験した。stock版・Family 1 ANGLE版の両方でmedia GETとRange要求が行われ、HTTP 206、`Content-Type: application/mp4`、`Accept-Ranges: bytes`の応答を受けたが、media loadは`net::ERR_ABORTED`で終わった。両方とも最終状態は`readyState=0`、`networkState=3`、`error.code=0`、duration未確定、動画寸法0、decoded frame 0だった。MP4本文は保存していない。
 
-両版とも`canPlayType("video/mp4")`は`maybe`、H.264 baseline／highとAACのqueryは空だった。`MediaSource.isTypeSupported()`もMP4/H.264/AACをfalse、WebM VP8/VP9をtrueと返した。Media domainにはdecoderやdecoded frameのpropertyが現れず、player error eventのerrors一覧も空だった。MP4の実codecは未確認だが、試験した両appはH.264/AAC対応を示さないため、提供MP4がそのcodecなら再生不能を説明できる。stock版とANGLE版に観測上の差はなかった。ただしdecoder初期化やframe合成より前で止まっているため、ANGLEが原因とも、ANGLE動画描画が正常とも判定できない。次は実際のmedia GET／range応答、container／codec、decoder初期化を確認してから動画面の合成経路を調べる。
+両版とも`canPlayType("video/mp4")`は`maybe`、明示的なH.264 baseline queryは空で、`MediaSource.isTypeSupported()`もMP4/H.264/AACをfalse、WebM VP8/VP9をtrueと返した。正しい`video/mp4` MIMEでローカル配信した合成H.264 Constrained Baseline対照も、両版でHTTP 206と全byte rangeの受信完了を確認した一方、`error.code=4`（`MEDIA_ERR_SRC_NOT_SUPPORTED`）、`readyState=0`、動画寸法0、decoded frame 0で再生できなかった。実行時にこのH.264 Baseline素材が受け付けられないことを示す。提供MP4自体のcodecは未確認なので、同じ原因と断定しない。
 
-後続のローカル合成VP8試験でも、両試験tabは`visibilityState=hidden`のまま、`readyState=0`、`networkState=2`、動画寸法0、decoded frame 0で、media requestは記録されなかった。stock tabは`Page.bringToFront`とactive lifecycle指定後もhiddenだった。したがってこの実行環境では、可視GUIでの動画再生をまだ試せていない。codec capabilityのqueryは確認できたが、動画再生の受入やGET／decode／composite経路の判定には数えない。続行には既存の試験Chromium windowが前面表示された状態での再試験が必要である。
+初回のローカル合成VP8試験では、実行スクリプトが終了時に一時配信serverも停止していた。後からウインドウを開いた際の黒画面は、動画sourceのserverが存在しない状態であり、codecやANGLEの判定材料にならなかった。配信を再開した状態でオーナーが各ウインドウを可視化すると、stock版・ANGLE版の双方で合成VP8が動いた。両方とも`readyState=4`、`networkState=1`、`error.code=0`、動画寸法320×180、buffered range 1、再生時間の進行と各2000超のdecoded frameを確認した。これにより両appでVP8のdecode・動画表示は成立するが、MP4/H.264やKOOV再生の受入には数えない。
+
+以上のA/Bでは、合成VP8は両方で再生でき、H.264 Baseline対照と提供MP4は両方で最初のframeより前に停止した。現時点の証跡は、独自ANGLE固有の差より、codecまたはmedia入力側の問題に整合する。MP4の正確なcodecとcontainer情報は未確認で、動画面の合成が全形式で正常だとも結論しない。
 
 ## 一続きの確認と記録
 
