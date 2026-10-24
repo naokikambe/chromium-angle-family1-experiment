@@ -40,6 +40,14 @@ KOOV公式PC版のOS要件はmacOS 14以降である。公式ページのイン�
 
 以上のA/Bでは、合成VP8は両方で再生でき、H.264 Baseline対照と提供MP4は両方で最初のframeより前に停止した。現時点の証跡は、独自ANGLE固有の差より、codecまたはmedia入力側の問題に整合する。MP4の正確なcodecとcontainer情報は未確認で、動画面の合成が全形式で正常だとも結論しない。
 
+### Chrome for Testingとの合成codec比較
+
+追加の対照として、公式Chrome for Testing 154.0.8037.0のmacOS x64版で、同一の合成H.264 Constrained Baseline素材と合成VP8素材を試しました。専用profileのheadless試験で、プロジェクト固有のANGLE引数、Family 1 opt-in環境変数、DYLDライブラリ注入はありません。Chrome内蔵の標準描画スタックは使われており、ANGLE自体を無効にした比較ではありません。
+
+Chrome for TestingはH.264素材で`canPlayType`を`probably`、MediaSource対応を`true`と報告し、`readyState=4`、`error.code=0`、320×180、decoded frame 8で再生を開始しました。VP8もdecoded frameを確認しました。対して同じH.264素材は前項のChromium stock版・Family 1 ANGLE版の両方で`error.code=4`、decoded frame 0となり、両版の明示的H.264判定とMediaSource対応はありませんでした。Chromium公式のcodec一覧もH.264/AVCをGoogle Chrome限定のproprietary video codecとして分類しています（[Audio/Video codec support](https://www.chromium.org/audio-video/)）。
+
+この三者比較は、今回のH.264差が独自ANGLEではなく、ChromeとChromiumのcodec構成・build branding差に整合することを示します。ただしChrome for Testingの基準revisionは1689415、対象Chromium snapshotは1689422で、同じversion表記でもsource revisionは一致しません。さらにCfT試験はheadlessであり、画面合成、実KOOV内の動画再生、持続再生の受入を証明しません。実MP4のcodecは未特定のため、合成H.264の結果をそのまま実MP4の原因とは断定しません。非公開media assetのURL・本文・端末固有証跡はこの記録に含めません。
+
 ## 一続きの確認と記録
 
 1. 実験appの実パス・version・署名・profile・全引数と環境変数、登録されたPWA ID、起動したBrowser/GPU PIDを固定する。
