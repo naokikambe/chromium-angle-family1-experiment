@@ -1,14 +1,16 @@
 # Chromium / Chrome + 独自ANGLE + KOOV 実験計画
 
 作成日: 2026-09-15
-状態: 実行開始前（方針合意済み）
-最終ゴール: **MacBookAir6,1上で、Google Chrome 154が独自ビルドのANGLEを動的に読み込み、WebGLを有効化した状態でKOOVを起動し、描画と基本動作の挙動を確認する。**
+状態: 履歴用の技術計画（現行KOOV手順ではない）
+> 現行KOOV対象はChrome for Testing 154 + Family 1 ANGLEです。この計画に記した旧Chrome 154サイドロード手順は履歴用で、現行手順として実行しません。現行の起動・受入条件は[KOOV受入手順](phase5-koov-current-entry.md)を参照してください。
+
+最終ゴール: **Mac GPU Family 1上で、Google Chrome 154が独自ビルドのANGLEを動的に読み込み、WebGLを有効化した状態でKOOVを起動し、描画と基本動作の挙動を確認する。**
 
 ---
 
 ## 1. この計画の目的
 
-Chrome 152以降でmacOSの従来のCGL/OpenGL経路が利用できなくなった後、OCLPでmacOS 15.7.9を動かしているHaswell世代のMacBookAir6,1（Intel HD Graphics 5000）では、Chrome 154のANGLE/MetalがEGL Displayを初期化できず、WebGLを含むGPUアクセラレーションが無効化される。
+Chrome 152以降のmacOSにおける描画経路の変更を背景に、Mac GPU Family 1環境でChrome 154のANGLE/MetalがEGL Displayを初期化できない境界を調べる計画である。特定のMac製品、GPU型番、ホストOS構成への一般化はしない。
 
 本計画では、ChromeやKOOVを全面的にビルド・改造するのではなく、Chromiumが用意した `--use-dynamic-angle` を使用して独自ANGLE共有ライブラリをGoogle Chrome 154へサイドロードする。段階的に初期化失敗箇所を特定し、Mac GPU Family 1でANGLE/Metalを実験的に初期化できる最小変更を作り、WebGLとKOOVで実害が出るかを実機で観察する。
 
@@ -16,7 +18,7 @@ Chrome 152以降でmacOSの従来のCGL/OpenGL経路が利用できなくなっ�
 
 - Family 1の制限を越えてANGLE/Metalを初期化できるか
 - WebGL 1/2が有効になるか
-- Intel HD Graphics 5000で描画破損、GPUプロセスクラッシュ、ハング、ソフトウェア描画へのフォールバックが起きるか
+- Mac GPU Family 1で描画破損、GPUプロセスクラッシュ、ハング、ソフトウェア描画へのフォールバックが起きるか
 - KOOVが実用上問題なく表示・操作できるか
 - 問題がある場合、どの機能または処理で再現するか
 
@@ -24,20 +26,17 @@ Chrome 152以降でmacOSの従来のCGL/OpenGL経路が利用できなくなっ�
 
 ## 2. 対象環境と確定済み情報
 
-### 2.1 実機
+### 2.1 対象条件
 
 | 項目 | 値 |
 | --- | --- |
-| Mac | MacBookAir6,1（2013年） |
-| CPU世代 | Intel Haswell |
-| GPU | Intel HD Graphics 5000 |
-| PCI Device ID | `0x0a26` |
-| macOS | 15.7.9（24G830） |
-| パッチ環境 | OpenCore Legacy Patcher（OCLP） |
-| KOOV実行ユーザー | `<KOOV_GUI_USER>`（一般ユーザー） |
-| 管理作業ユーザー | `<ADMIN_USER>`／必要時のみrootまたはsudo |
+| Host | Mac |
+| GPU条件 | Mac Family 1 |
+| OS条件 | macOS |
+| 実行セッション | macOSのGUIログインセッション |
+| 管理作業 | 必要時のみ管理権限を使用 |
 
-この環境はAppleおよびGoogleがChrome 154向けにサポートする正規のHaswell + macOS 15構成ではない。OCLPが復元したLegacy Metalドライバと新しいmacOSフレームワークの組み合わせであるため、結果はOCLP環境固有となる可能性がある。
+この計画は実験的なMac GPU Family 1条件を扱う。結果からAppleまたはGoogleによる特定の製品・OS構成へのサポートを推定しない。
 
 ### 2.2 ブラウザとANGLEの固定バージョン
 
@@ -57,7 +56,7 @@ Chrome 152以降でmacOSの従来のCGL/OpenGL経路が利用できなくなっ�
 
 - バージョン: `149.0.7827.201`
 - ANGLE/OpenGL経路でGPUアクセラレーションとKOOV起動を確認済み
-- 基準ログ: `about-gpu-2026-09-13T09-41-17-641Z.txt`
+- 比較結果: 内蔵ANGLE/OpenGL経路でGPUアクセラレーションとKOOV起動を確認したという履歴上の基準
 - KOOVは次のApp IDで起動している。
 
 ```text
@@ -71,13 +70,7 @@ kpmcfooelenggiklfmbljpognolignpg
 - `Initialization of all (1) EGL display types failed`
 - GPUプロセス初期化失敗後、`--use-gl=disabled`へフォールバック
 - Canvas、Compositing、Rasterization、WebGL等がSoftware onlyまたはDisabled
-- 一方でDawnは `Metal backend - Intel HD Graphics 5000` を認識しているため、Metalデバイスの存在そのものは確認できている
-- 基準ログ:
-  - `about-gpu-2026-09-13T08-51-02-808Z.txt`
-  - `about-gpu-2026-09-14T12-06-16-324Z.txt`
-  - `about-gpu-2026-09-14T12-56-15-880Z.txt`
-  - `chrome154-gpu-process-command.txt`
-  - `貼り付けられたテキスト（1 点）(20260914-122649).txt`
+- 一方でDawnはMetal backendを認識しているため、Metal deviceの存在とEGL Display初期化の成否は分けて確認する
 
 #### 実施済みANGLE Feature override
 
@@ -108,7 +101,7 @@ GitHub公開リポジトリ
   └─ x86_64成果物（libEGL.dylib / libGLESv2.dylib）
                     │
                     ▼
-Google Chrome 154 ANGLE Test.app（ローカル複製）
+$CHROME_TEST_APP_PATH（Chrome 154の実験用コピー）
   ├─ --use-dynamic-angle
   ├─ --use-gl=angle
   ├─ --use-angle=metal
@@ -116,7 +109,7 @@ Google Chrome 154 ANGLE Test.app（ローカル複製）
   └─ 独自ANGLE dylib
                     │
                     ▼
-MacBookAir6,1 / Intel HD Graphics 5000 / OCLP macOS 15.7.9
+Mac / GPU Family 1 / macOS
   ├─ ANGLE読込確認
   ├─ chrome://gpu
   ├─ WebGL 1/2試験
@@ -132,16 +125,14 @@ MacBookAir6,1 / Intel HD Graphics 5000 / OCLP macOS 15.7.9
 
 ### 4.1 既存環境を壊さない
 
-- 動作確認済みの `/Applications/Google Chrome 149.app` を変更しない。
+- Chrome 149のアプリ本体を変更しない。
 - GoogleからインストールされたChrome 154本体を直接改造しない。
 - 実験には明確に名前を変えた複製だけを使う。
 
-```text
-/Applications/Google Chrome 154 ANGLE Test.app
-```
+実験用コピーの場所は `$CHROME_TEST_APP_PATH` として扱う。
 
-- `<KOOV_GUI_USER>` の既存Chromeプロファイルを直接Chrome 154実験版で開かない。
-- KOOVを含む既存プロファイルは、Chromeを完全終了してからテスト専用ディレクトリへ複製する。
+- 既存Chromeプロファイルを直接Chrome 154実験版で開かない。
+- テストには新しい専用プロファイルを使う。必要な場合も既存プロファイルを使わず、承認済みテスト用データだけを専用ディレクトリへ複製する。
 - 初期段階では毎回新しい一時プロファイルを使い、同期を無効にする。
 - 実験版を通常のWebブラウジング、パスワード保存、決済、個人情報入力に使わない。
 
@@ -150,7 +141,7 @@ MacBookAir6,1 / Intel HD Graphics 5000 / OCLP macOS 15.7.9
 Chromeアプリバンドルへdylibを追加・交換すると、Googleの署名は無効になる。必要な場合は、**実験用コピーだけ**をad-hoc署名する。
 
 ```bash
-codesign --force --deep --sign - "/Applications/Google Chrome 154 ANGLE Test.app"
+codesign --force --deep --sign - "$CHROME_TEST_APP_PATH"
 ```
 
 これはGoogleの署名や公証を維持する操作ではない。署名後のアプリはローカル実験用改造バイナリとして扱う。元の署名済みChromeを上書きしない。
@@ -163,8 +154,8 @@ GitHubへ公開してよいもの:
 - GitHub Actions workflow
 - ビルド・テストスクリプト
 - ANGLEのライセンス条件に従った独自ANGLE成果物
-- 個人情報、トークン、ローカルパスを除去したログ
-- 再現手順と実験結果
+- 公開入力と合成データを使った再現手順
+- 実機固有値を含まない技術結果の要約
 
 GitHubへ公開しないもの:
 
@@ -213,17 +204,17 @@ ANGLE_REVISION
 
 ANGLE本体の完全なコピーをリポジトリへ恒久的に置く必要はない。workflow内で公式リポジトリから固定リビジョンを取得し、パッチを適用する方式を基本とする。
 
-### 5.3 成果物に必ず含める情報
+### 5.3 再現に必要な公開情報
 
 - `libEGL.dylib`
 - `libGLESv2.dylib`
 - 必要なら関連するANGLEデータファイル
 - `ANGLE_REVISION`
 - `args.gn`
-- Xcode／SDK／clangバージョン
+- 公開ビルド環境で使ったXcode／SDK／clangバージョン
 - `file`、`otool -L`、`codesign -dvvv` の結果
 - 各ファイルのSHA-256
-- ビルドログ
+- 公開可能なビルド結果の要約
 - パッチ一覧
 - ビルド種別（unmodified／diagnostic／experimental）
 
@@ -231,12 +222,12 @@ ANGLE本体の完全なコピーをリポジトリへ恒久的に置く必要は
 
 ## 6. 実行フェーズ
 
-## Phase 0 — 基準資料の保全
+## Phase 0 — 公開再現条件の整理
 
 ### 作業
 
-1. 上記のChrome 149成功ログとChrome 154失敗ログを読み取り専用の基準資料として保存する。
-2. 各ログから次を表にまとめる。
+1. 公開Chrome／Chromium／ANGLE pinと公開手順を使い、Chrome 149とChrome 154の比較条件を定義する。
+2. 再現可能な公開結果として、次を同じ形式でまとめる。
    - Chrome／Chromium／ANGLEバージョン
    - コマンドライン
    - GL implementation parts
@@ -245,12 +236,12 @@ ANGLE本体の完全なコピーをリポジトリへ恒久的に置く必要は
    - GPUプロセスクラッシュ数
    - GPUプロセスの最終コマンドライン
    - EGL／Metal関連エラー
-3. `system_profiler SPDisplaysDataType`、OCLPバージョン、macOSビルド番号を保存する。
+3. 実機固有の値や生ログを公開出力に含めず、再現に必要な一般条件をMac GPU Family 1とmacOSとして記す。
 
 ### 完了条件
 
-- Chrome 149成功とChrome 154失敗を同じ項目で比較できる。
-- 後続のテスト結果がこの基準と混ざらない。
+- 公開入力、手順、期待される結果が明確で、第三者が比較を再現できる。
+- 公開条件だけで再現できない点は技術的な再現ギャップとして明記する。
 
 ---
 
@@ -297,8 +288,8 @@ Family 1向け変更を加える前に、ビルド環境・ABI・アーキテク
 
 ### 注意
 
-- GitHubランナーにはIntel HD Graphics 5000がないため、ここでMetal/Haswellの成否は判定できない。
-- CI上のMetalテスト結果をMacBookAir6,1の代用にしない。
+- GitHubランナーは対象のMac GPU Family 1実機条件ではないため、Metalの対象環境での成否は判定できない。
+- CI上のMetalテスト結果を対象Mac GPU Family 1条件の代用にしない。
 - ディスク不足時は、全Chromium checkoutへ拡張する前に不要ファイル、ターゲット、デバッグ情報を削減する。
 
 ### 完了条件
@@ -326,8 +317,8 @@ Family 1向け変更を加える前に、ビルド環境・ABI・アーキテク
 7. 次を基本として起動する。最終的なコマンドはソース確認後に確定する。
 
 ```bash
-"/Applications/Google Chrome 154 ANGLE Test.app/Contents/MacOS/Google Chrome" \
-  --user-data-dir="/tmp/chrome154-dynamic-angle-profile" \
+"$CHROME_TEST_APP_PATH/Contents/MacOS/Google Chrome" \
+  --user-data-dir="$ANGLE_PROFILE_DIR" \
   --no-first-run \
   --no-default-browser-check \
   --disable-sync \
@@ -369,7 +360,7 @@ Family 1向け変更を加える前に、ビルド環境・ABI・アーキテク
 少なくとも次を明示的にログ出力する。
 
 - ANGLEコミットと実験ビルド識別子
-- Metal device名、vendor、registry ID（公開ログでは必要に応じマスク）
+- Metal deviceの能力判定情報（公開結果にはFamilyと機能の要約だけを記載し、機種名・vendor・registry IDなどの実機固有値は含めない）
 - Metal GPU Family判定結果
 - `requireGpuFamily2.enabled`
 - `requireGpuFamily2.hasOverride`
@@ -444,7 +435,7 @@ allowUnsupportedMacGpuFamily1
 
 - 実験パッチの意図と影響範囲がコードとテストで説明できる。
 - Family 2以上に回帰を起こさない設計になっている。
-- MacBookAir6,1でANGLE/MetalのEGL初期化が次の段階へ進む、または新しい具体的な失敗位置を得られる。
+- Mac GPU Family 1条件でANGLE/MetalのEGL初期化が次の段階へ進む、または新しい具体的な失敗位置を得られる。
 
 ---
 
@@ -526,24 +517,24 @@ allowUnsupportedMacGpuFamily1
 | 項目 | 値 |
 | --- | --- |
 | App ID | `kpmcfooelenggiklfmbljpognolignpg` |
-| 既存ユーザーデータ | `$KOOV_USER_HOME/Library/Application Support/Google/Chrome` |
-| 既存プロファイル | `Default` |
-| 旧ランチャー | `$KOOV_USER_HOME/Applications/Chrome Apps.localized/KOOV旧ランチャー.app` |
-| 実験用ランチャー候補 | `$KOOV_USER_HOME/Applications/KOOV 154 ANGLE Test.app` |
+| プロファイル元 | `$KOOV_PROFILE_SOURCE`（承認済みテスト用データのみ） |
+| プロファイル名 | `$KOOV_PROFILE_NAME` |
+| 旧ランチャー | `$KOOV_OLD_LAUNCHER_PATH` |
+| 実験用ランチャー候補 | `$KOOV_TEST_LAUNCHER_PATH` |
 
 Chrome 149の実測では、Chrome本体がKOOV App IDで起動した後、旧 `app_mode_loader` が子プロセスとして現れた。Dockに旧ランチャーのアイコンが出ても、それだけで旧Chromeが起動したとは限らない。判定はChrome親プロセスの実行パス、バージョン、GPUプロセスの引数で行う。
 
 ### 作業
 
-1. `<KOOV_GUI_USER>`でChromeとKOOVを完全終了する。
-2. 既存プロファイルをテスト専用の場所へ複製する。
-3. 複製後、同期と一般ブラウジングを無効にする。
-4. KOOVのApp ID、Web Applicationデータ、必要な拡張が複製に含まれることを確認する。
+1. ChromeとKOOVを完全終了する。
+2. 新しい専用プロファイルを作成する。必要な場合は承認済みテスト用データだけを `$KOOV_TEST_PROFILE_DIR` へ複製する。
+3. 専用プロファイルでは同期と一般ブラウジングを無効にする。
+4. 公開手順上必要なApp IDやWeb Applicationデータの条件を確認する。
 5. テスト用Chromeへ次を渡す専用ランチャーまたはスクリプトを作る。
 
 ```text
---user-data-dir=<KOOV専用複製プロファイル>
---profile-directory=Default
+--user-data-dir=$KOOV_TEST_PROFILE_DIR
+--profile-directory=$KOOV_PROFILE_NAME
 --app-id=kpmcfooelenggiklfmbljpognolignpg
 --use-dynamic-angle
 --use-gl=angle
@@ -553,12 +544,12 @@ Chrome 149の実測では、Chrome本体がKOOV App IDで起動した後、旧 `
 --disable-sync
 ```
 
-6. ランチャーは必ず `<KOOV_GUI_USER>` のGUIログインセッションから起動する。rootの非GUIセッションから `launchctl asuser ... open` を実行した際には `RBSRequestErrorDomain Code=5`／`OSLaunchdErrorDomain Code=125` が発生した実績があるため、この経路を標準手順にしない。
+6. ランチャーはmacOSのGUIログインセッションから起動する。管理者の非GUIセッションからGUIアプリを開く方式は使わない。
 
 ### 完了条件
 
-- 既存の `<KOOV_GUI_USER>` プロファイルを変更せず、複製プロファイルからKOOV App IDを起動できる。
-- Chromeの実行パスが `Google Chrome 154 ANGLE Test.app` を示す。
+- 専用プロファイルからKOOV App IDを起動できる。
+- Chromeの実行パスが `$CHROME_TEST_APP_PATH` を示す。
 - GPUプロセスが独自ANGLEを使っている証拠が取れる。
 
 ---
@@ -605,7 +596,7 @@ Chrome 149の実測では、Chrome本体がKOOV App IDで起動した後、旧 `
 次をすべて満たした時点で、このプランの最終ゴールを達成とする。
 
 1. Chrome 154が `--use-dynamic-angle` により独自ビルドANGLEをロードしていることを証明できる。
-2. MacBookAir6,1のIntel HD Graphics 5000でANGLE/Metal初期化結果を取得できる。
+2. Mac GPU Family 1条件でANGLE/Metal初期化結果を取得できる。
 3. WebGLサポート状態を `chrome://gpu`、WebGLテスト、ログで確認できる。
 4. 独自ANGLEを使用したChrome 154からKOOVを起動できる。
 5. KOOVの描画と基本操作を実際に試し、正常・破損・クラッシュ・フォールバックのいずれかを再現可能な形で記録できる。
@@ -623,14 +614,14 @@ Chrome 149の実測では、Chrome本体がKOOV App IDで起動した後、旧 `
 
 - Date/time:
 - Operator:
-- Machine: MacBookAir6,1
-- macOS/OCLP:
+- Machine: Mac GPU Family 1
+- Platform: macOS（version/buildおよび機種固有値は公開記録に含めない）
 - Chrome version/revision:
 - ANGLE revision:
 - Patch revision:
 - dylib SHA-256:
-- Chrome app path:
-- User-data-dir:
+- Chrome app path: `$CHROME_TEST_APP_PATH`
+- User-data-dir: `$ANGLE_PROFILE_DIR`
 - Full command line:
 - Code-sign status:
 - Dynamic library load evidence:
@@ -657,7 +648,7 @@ Chrome 149の実測では、Chrome本体がKOOV App IDで起動した後、旧 `
 | --- | --- |
 | 無改造dylibをロードできない | 配置先、ABI、GN args、依存dylib、署名を修正。Family 1改修へ進まない |
 | overrideが適用されていない | Chromium→EGL属性→ANGLE Featureの伝達を追跡し、テストを追加 |
-| `newCommandQueue`失敗 | OCLP Metal device/queue互換性を調査。Family判定解除だけでは解決不可 |
+| `newCommandQueue`失敗 | Metal device/queue互換性を調査。Family判定解除だけでは解決不可 |
 | shader library生成失敗 | NSError、MSLバージョン、オフラインshader生成物、macOS SDK差を特定 |
 | EGL初期化成功、WebGL作成失敗 | Context/Config/Surface作成のどこで失敗するか追加診断 |
 | WebGL成功、描画破損 | 最小WebGL再現ケースを切り出し、Family 2固有機能・ドライバworkaroundを調査 |
@@ -671,7 +662,7 @@ Chrome 149の実測では、Chrome本体がKOOV App IDで起動した後、旧 `
 
 次は本計画では実施しない。
 
-- macOSやOCLPのMetal Framework／GPUドライバそのものの改造
+- macOSのMetal Framework／GPUドライバそのものの改造
 - OS全体に対するMac GPU Family 2の偽装
 - Chrome 149の改造または削除
 - Google Chrome改造版の第三者配布
@@ -688,11 +679,11 @@ Chrome 149の実測では、Chrome本体がKOOV App IDで起動した後、旧 `
 
 - 最小パッチ
 - Family 2以上の挙動を変えないテスト
-- MacBookAir6,1／HD Graphics 5000での実測結果
+- Mac GPU Family 1条件での実測結果
 - WebGLの成功・失敗テスト一覧
 - KOOVでの比較結果
 - 描画破損がある場合の最小再現コード
-- OCLP環境であることの明示
+- 対象条件とサポート範囲の明示
 - 明示的オプトイン、unsupported／own-riskという位置付け
 - セキュリティとクラッシュ時のフォールバック説明
 
@@ -701,7 +692,7 @@ Chrome 149の実測では、Chrome本体がKOOV App IDで起動した後、旧 `
 1. Family 1実機調査を可能にする既定OFFの実験Feature
 2. 初期化失敗位置を明確にする診断ログ
 3. Family 1を通す専用テストと能力別フォールバック
-4. 実証されたIntel Haswell固有workaround
+4. Mac GPU Family 1条件に対して実証されたworkaround
 
 ---
 
@@ -730,13 +721,13 @@ Chrome 149の実測では、Chrome本体がKOOV App IDで起動した後、旧 `
 
 後続エージェントは、いきなりFamily 1制限のコードを書き換えないこと。次の順序を守る。
 
-1. Phase 0の既存ログを整理する。
+1. Phase 0で公開入力・手順・期待結果を整理する。
 2. Phase 1でChrome 154の `DEPS`、ANGLE pin、dylib探索位置をソースで確定する。
 3. GitHub Actionsの14GB制約内で、無改造ANGLEの共有ライブラリを生成できる最小workflowを作る。
-4. MacBookAir6,1で無改造dynamic ANGLEの読込証拠を取る。
+4. Mac GPU Family 1条件で無改造dynamic ANGLEの読込を確認する。
 5. その後にのみ診断パッチを作る。
 
-不明点は推測で埋めず、固定コミットのソース、ビルドログ、実機ログのどれで確認したかを記録する。特に次の三点を混同しない。
+不明点は推測で埋めず、固定コミットのソース、公開ビルド結果、公開可能な再現手順のどれで確認するかを明記する。特に次の三点を混同しない。
 
 - コマンドラインにスイッチが表示されたこと
 - GPUプロセスへスイッチが伝達されたこと

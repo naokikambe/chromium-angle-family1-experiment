@@ -8,7 +8,7 @@
 
 ## 入力を設定する
 
-リポジトリの`scripts/page-recovery/`ディレクトリへ移動してから、次の変数を実際の保存場所に設定する。比較用stock appと署名用原本は別のcopyを使い、原本は完全未署名のChromium.appとする。
+リポジトリの`scripts/page-recovery/`ディレクトリへ移動してから、対象環境にある入力のパスを設定する。比較用stock appと署名用原本は別のcopyを使い、原本は完全未署名のChromium.appとする。公開文書へ解決後のローカルパスを書かない。
 
 ```bash
 cd scripts/page-recovery
@@ -20,13 +20,13 @@ cd scripts/page-recovery
 kit_dir="$PWD"
 task_dir="$HOME/Desktop/chromium-page-recovery-$(date +%Y%m%d-%H%M%S)"
 mkdir -m 700 "$task_dir"
-old_stock_app="/実際の保存場所/stock-copy/Chromium.app"
-unsigned_app="/実際の保存場所/chrome-mac/Chromium.app"
-revisions_file="/実際の保存場所/REVISIONS"
+old_stock_app="/path/to/stock-copy/Chromium.app"
+unsigned_app="/path/to/chrome-mac/Chromium.app"
+revisions_file="/path/to/REVISIONS"
 identity_sha1="Apple Development証明書の40桁SHA1"
 ```
 
-パスは対象環境の保存場所に置き換える。比較用stock app、未署名原本、REVISIONS、署名identityの対応付けが必要である。
+各パスは対象環境の入力に置き換える。比較用stock app、未署名原本、REVISIONS、署名identityの対応付けが必要である。解決後のパスやidentity値は公開出力へ含めない。
 
 ## 1. 元の失敗を取得する
 
@@ -84,7 +84,7 @@ Chromium Safe Storageへのアクセス拒否や、非同期暗号化providerの
 
 署名policyの比較は同一snapshotから作った新しいcopyで行い、nested signing plan、role flags、entitlements、verification resultを確認する。初回署名と後の再署名の記録は分ける。helper rolesの設定が合っていても、それだけでSafe Storage authorizationやHTTP停止を説明しない。signing correlationだけから因果を断定しない。
 
-`--use-mock-keychain`は診断用に限り、通常動作やproduct fixとして扱わない。Ordinary-Keychain acceptanceには通常GUIでの人間確認と、独立した3つのfresh profilesによる成功が必要である。Archived historical evidenceとの対応も確認する。過去trialの原因を未照合のまま一般化しない。
+`--use-mock-keychain`は診断用に限り、通常動作やproduct fixとして扱わない。Ordinary-Keychain acceptanceには通常GUIでの人間確認と、独立した3つのfresh profilesによる成功が必要である。別条件へ結論を適用する場合は、その条件と再現手順を公開入力で確認する。過去trialの原因を未照合のまま一般化しない。
 
 固定ソースの追跡箇所は[Keychain key provider](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/components/os_crypt/async/browser/keychain_key_provider.mm)、[macOS Keychain password handling](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/components/os_crypt/common/keychain_password_mac.mm)、および[URL request job](https://chromium.googlesource.com/chromium/src/+/82303c21a18acdc256c6264cd2ed0e1588df99d4/net/url_request/url_request_http_job.cc)である。固定コードは調査の手掛かりであり、特定環境の実行時原因を単独で証明するものではない。
 
@@ -131,7 +131,7 @@ python3 persistent_cookie_runner.py \
 
 `webgl1_runner.py`は、署名検証済みの新しい実験用Chromium copyと新規profileで、nonce付きloopback fixtureを一度起動します。seed/restore用の2D canvasやCSS色には頼らず、WebGL1 context、GLSL ES 1.00 vertex/fragment shader compile、program link、fullscreen triangle draw、中央pixel `readPixels`のRGBA `[0,160,0,255]`、`GL_NO_ERROR`を検査します。失敗ログはshader／programごと4096文字まで記録し、取得可能なGL version、vendor／renderer、debug renderer extensionのunmasked名は512文字まで記録します。page上の`DRAW_OK`／`READBACK_OK`または`FAIL`とpixel値、state観測時刻、GUI観察開始・終了UTC時刻を残し、CDP state・canvas中央のscreenshot patch・通常ページscreenshotも保存します。raw NetLogは使わず、fixture server eventにはnonce、path、statusだけを残します。
 
-起動したfresh profileの`DevToolsActivePort`からlocal browser CDP endpointを検証して`SystemInfo.getInfo`／`getProcessInfo`を読み、限定したGL renderer/vendor/version、display type、feature status、GPU PIDとbrowser PIDをprivateな`gpu-info.json`へ記録します。API失敗は型だけを含む別diagnosticにし、WebGLのpass/failやerrorsへ混ぜません。browser-root CDP connectionはcloseしますが、capture helperからBrowser.closeは送りません。
+起動したfresh profileの`DevToolsActivePort`からlocal browser CDP endpointを検証して`SystemInfo.getInfo`／`getProcessInfo`を読み、限定したGL renderer/vendor/version、display type、feature status、GPU PIDとbrowser PIDを実行結果へ記録します。API失敗は型だけを含む別diagnosticにし、WebGLのpass/failやerrorsへ混ぜません。browser-root CDP connectionはcloseしますが、capture helperからBrowser.closeは送りません。公開する要約にはPIDや実機固有値を含めません。
 
 ```bash
 python3 webgl1_runner.py \
@@ -157,7 +157,7 @@ Canvasは実WebGLの描画/readbackを表示し、2D canvas・CSS色・mock back
 
 ## 3. 署名設定の修正を、新規コピーで試す
 
-この試験は、保存済みinventory／receiptで公式のHelper別設定との差が見つかった場合、または以前の署名処理対象を復元できず基準copyが必要な場合に実施する。
+この試験は、inventory／receiptで公式のHelper別設定との差が見つかった場合、または基準となる未署名copyが必要な場合に実施する。
 
 `sign_once.py`は次の設定を明示する。
 
@@ -187,13 +187,13 @@ python3 "$kit_dir/probe.py" probe --app "$task_dir/stock-role-policy/Chromium.ap
 
 署名を一つでも失敗した場合はそのコピーとreceiptを保存して停止する。実行済みコピーで署名をやり直さない。全体のstrict verificationに成功しても、ページ表示の合格とは別に判定する。
 
-別のGUIユーザーが署名済みcopyを使う場合は、署名者側のstrict verificationだけでなく、対象ユーザーが各nested bundleの`_CodeSignature/CodeResources`を読み取れ、そこまでの親directoryを検索できることをread-onlyで確認する。macOSではsymlinkの`readlink`権限はリンク自体のmodeに依存するため、リンク先を開けることだけでは別ユーザーがリンクを読める証明にならない。`prepare`は安全なinternal symlinkを保ったうえで、別ユーザーに必要なread bitがないsymlinkを署名前に拒否する。future first-signではcodesign書込みsubprocessだけにumask `022`を渡し、新規signature resourceを他ユーザーから読めるmodeで生成する。signing plan、entitlements、receipt、command logはprivateのまま維持する。preflightに失敗した既存署名copyへad hocなchmodや再署名をせず、必要な対応は新しいfresh copyを使う手順として別途評価する。
+別のGUIユーザーが署名済みcopyを使う場合は、署名者側のstrict verificationだけでなく、対象ユーザーが各nested bundleの`_CodeSignature/CodeResources`を読み取れ、そこまでの親directoryを検索できることをread-onlyで確認する。macOSではsymlinkの`readlink`権限はリンク自体のmodeに依存するため、リンク先を開けることだけでは別ユーザーがリンクを読める証明にならない。`prepare`は安全なinternal symlinkを保ったうえで、別ユーザーに必要なread bitがないsymlinkを署名前に拒否する。future first-signではcodesign書込みsubprocessだけにumask `022`を渡し、新規signature resourceを他ユーザーから読めるmodeで生成する。公開出力にはidentity、entitlements、署名receipt、command log、実機固有値を含めない。preflightに失敗した既存署名copyへad hocなchmodや再署名をせず、必要な対応は新しいfresh copyを使う手順として別途評価する。
 
-このアダプターはsnapshot 1689422の署名部品設定専用。別snapshotに対しては対応する固定ソースを確認して更新する。原本とREVISIONSの結び付けには既存archive hash／取得記録も使う。REVISIONSファイルの一致だけでは、ローカルappの出所の証明にはならない。
+このアダプターはsnapshot 1689422の署名部品設定専用。別snapshotに対しては対応する固定ソースを確認して更新する。再現手順には原本archiveの公開取得URLとSHA-256を明記する。`REVISIONS`は固定source revisionを示すが、その一致だけではローカルappの出所を証明しない。
 
 ## 4. 修正の採否
 
-新規stockが成功したら、旧stockとの差分を署名receiptとinventoryで比較する。旧失敗を説明する実行時ログか再現条件を確認し、通常の設定へ戻した状態で3回の独立した新規profile試験に成功することを修正採用条件とする。
+新規stockが成功したら、公開された入力と手順で再現できる比較条件を確認し、通常の設定へ戻した状態で3回の独立した新規profile試験に成功することを修正採用条件とする。条件が再現できない場合は、その再現性の不足を明記し、修正採用の根拠にしない。
 
 GUIの最終確認では、HTTPページを20秒間表示してから終了する次のコマンドを使う。固定文字列・JS marker・緑の四角が実ウィンドウで見えることを確認し、確認者と時刻を結果フォルダに記録する。
 

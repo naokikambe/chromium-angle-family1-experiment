@@ -38,9 +38,10 @@ subsequent work.
 - [Current KOOV PWA entry and acceptance preparation](docs/phase5-koov-current-entry.md)
 
 For the next stage, obtain the `phase5-page-recovery` branch from GitHub on the
-target MacBookAir6,1. The handoff includes clone/fetch instructions, GUI-user and
-Keychain checks, and the order of the device experiments. Browser bundles and
-previous evidence are inputs on the Mac; they are not included in this repository.
+target Mac. The handoff includes clone/fetch instructions, GUI-user and
+Keychain checks, and the order of the device experiments. The remaining public
+inputs for reproducing the current Chrome + ANGLE media and WebGL checks are
+listed in the [current KOOV entry](docs/phase5-koov-current-entry.md).
 
 The branch includes the device-side symlink fix from `cc49dd9`, post-observation
 capture from `383310b`, and configurable startup wait from `71d5bb1`. The device
@@ -80,7 +81,7 @@ The original standalone ANGLE build baseline remains:
 
 The baseline workflow builds unmodified ANGLE targets `libEGL` and `libGLESv2` on
 `macos-15-intel`. It does not modify Chrome, place libraries into a browser,
-launch Chrome or KOOV, or perform any MacBookAir6,1 testing.
+launch Chrome or KOOV, or perform testing on the target Mac.
 
 See `docs/phase-status.md` for current status and `docs/phase2-build.md` for
 the build and validation design. The repository itself has no selected license;

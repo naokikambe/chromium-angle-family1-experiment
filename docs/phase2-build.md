@@ -132,7 +132,7 @@ macOS Intel host で Xcode、Python 3、Git を用意し、workflow の `Fetch a
 ## 既知の未確認事項と Phase 3 条件
 
 - CI 実行後にしか、固定 SHA の fetch / dependency sync、Xcode Metal toolchain の可用性、GN / Ninja 成功、dylib の実 install name・依存・size・hash、追加 dylib の要否は確認できない。
-- CI runner は Intel HD Graphics 5000 / OCLP / MacBookAir6,1 ではない。Metal initialisation、`requireGpuFamily2` override の実行時認識、Chrome 154 の実 load ABI、codesign / Library Validation、WebGL、KOOV は実機だけで確認できる。
+- CI runnerは対象実機ではない。Metal初期化、`requireGpuFamily2` overrideの実行時認識、Chrome 154のload ABI、codesign／Library Validation、WebGL、KOOVの動作は対象実機で確認する。
 - `requireMsl21` は固定コミットに存在を確認できていない。args、workflow、検証、文書のいずれも当該 Feature を前提にしない。
 
 Phase 3 へ進む条件は、Phase 0 の基準ログ保全を完了し、Phase 2B の artifact が上記成功判定を満たし、レビューで `otool` の依存とライセンス収集結果を承認することである。Chrome.app への dylib 配置、再署名、起動はこの条件を満たすまで実施しない。

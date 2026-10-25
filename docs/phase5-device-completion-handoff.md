@@ -1,22 +1,25 @@
-# 実機作業の一括引き継ぎ：stock復旧から独自ANGLE・KOOVまで
+# 引き継ぎ：Chromium stock復旧トラックとChrome + Family 1 ANGLEのKOOV受入
 
-対象Macで、公式の完全未署名・ビルド済みChromiumへFamily 1対応ANGLEを組み込み、Apple Developmentで初回署名した実験アプリにより、通常Keychainでページ描画とKOOVの画面・基本操作を成立させてください。今回の委任はstock復旧からANGLE・KOOVまでを含みます。工程ごとに次の指示を求めず、開始条件を満たしたら次へ進んでください。
+この文書では、Chromium stock／通常Keychainの復旧をKOOVとは別のトラックとして扱います。現行KOOV対象はChrome for Testing 154.0.8037.0 + Family 1 ANGLE revision `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`です。ChromiumだけでのKOOV動画・codec診断とsnapshot 1689422上のKOOV経路は歴史的調査であり、今後のKOOV実行・受入に使いません。
+
+2026-10-25のオーナー実操作では、このChrome + ANGLE構成で動画と3Dに目立った問題はありませんでした。これはKOOV画面を自動計測していない定性的観察です。PWAの通常起動、保存／再読込、約30分の継続操作、正常終了後の再起動、音声、機器連携は未確認です。合成media/WebGL/GPU測定ではH.264／VP8再生、WebGL1 draw/readback、同一GPU processでのANGLE/Metal mappingを確認しました。公開手順からの再現には、再配布可能な合成メディア入力とCfT + Family 1 ANGLE appの取得・組立・署名手順が必要です。KOOV受入は未完了です。
 
 ## 開始と引き継ぐ判断
 
-リポジトリは `naokikambe/chromium-angle-family1-experiment`、ブランチは `phase5-page-recovery`。対象MacのGUIログインユーザーで実施します。最新checkout・HEAD・dirty状態・適用指示を確認し、既存変更を保全して最新版を取得してください。実機の最新調査レポート、runbook、証跡一覧、保留中の同意回答を確認します。実機固有の詳細は公開文書へ転載しません。
+リポジトリは `naokikambe/chromium-angle-family1-experiment`、ブランチは `phase5-page-recovery`。対象MacのGUIログインユーザーで実施します。checkout・HEAD・dirty状態・適用指示を確認し、既存変更を保全して最新版を取得してください。作業はこの公開文書、関連する公開手順、固定したsource revisionを基準に進めます。実機固有値や個人情報は公開文書へ含めません。
 
 ### 現在の公開チェックポイント
 
 公開条件は[現行の誤push防止手順](safe-push-and-gc-procedure.md)に従います。
-Ownerは旧SHA一覧との照合必須を取り下げ、固定した承認済み公開HEAD以降の
-直線履歴・全merge拒否へ置き換えました。失われた対応表の復元待ちは公開の
-前提条件ではありません。通常pushは無効のまま、永続的な検査付き専用経路を
-設置・検証してから公開します。実機の未達条件や個別同意の範囲は変わりません。
+公開方針では、固定した承認済み公開HEADを基準にremote tipと候補の祖先関係を確認し、
+基準以降の直線履歴と全merge拒否を検証します。通常pushは無効のまま、検査付き専用
+経路を設置・検証してから公開します。実機の未達条件や個別同意の範囲は変わりません。
 
 通常GUIユーザーのstock標準設定では、専用profileで暗号化cookieを保存し、再起動後に再送できることを一度確認しました。この結果だけでは、新規3 profileでの検証は成立していません。同じ試行内でのKeychain API返却値との直接相関も未完了です。
 
-変更・再署名していない候補appは、host側の厳格署名検査とprivate manifest hash照合に通りました。以前のcookie seed／再起動試行の集計には、暗号化保存・平文欄空・有効期限・再起動後のfixture再送と両起動の正常終了が記載されていました。後続の2026-10-23再診断では、新しい専用profileでcookieのseed・再起動・再送信・正常終了を確認しました。終了時stackの採取だけは失敗し、過去のteardown watchdog期限切れの根本原因は不明です。詳細は以下の最新状態を適用します。
+### Chromium／Family 1 ANGLEの過去の技術診断（KOOV受入ではない）
+
+変更・再署名していない候補appは、host側の厳格署名検査と入力hash照合に通りました。stock標準設定では専用profileで暗号化cookieを保存し、再起動後に再送できることを一度確認しました。この結果だけでは、新規3 profileでの検証や同じ試行内のKeychain API返却値との直接相関は成立していません。2026-10-23の再起動検査では、合成cookieのseed・再起動・再送信・正常終了を確認しました。終了時stackの採取だけは失敗し、以前のteardown watchdog期限切れの根本原因は不明です。
 
 ### 2026-10-23 cookie再起動・正常終了の最新状態
 
@@ -24,9 +27,9 @@ Ownerは旧SHA一覧との照合必須を取り下げ、固定した承認済み
 
 続く終了診断用の再起動でも、実画面・HTTP・JS・canvas・描画・暗号化cookie再送信・Keychain histogramが通り、追加promptはなく、ブラウザは終了code 0で終了しました。shutdown watchdog timeoutはありませんでした。終了時stack採取は2回とも失敗またはtimeoutし、stackデータは得られていません。したがってこの実行ではcookie再起動と正常終了を確認しましたが、以前のteardown watchdog期限切れの根本原因は未特定です。stack採取失敗をアプリ終了失敗へ読み替えず、両者を分けて記録します。
 
-以前の15段階CDP診断はscreenshotのみ取得し、runnerがJS開始前の一時状態を終端扱いしたため構造化stateを残せませんでした。その後の修正版16段階診断は、変更していない候補appと専用profileでHTTP 200、nonceに対応する完全なstate、全16段階を記録しました。私的証跡の照合では、同じGPU processに独自`libEGL`・`libGLESv2`とMetalがmapされ、実行前後のapp／library hashと厳格な署名検証も一致しています。
+以前の15段階CDP診断はscreenshotのみ取得し、runnerがJS開始前の一時状態を終端扱いしたため構造化stateを残せませんでした。その後の修正版16段階診断は、変更していない候補appと専用profileでHTTP 200、nonceに対応する完全なstate、全16段階を記録しました。同じGPU processに独自`libEGL`・`libGLESv2`とMetalがmapされ、実行前後のapp／library hashと厳格な署名検証も一致しました。
 
-この後の終了診断再試行は、保存済みの合成cookieが平文欄空・暗号化状態のまま存在する一方、有効期限が未来ではないことをhost preflightが検出して起動前に停止しました。候補appの追加起動、profile作成、prompt応答はありません。同じrun記録を上書きしないため再実行も拒否されました。終了診断を再開するには、旧profileと証跡を保持したまま、新しい専用profileで有効期限が未来の合成cookieを準備し、seed・再起動・終了採取を改めて行う必要があります。
+終了診断の一回は、host preflightが合成cookieの有効期限が未来ではないと検出し、起動前に停止しました。候補appの追加起動、新規profile作成、prompt応答はありませんでした。再試行する場合は、新規の専用profileで有効期限が未来の合成cookieをseedし、再起動と終了採取を実施します。
 
 16段階診断ではdefault／scissor clearとFBO clearが通り、single-sample canvasのconstant pointとpacked／interleavedの1頂点VBO pointも期待pixelを返しました。一方、default／FBO／single-sample triangleと、clip内三角形と同じ3頂点vec2 VBOを用いた`POINTS count=3`は期待pixelを返しませんでした。失敗段階はshader compile/link、attribute／buffer state、draw発行が記録され、GL errorはありません。画面取得ではdefault canvasは黒、比較canvasの3点は意図した上下2段ではなく同じ水平行に見えました。これはY座標のfetch／変換差を調べる候補ですが、pixel列挙で裏付けるまで原因とは扱いません。WebGL draw/readback受入も未達です。
 
@@ -36,17 +39,17 @@ Ownerは旧SHA一覧との照合必須を取り下げ、固定した承認済み
 
 固定ANGLE版ではvertex末尾のY補正にpacked snormのdecodeを使います。[単独Metal診断](phase5-metal-flip-probe.md)では、vertex側builtin経路だけが描画に失敗し、同じdecodeのscalar経路は通りました。実験opt-inが有効なnative Mac Family 1のvertex shaderだけで、明示的な符号拡張・除算・clampへ置き換える修正を行いました。対象版sourceへのpatch適用、focused policy検査、固定snapshotからのCI build、未署名library検証、fresh unsigned Chromiumへの初回署名、WebGL draw/readbackまで成立しました。ここで記録したMac実行とCIの実体験は、他GPU／通常ANGLE設定の対応やKOOV全機能の受入を意味しません。
 
-再開前に報告されたsandbox経路のidentity検索0件と署名trust errorは、現在の署名不成立を示す結果ではありません。引継ぎ手順に沿って実行経路を分けて読み取り検証し、候補の厳格署名検証と署名identityの可視性を確認しました。証明書名、Keychain項目、ユーザー、実行PIDその他の端末固有情報や生証跡は公開文書へ記録しません。通常GUI stockのcookie保存・再起動runnerは両phaseのKeychain成功histogram、暗号化metadata、再起動後の送信を記録しました。独立profile3件はHTTP・DOM・JS・canvas readbackとKeychain成功を記録しました。一方、GPU feature statusは合成／2D canvasをsoftware扱いと記録しており、stockのhardware GPU描画受入は未確認です。各試行の実GUI確認報告も必要です。独立検証ユーザーでの成功には置き換えません。ANGLE候補は、WebGL1自動draw/readback、same-process Metal/library mapping、Keychain成功、実GUI描画、暗号化cookie再送信と正常終了を確認しました。今回の終了時stack採取は成功せず、過去のteardown watchdog期限切れの原因は未特定です。stockの通常GPU受入が未完了のため、工程Aと工程Bの正式な全体完了は未確定です。ANGLE側の工程C開始条件を満たしてKOOV探索を開始し、起動・ログイン後の画面到達まで確認しましたが、正式な基本操作、保存／再読込、約30分の連続操作、正常終了後の再起動は未受入です。動画再生を優先診断中です。個別試行や画面の実機固有情報は非公開証跡に保持します。
+以前のsandbox経路での署名検査結果だけでは、現在の署名成立・不成立を判定できません。引継ぎ手順に沿って実行経路ごとに検査し、候補appの厳格署名検証に通りました。署名検証とKeychain accessは別の判定です。通常GUI stockのcookie保存・再起動runnerは両phaseのKeychain成功histogram、暗号化metadata、再起動後の送信を記録しました。独立profile3件はHTTP・DOM・JS・canvas readbackとKeychain成功を記録しました。一方、GPU feature statusは合成／2D canvasをsoftware扱いと記録しており、stockのhardware GPU描画受入は未確認です。各試行での実GUI確認が必要で、独立検証環境の結果は既存ユーザーでの復旧に置き換わりません。ANGLE候補は、WebGL1自動draw/readback、同一GPU processでのMetal/library mapping、Keychain成功、実GUI描画、暗号化cookie再送信と正常終了を確認しました。終了時stack採取は成功せず、以前のteardown watchdog期限切れの根本原因は未特定です。stockの通常GPU受入が未完了のため、Chromium stock／ANGLE技術トラックの正式完了は未確定です。当時のChromium + Family 1 ANGLE構成でKOOV探索を行い、起動・ログイン後の画面到達までは確認しました。この探索は歴史的結果であり、現行KOOVの受入には含めません。
 
-私的証跡は必要ファイル単位で永続領域へ保全します。古い受入記録の一部に元manifest・個別receiptの欠落があるため、checkpointの要約だけで来歴や同一試行の相関を再受入しません。残存証拠との照合または新しい試行による再確認が必要です。app・profile・cookie DBを公開Gitへコピーしません。
+2026-10-25のKOOV確認では、Chrome for Testing 154.0.8037.0（revision position 1689415、source revision `e967b7961d80199276ce493904c95f5fbbc42fca`）とFamily 1 ANGLE revision `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`の組み合わせで、合成H.264／VP8の再生進行とWebGL1 draw/readbackを計測しました。オーナーの実操作ではKOOVの動画と3Dに目立つ問題がなかったとの報告がありました。KOOV画面自体は計測していないため、肯定的な定性的観察として記録し、実動画のcodec・frame数などは未確認です。オーナーの方針によりKOOV用途ではChromiumの動画問題の追究を止め、Chromeのcodec構成を使い、この実験ではFamily 1 ANGLEを保持します。登録済みPWAの起動、保存／再読込、約30分の連続操作、正常終了後の再起動、音声、機器連携は未受入であり、KOOV全体の完了は未確定です。
 
 優先する指示はこの一括プロンプトです。[stock復旧の詳細](phase5-normal-keychain-handoff.md)は工程Aに適用します。同文書の「stockまで」という委任境界は、この一括指示では工程B・Cまで拡張します。Keychain操作への同意は拡張しません。
 
 ## 委任する操作と確認が必要な変更
 
-- 読み取り専用調査、再現可能なfixture・runner・ANGLEパッチ・build設定の作成、関連文書と検証、新規実験コピーの組み立て、有効な既存Apple Development identityによる初回署名、許容される実行環境での必要なビルド・試験、作業ブランチへのcommit／pushを進めてください。
+- 読み取り専用調査、再現可能なfixture・runner・ANGLEパッチ・build設定の作成、関連文書と検証、新規実験コピーの組み立て、有効な既存Apple Development identityによる初回署名、許容される実行環境での必要なビルド・試験、作業ブランチへのcommit／pushを進めてください。KOOVの操作対象は工程Cに定めるChrome for Testing 154 + Family 1 ANGLEに限ります。
 - Keychainへの追加応答、信頼設定・ACLの変更、証明書操作、検証ユーザーやKeychain環境の作成、既存KOOVデータの複製・移行は、対象・変更差分・影響・復元方法を準備し、既存同意を確認して必要な変更についてまとめて依頼してください。既存の拒否やAllow一回から新しい操作への同意を推定しません。
-- 既存S0/S1・アプリ・profile・証跡は変更しません。秘密値・秘密鍵・実ユーザーのcookieを出力せず、秘密鍵をクラウドやCIへ移しません。署名は対象Mac上で行います。既存item削除、全アプリへの許可、OS全体のGPU偽装、system Metalの変更、保護機能の無効化は検証手段にしません。
+- S0/S1・アプリ・profileなどの試験対象を変更しません。秘密値・秘密鍵・実ユーザーのcookieを出力せず、秘密鍵をクラウドやCIへ移しません。署名は対象Mac上で行います。既存item削除、全アプリへの許可、OS全体のGPU偽装、system Metalの変更、保護機能の無効化は検証手段にしません。
 - KOOVの認証はオーナー入力とし、資格情報を取得しません。USB／Bluetoothや実機への転送は描画が安定してから、対象操作への同意の範囲で行います。機器未提供ならソフトウェア確認と機器連携を別に報告します。
 
 ## 工程A：署名信頼と通常Keychainでのstock復旧
@@ -55,11 +58,13 @@ Ownerは旧SHA一覧との照合必須を取り下げ、固定した承認済み
 2. 同じ試行のprompt前から応答後まで、対象PID・item・API返却または待機・暗号化利用可否・request source・nonce・server受信を測ります。追加Allowは既存回答の範囲内だけ行います。署名未解決のコピーでの測定は診断として扱います。Allow Once後の別プロセスの再promptだけで、先の応答が反映されなかったと断定しません。
 3. 正常な鍵取得と暗号化利用を確認し、必要に応じて独立した検証環境で比較します。別ユーザーでもSystem Keychainは共通なので、itemの所属と検索順を確認します。GPU条件を一つずつ戻し、通常Keychain・通常GPUで新規profile3件のHTTP・本文・JS・fetch・canvas・描画と実GUIを確認します。
 4. `persistent_cookie_runner.py`を使い、専用profileの正常終了・再起動で非機密persistent cookieの暗号化保存・復号・再送信を確認します。再起動ごとの手動応答に依存する条件は継続利用の受入としません。独立環境での成功と既存ユーザーの復旧を区別します。
-5. KOOVの実体・起動方式・App ID・必要な拡張／パッケージ・認証方法を事前確認します。歴史的なApp ID `kpmcfooelenggiklfmbljpognolignpg`や`--app-id`が対象版で利用可能かを確認し、廃止されたChrome Apps機能や欠けたKOOV入力をGPU障害と混同しません。既存profileの複製を前提とせず、専用環境での必要最小限の準備を具体化してください。
+5. このstock／KeychainトラックではKOOVをインストール・起動しません。KOOVのPWA起動方式と受入は工程Cで、Chrome for Testing 154 + Family 1 ANGLEを使って確認します。歴史的App IDやChromiumの`--app-id`処理から現行のKOOV起動方式を推測しません。
 
 **工程Bの開始条件：** 対象stockの署名検証・正常Keychainアクセス・通常GPUでの3件の自動／GUI試験・暗号化cookie再起動検査が成立していること。成立していなければ最初の未完了境界を調べます。ANGLEソースの調査や入力確認は進められますが、追加ANGLEの実機成功をstock復旧の代用にしません。
 
-## 工程B：ANGLEの版合わせ・組み込み・初回署名
+## 過去の工程B：Chromium snapshot 1689422へのANGLE組込み（履歴、現行KOOV経路ではない）
+
+以下はChromium snapshot 1689422を使った過去のANGLE技術作業を記録します。この手順でChromium上のKOOVを起動したり、動画を診断したりしません。CfT 154 + Family 1 ANGLE appの組立・署名手順と再配布可能な合成メディア入力は別途必要です。詳細は[KOOV受入条件](phase5-koov-current-entry.md)を参照してください。
 
 1. 受入済みstockのsnapshot・Chromium revision・DEPSのANGLE pinを固定します。snapshot 1689422を継続する場合はChromium `82303c21a18acdc256c6264cd2ed0e1588df99d4`、ANGLE `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`を実入力と照合します。別入力へ変更する必要があれば理由を示し、署名アダプターを対応版で検証して工程Aの基準を取り直します。
 2. 過去のFamily 1 runtimeパッチを固定履歴から回収し、対象ANGLE版へ移植します。旧artifactのrevisionやworkflow既定値を流用しません。Family 1の明示的な実験オプトイン、実機能力に合ったES／Metal機能境界、Family 2以上の既存動作を保持します。架空のFeature名や未対応機能を有効にして通しません。
@@ -68,17 +73,17 @@ Ownerは旧SHA一覧との照合必須を取り下げ、固定した承認済み
 5. 完全未署名の公式原本から新規コピーを作り、同じ未署名状態のANGLE dylibを、固定版ソースが示す配置先へ組み込みます。ABI・依存・symlink・全Mach-Oの未署名状態を確認し、組み立て完了後に凍結します。署名済みstockへ追加して再署名する方法は使いません。
 6. `sign_once.py`の役割別policyと実対象の対応を確認し、Mac上の有効なApple Development identityで内側から初回署名します。receipt・署名要件・厳密な検証結果を保存します。署名失敗したコピーは証跡として保持し、そのコピーでやり直さず新しい未署名入力から作ります。
 7. 工程Aと同じKeychain環境・通常の保護設定でページと暗号化cookieの基準を再確認します。必要なANGLE/Metalの起動引数は固定版で有効なものだけを使い、診断用引数と運用用の実験設定を区別します。独自dylibのロード、ANGLE/Metal、対象GPUを同じGPU PIDで対応付けます。SwiftShaderや別backendへのfallbackをFamily 1 Metal成功へ読み替えません。
-8. WebGL1のcontext作成・shader compile/link・draw・readbackをnonce付きfixtureで検証し、実GUIの結果と照合します。[固定版のvertex input診断境界](phase5-vertex-input-diagnosis.md)を使い、定数attribute・VBO fetch・triangle clippingとsample条件を区別します。ES 3／WebGL2が使えるとは仮定せず、KOOVの要求機能との関係を確認します。
+8. 当時のChromium/ANGLE技術試験ではWebGL1のcontext作成・shader compile/link・draw・readbackをnonce付きfixtureで検証しました。[固定版のvertex input診断境界](phase5-vertex-input-diagnosis.md)の記録は歴史的な技術調査であり、現行KOOV経路の試験指示ではありません。
 
-**工程Cの開始条件：** 独自ANGLE版の署名・正常Keychain・ページ受入・暗号化cookie再起動が成立し、同一GPU PIDで独自ANGLE/MetalのロードとWebGL1 draw/readbackを確認していること。
+**過去の工程Bで記録した技術条件：** 独自ANGLE版の署名・正常Keychain・ページ受入・暗号化cookie再起動と、同一GPU PIDでのANGLE/Metalロード、WebGL1 draw/readbackを確認していた。これはChrome for Testing 154 + Family 1 ANGLEによる現行KOOV受入を代替しない。
 
 ## 工程C：KOOVの画面・基本操作・再起動・安定性
 
-現行PC版の公開PWA入力と旧方式との差は [KOOV起動入力の補足](phase5-koov-current-entry.md) を参照してください。実際の専用profileのインストールと受入結果で確認します。
+現行PC版の公開PWA入力と旧方式との差は [KOOV起動入力の補足](phase5-koov-current-entry.md) を参照してください。この工程だけがKOOV受入トラックです。Chrome for Testing 154.0.8037.0と上記Family 1 ANGLE revisionを使い、実際の専用profileのインストールと受入結果で確認します。Chromium stock復旧は別トラックのままです。
 
-1. 工程Aで確認した起動方式を専用の検証環境へ用意します。正しい実験Chromiumの実パス・version・profile・起動引数・GPU PIDで起動を確認し、Dockのアイコンや旧ランチャー名だけで判定しません。
+1. Chrome for Testing 154の専用検証profileからKOOVを起動します。実機固有のpathやPIDを公開記録へ含めず、対象version・ANGLE revision・profile起動方式を特定して、Dockのアイコンや旧ランチャー名だけで判定しません。
 2. KOOVのdocument・JS・追加fetch・WebGL領域を確認し、オーナーの実画面観察を取得します。nonce付きfixtureの成功と実KOOVの成功を分けて保存します。
-3. 埋め込み動画が黒画面または再生しない場合は、長時間安定性試験より先に動画再生を切り分けます。オーナー操作で再生を開始した同じ試行から、HTTP status・Content-Type・Range応答などの許可リスト済みネットワーク情報、動画要素のreadyState／error、Chromium media pipelineのdecoder／frame状態を対応付けます。URLのパス・query、cookie、本文、生ログは記録せず、配信・形式／codec認識・decoder・frame出力・画面合成の境界を区別します。WebGLやANGLEの黒画面と同一視しません。
+3. KOOVの動画・3Dに問題があればChrome for Testing 154 + Family 1 ANGLEという実際の構成で観察結果を記録します。Chromium media-pipeline診断やChromiumでの再試験は行わず、歴史的なChromium比較から現行構成の結果を推測しません。
 4. 非機密のテストプロジェクトで、画面遷移、ブロック編集、保存、再読込、必要な3D描画、resizeを確認します。既存プロジェクトを上書きしません。Chrome Apps互換性、拡張、認証、ネットワーク、WebGLの失敗を分け、最初の未完了境界を調べます。
 5. 専用環境で30分程度の連続操作を行い、クラッシュ・context loss・白黒画面・表示破損・CPU／メモリ傾向を記録します。正常終了後に同じ検証環境で再起動し、画面・テストプロジェクト・基本操作とKeychainアクセスの継続を確認します。
 6. 機器連携は利用可能な機器と同意がある場合に限り、描画安定後に実施します。未実施ならUSB／Bluetooth・転送を未試験として明記し、ソフトウェア受入の範囲を限定します。
@@ -91,7 +96,7 @@ Ownerは旧SHA一覧との照合必須を取り下げ、固定した承認済み
 | ビルド入力・パッチ適用・ABI・依存 | revisionと差分、失敗targetを固定して修正・検証する。無関係な小規模targetの成功で置き換えない |
 | 独自dylibがGPUにロードされない | 固定版の探索先・起動引数・install name・署名部品・library validationを照合する。保護機能を無効化して通さない |
 | ロード済みだがMetal／WebGLが失敗 | 同じGPU PIDの最初のエラーと能力境界を確認し、Family 1パッチを限定修正する。変更ごとに新規コピーを組み立てて初回署名する |
-| fixtureは通るがKOOVが失敗 | KOOVの起動方式・アプリ機能互換性・認証・要求・必要なWebGL機能を切り分け、テストデータで再現する |
+| fixtureは通るがKOOVが失敗 | Chrome for Testing 154 + Family 1 ANGLE上で起動方式・認証・必要なWebGL機能を確認し、Chromium-only動画診断を再開せず、現行構成で観察できた失敗境界を記録する |
 | 再起動または安定性が失敗 | 同じprofile・鍵・app・GPU条件を照合し、最初のエラーを修正して該当検査をやり直す |
 
 実験が画面全体の持続的破損、WindowServer反復クラッシュ、OSフリーズ、GPU crash loopを起こした場合は実験を中断し、起動した実験プロセスだけを終了して証跡を保存します。安全に続行できない状態は具体的に報告します。
@@ -99,10 +104,10 @@ Ownerは旧SHA一覧との照合必須を取り下げ、固定した承認済み
 ## 最終完了条件
 
 - stockの署名信頼・正常Keychain・通常GPU・独立profile3件の自動／実GUI・暗号化cookie再起動が成立している。
-- 対象ChromiumとDEPSに対応するFamily 1 ANGLEを、新しい完全未署名コピーへ組み込み、Apple Developmentで初回署名した来歴と検証結果がある。
+- KOOV対象のChrome for Testing 154.0.8037.0とFamily 1 ANGLE revision `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`を特定し、署名・組立・起動の受入条件を記録している。公開手順から動画・WebGL確認を再現するには、再配布可能な合成メディア入力とCfT + ANGLE appの取得・組立・署名手順が必要であり、KOOV受入も未完了である。
 - 独自ANGLE版でも正常Keychain・ページ受入・暗号化cookie再起動が成立し、同じGPU PIDの独自ANGLE/MetalロードとWebGL1 context・draw・readbackを実証している。
 - その実験アプリでKOOVの実画面・基本操作・テストデータの保存／再読込・正常終了後の再起動が成功し、連続操作中の安定性を確認している。
-- 使用ユーザー・Keychain方針・KOOV起動方式・全引数・必要な実験オプトイン・未対応機能・機器連携の範囲・既存ユーザーとの差が明記され、追試できる。
+- 公開手順で追試できる範囲と未解決の再現性gap、KOOV起動方式、未対応機能、機器連携の範囲が明記されている。Chromium-only動画診断を現行KOOVの受入項目に含めない。
 - パッチ・スクリプト・workflow・関連文書が適切に検証され、作業ブランチへcommit／pushされている。実機固有の生ログ・profile・秘密情報は公開しない。force pushやmainへのmergeは行わない。
 
 一試験や一工程の終了だけで会話を終えず、上記分岐と開始条件に従って続行します。中間報告には進んだ工程・新しい証拠・残る阻害要因を簡潔に記載します。必要なオーナー入力は、操作・理由・回数・観察時間・入力後の工程をまとめて依頼し、回答待ちでも依存しない準備を進めます。

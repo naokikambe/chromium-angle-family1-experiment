@@ -2,15 +2,13 @@
 
 ## 現行ルールと承認範囲
 
-2026-10-20、Ownerは`phase5-page-recovery`の公開条件から旧SHA一覧との照合を
-外すことを明示的に承認しました。旧新SHA対応表・拒否一覧・そのchecksumは、
-このブランチのpushの前提条件ではありません。過去の「欠落時は公開を停止する」
-という条件を、この文書の固定起点・直線履歴の条件へ置き換えます。
+2026-10-20、Ownerは`phase5-page-recovery`の公開条件として、以下の固定公開起点と
+直線履歴の検査を承認しました。この手順では、固定起点以降の祖先関係と各commitの
+parent数を公開条件とします。
 
 承認済み公開HEAD `49b69c78861750b34ec533dfaa1fdbe3469fe9f2`を信頼の起点に固定します。
-この起点自体の安全性を再証明したり、失われた一覧を復元・照合したりしたという
-意味ではありません。旧SHA照合を取り除く承認と、起点以降の全mergeを拒否する
-制限を区別してください。起点を自動的に現在のHEADへ更新してはいけません。
+検査範囲はこの固定起点からの祖先関係と直線履歴に限ります。起点を自動的に現在の
+HEADへ更新してはいけません。
 
 許可する更新は、公式repository
 `https://github.com/naokikambe/chromium-angle-family1-experiment.git`の既存
@@ -35,9 +33,9 @@
   `check-publication-privacy.py --pre-push`を通す。途中で秘密情報を追加し、tipで
   消した履歴も検査する。Parentによる差分レビューも必要とする。
 
-基準や必要objectが不在、入力不正、検査失敗なら拒否します。旧SHA一覧や対応表は
-読み込みません。旧履歴のfetch/import、objectsのコピー、旧refの持込み、
-alternates設定、旧branchの再公開を許可する変更ではありません。
+基準や必要objectが不在、入力不正、検査失敗なら拒否します。検証対象として明示した
+公開ancestryの外からGitデータを取り込んだり、履歴上書きを設定したりする変更は
+許可しません。
 
 ## 2. 独立cloneと保全
 
@@ -45,14 +43,13 @@ alternates設定、旧branchの再公開を許可する変更ではありませ�
 適用`AGENTS.md`、common directory、shallow、alternates、grafts、replacement refsを
 確認します。取得元は確認済みの公式GitHub remoteだけです。
 
-新cloneの設定と既存hookは、変更前にrepository外のowner-only私的領域へ保全します。
-未コミット変更・index・stash・refs・reflog・app・profile・証跡を保持し、
-`reset --hard`、`checkout --`、`clean`で破棄しません。旧Gitのobjects・refs・reflog・
-stash・bundleを新cloneへ持ち込みません。実機引継ぎ資料は必要ファイルだけ読み、
-ディレクトリ全体を新cloneへコピーしません。
+作業cloneは公式originを基点に独立して用意し、scope外の設定やhookを変更しません。
+作業状態を破棄する`reset --hard`、`checkout --`、`clean`は実行せず、検証対象として
+明示した公開ancestry以外のGitデータを取り込みません。実機作業の公開手順は必要な
+ファイルだけ参照し、無関係なローカルディレクトリをcloneへコピーしません。
 
-旧checkout・worktree・mirrorの設定変更やref整理は、この新cloneの担当範囲外です。
-旧Gitのshared hookを上書きせず、新cloneとはhook配置を分離します。
+変更は指定branchへのfast-forward公開に限定し、他のGit設定変更やref整理は行いません。
+hook配置は専用公開経路に分離します。
 
 ## 3. 通常pushを常時無効にする
 
@@ -75,8 +72,9 @@ Gitはhookファイルが消失しているだけではpushを拒否しません
 無効化を維持し、`scripts/safe-push.py`のレビュー済みコピーを、repository外の
 永続的なowner-only `GUARD_DIR`へ配置します。一時領域に置きません。
 
-同じdirectoryに次を置きます。新しいdirectoryを使い、既存の保管データは上書き
-しません。新cloneの`core.hooksPath`もこの専用directoryに固定します。
+未使用pathに新しい専用directoryを作り、その中に次を置きます。既存のユーザーデータ、
+hook wrapper、guard fileを上書き・削除・変更しません。対象directoryが空でなければ
+作業を止め、別のpathを選びます。新cloneの`core.hooksPath`もこの専用directoryに固定します。
 
 - `safe-push.py`、`check-safe-push.py`、`check-publication-privacy.py`のレビュー済みコピー。
 - `pre-push`、`pre-commit`、`commit-msg`のwrapper。全wrapperが新cloneの絶対pathを
@@ -84,7 +82,8 @@ Gitはhookファイルが消失しているだけではpushを拒否しません
   他の二つは既存privacy scannerを呼ぶ。新cloneのtracked `.githooks`だけでは
   restrictive policyにならない。
 - `manifest.json`。Schemaは`schema`（整数1）、`repo`、`common_dir`、`anchor`、
-  `files`だけ。前二つのpathは私的な絶対path、anchorは上記固定公開HEAD。
+  `files`だけ。`repo`と`common_dir`は選択したcloneのGit directoryを束縛し、
+  anchorは上記固定公開HEADとします。ローカルpath値は公開出力に含めません。
   `files`は六つのscript/wrapper名をキーにし、各ファイルのSHA-256を値にする。
   Manifest・全ファイル・directoryをowner-onlyにし、symlinkは使わない。
 
@@ -125,17 +124,17 @@ git diff --check
 ```
 
 Parentのdiffレビュー後にstagingし、`python3 scripts/check-publication-privacy.py`を
-実行してから通常commitします。設置済みguardの直接検査と専用commandのdry-runを
-確認した後にだけ、同じ専用commandで指定branchへ公開します。検査結果、設定・
-hookのバックアップ、実機証跡、私的pathはGitやCI出力へ転載しません。
+実行してから通常commitします。guardの直接検査と専用commandのdry-runを確認した
+後にだけ、同じ専用commandで指定branchへ公開します。GitやCI出力には、ローカル
+path、guardの値、actual-device data、生成backupを含めません。
 
-## 6. 履歴資料とGC
+## 6. 履歴範囲とGC
 
-旧SHA一覧や対応表が後で見つかっても私的資料として保持し、公開Gitへコピーしません。
-歴史的workflowの実行refはrun記録で区別します。現在の文書内参照の確認に未復元の
-対応表を必須条件とはしませんが、証拠がない対応関係を推測で書き換えません。
+公開履歴の検査は、固定したapproved anchor、ancestry、single-parent条件で行います。
+歴史的workflowの実行refは公開run IDで区別し、文書内のSHA参照は公開source pinと
+照合します。対応を裏付ける公開情報がない場合は、推測で参照を書き換えず、限界を
+記載します。
 
-GC、参照削除、reflogの強制期限切れは今回実行しません。誤push防止のために履歴を
-削除する必要はありません。旧Gitの設定変更、mirror保管専用化、GCも今回の担当
-範囲外です。この文書は現行手順であり、個々の実機試験や設置検証の受入記録では
-ありません。
+GC、参照削除、reflogの強制期限切れは今回実行しません。この手順の対象は指定branch
+への公開検査であり、他のGit設定変更やobject-storeの保守は範囲外です。この文書は
+現行手順であり、個々の実機試験や設置検証の受入記録ではありません。

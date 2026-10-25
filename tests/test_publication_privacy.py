@@ -31,7 +31,7 @@ class PublicationPrivacyTests(unittest.TestCase):
         run_git(self.root, "init", "-q")
         run_git(self.root, "config", "user.name", "synthetic-reviewer")
         run_git(self.root, "config", "user.email", "12345+synthetic@users.noreply.github.com")
-        (self.root / "safe.md").write_text("Model: MacBookAir6,1; source pin: 0123456789abcdef\n", encoding="utf-8")
+        (self.root / "safe.md").write_text("Model: SyntheticHardware7,3; source pin: 0123456789abcdef\n", encoding="utf-8")
         run_git(self.root, "add", "safe.md")
         run_git(self.root, "commit", "-qm", "synthetic baseline")
 

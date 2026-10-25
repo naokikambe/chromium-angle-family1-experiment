@@ -39,4 +39,4 @@ APIがblockingであることはApple資料で、待機の影響がHTTPへ伝わ
 2. file-basedのtrusted-app ACLとdata protectionのaccess groupを混同しない。access-group entitlement追加をfile-based itemへの対策として直ちに採用しない。
 3. 独立ユーザー比較ではlogin項目の分離と共有Systemを区別し、同じ署名済みappで実測する。
 4. 個別appの恒久許可は、原因調査を終えた後の承認された変更として試し、再起動・鍵の再利用・通常Keychainでのページ表示を確認する。
-5. 以上の公開資料は対策を検討する根拠であり、現在のS0の完了条件や10月5日の証跡不足を代替しない。
+5. 以上の公開資料は対策を検討する根拠であり、現在のS0の完了条件や10月5日の試行条件への適用範囲の確認を代替しない。

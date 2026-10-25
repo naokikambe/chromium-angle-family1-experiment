@@ -3,7 +3,9 @@
 Use the 22-stage diagnostic runner on an unchanged, hash-verified candidate. This
 is a decision guide, not device acceptance. Match pixels, GL errors, actual context
 attributes, owner GUI observations, and custom-library/Metal samples to the same
-trial and GPU process. Keep all device evidence private.
+trial and GPU process. Public summaries should include reproducible inputs and
+expected results while excluding personal data, actual-device values, raw
+captures, and local result paths.
 
 The source input is ANGLE `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`.
 [`VertexArrayMtl::setupDraw` and attribute synchronization](https://chromium.googlesource.com/angle/angle/+/8efd15f71c27cd0bc2a9cf0074d77e899ca9c448/src/libANGLE/renderer/metal/VertexArrayMtl.mm)

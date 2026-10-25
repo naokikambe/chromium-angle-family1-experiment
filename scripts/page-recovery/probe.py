@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Observe existing Mac browser bundles without modifying their contents.
 
-All browser runs use fresh profiles and a local fixture. Imported CDP transport
-is pinned to the user's repository; see README.md for provenance.
+All browser runs use fresh profiles and a local fixture. The CDP transport
+helper is maintained in this project; see README.md for provenance.
 """
 from __future__ import annotations
 

@@ -14,11 +14,11 @@
 
 原因検証の成功判定にはHTTP本文・JS・画像・実GUIを使用し、復旧した条件では独立した新規profileで3回確認する。診断用の限定変更による因果の証明と、製品への恒久修正の採用は区別する。製品として根本解決と判断するには、原因に対応する恒久修正と、通常GUI・通常の保護設定での3回の成功が必要である。HTTP 200、署名検証成功、アプリ起動、画像ファイルの存在だけで完了とはしない。
 
-ページ停止の原因はまだ確定していない。Chromium Safe Storage authorizationや非同期暗号化callbackの待ちを含む候補を、実行時stack、securityd authorization情報、read-only trusted-app metadata、network request timelineで調べる。調査は継続中であり、Oct 5 archived evidenceの照合、GUI owner confirmation、通常Keychain条件でのproduct acceptance、ANGLE/KOOV確認は未完了である。
+ページ停止の原因はまだ確定していない。Chromium Safe Storage authorizationや非同期暗号化callbackの待ちを含む候補を、実行時stack、securityd authorization情報、read-only trusted-app metadata、network request timelineで調べる。調査は継続中であり、2026-10-05の試行条件への適用範囲、GUI owner confirmation、通常Keychain条件でのproduct acceptance、ANGLE/KOOV確認は未完了である。
 
 ## 実行手段
 
-クラウド上の準備から対象Macでの作業へ移る。GitHubの`naokikambe/chromium-angle-family1-experiment`、`phase5-page-recovery`ブランチをMacへclone、または既存checkoutでfetchして別worktreeへ展開する。取得コマンドとGUIユーザー・Keychainの開始確認は[実機向け引き継ぎプロンプト](phase5-page-recovery-handoff.md)に記載した。試験用app・保存済みlogs・signing identityは適切なアクセス制御の下で管理する。
+クラウド上の準備から対象Macでの作業へ移る。GitHubの`naokikambe/chromium-angle-family1-experiment`、`phase5-page-recovery`ブランチをMacへclone、または既存checkoutでfetchして別worktreeへ展開する。取得コマンドとGUIユーザー・Keychainの開始確認は[実機向け引き継ぎプロンプト](phase5-page-recovery-handoff.md)に記載した。試験用appと署名identityは適切なアクセス制御の下で扱い、公開記録には再現可能な条件・結果要約を記載する。
 
 リポジトリの [`scripts/page-recovery/`](../scripts/page-recovery/README.md) をMacで使用する。Python 3.10以上と、MacのGUIログインユーザーのTerminalを使用する。追加Pythonパッケージは不要。
 
@@ -39,7 +39,7 @@
 | 4 | 設定差が見つかった場合、新規unsigned原本から設定を修正したstockコピーを作り初回署名・同じ試験 | 30〜60分 | 本体ビルドなしでページ表示が復旧するか |
 | 5 | 成功なら原因条件だけを変えた失敗／成功の対照と、GUI・独立した3回の新規profile試験。失敗なら対象requestの最初のエラー・切断を特定 | 30〜60分 | 原因特定の証拠がそろったか、次に何を観測するか |
 
-初回は2〜4時間を中間報告の区切りとする。アプリ・証跡・証明書がそろっている場合の作業予算で、調査の終了条件ではない。根本原因の特定まで検証を続ける。新しい証拠を増やさない反復を避け、停止段階と不足する観測を報告して次の検証を選ぶ。権限・入力・実行資源の不足で中断する場合は未完了と明示し、再開条件を記録する。
+初回は2〜4時間を中間報告の区切りとする。必要な入力・実行環境・権限がそろっている場合の作業予算で、調査の終了条件ではない。根本原因の特定まで検証を続ける。新しい測定を加えない反復を避け、停止段階と不足する観測を報告して次の検証を選ぶ。権限・入力・実行資源の不足で中断する場合は未完了と明示し、再開条件を記録する。
 
 ## 最初に実施する修正候補
 
@@ -61,7 +61,7 @@ ChromiumのProcessRequirementは、Team IDだけでなく証明書種別も照�
 
 ### KeychainのSafe Storage待ちを診断する
 
-続行する実機担当者は[Keychain調査の続行プロンプト](phase5-keychain-investigation-handoff.md)を使用する。次は、承認状態を変える前の通常→mock→通常の対照、独立した3試験の実GUI確認、承認応答前後のAPI／callback／HTTP timeline、10月5日の記録との照合を進める。アクセス拒否がAPIから返った状態と、未応答の承認待ちで返らない状態を区別する。根本原因の特定と通常Keychainでの製品受入は別の判定である。
+続行する実機担当者は[Keychain調査の続行プロンプト](phase5-keychain-investigation-handoff.md)を使用する。次は、承認状態を変える前の通常→mock→通常の対照、独立した3試験の実GUI確認、承認応答前後のAPI／callback／HTTP timeline、10月5日の試行条件への適用範囲の確認を進める。アクセス拒否がAPIから返った状態と、未応答の承認待ちで返らない状態を区別する。根本原因の特定と通常Keychainでの製品受入は別の判定である。
 
 現在の`probe.py`はGUI観察待機前にdocumentと画像を採取する。待機中にダイアログへ応答する試験では、応答後の観測を改めて採取し、応答前の結果で復旧を判定しない。
 
@@ -76,7 +76,7 @@ Chromium Safe Storage authorizationや、暗号化providerの非同期callback�
 | network timeline | request開始、cookie processing、HTTP stream開始、server受信を照合 | status codeやGUI画像単独では、ユーザーに見える画面を確認しない |
 | paired mock-keychain diagnostic | fresh profilesでKeychain providerだけを切り替え、同じfixtureを再試行 | 診断介入であり、通常Keychainでのproduct acceptanceや全履歴の原因確認ではない |
 
-署名policy比較では同一snapshot由来のunsigned sourceと別のnew outputを使い、complete signing planとrole settingsを確認する。初回署名と後の再署名を区別し、適切なrole policyでも問題が続く場合はKeychain authorizationなど他要因を調べる。`--use-mock-keychain`は診断介入であり、製品修正として採用しない。Ordinary-Keychain acceptanceには、通常GUIの人間確認と通常設定での独立した3 fresh profilesの成功が必要である。Oct 5 archived evidenceとの対応も確認する。
+署名policy比較では同一snapshot由来のunsigned sourceと別のnew outputを使い、complete signing planとrole settingsを確認する。初回署名と後の再署名を区別し、適切なrole policyでも問題が続く場合はKeychain authorizationなど他要因を調べる。`--use-mock-keychain`は診断介入であり、製品修正として採用しない。Ordinary-Keychain acceptanceには、通常GUIの人間確認と通常設定での独立した3 fresh profilesの成功が必要である。2026-10-05の試行条件への適用範囲も確認する。
 
 コード経路の参照は固定commit `82303c21` の`components/os_crypt/async/browser/keychain_key_provider.mm`、`components/os_crypt/common/keychain_password_mac.mm`、`net/url_request/url_request_http_job.cc`。中間のcallback依存は`components/os_crypt/async/browser/os_crypt_async.cc`、`services/network/network_context.cc`、`net/extras/sqlite/sqlite_persistent_cookie_store.cc`で確認し、実際の入力版・実行時証拠と対応付ける。
 
@@ -129,6 +129,6 @@ ANGLEの版合わせの見積もりはstock復旧後の差分確認で出す。H
 
 キットのsymlink検証では、resolved targetを未解決のapp pathと比較していたため、macOSの`/var`と`/private/var`の別名を通る内部リンクを誤って拒否する問題が見つかった。app rootをcanonicalizeして比較する修正とsymlink parent alias regressionを追加した。portable regression checks that internal links through an aliased parent are accepted while external and broken links are rejected.
 
-ページ表示の原因調査は継続中であり、現在の資料は根本原因を確定しない。Oct 5 archived evidence、GUI owner confirmation、ordinary-Keychain product acceptance、ANGLE/KOOVは未完了。`--use-mock-keychain`によるdiagnostic resultだけでproduct recoveryとは判定しない。
+ページ表示の原因調査は継続中であり、現在の資料は根本原因を確定しない。2026-10-05の試行条件への適用範囲、GUI owner confirmation、ordinary-Keychain product acceptance、ANGLE/KOOVは未完了。`--use-mock-keychain`によるdiagnostic resultだけでproduct recoveryとは判定しない。
 
 小規模ビルドの候補追加は打ち切りを提案する。別チャットで進行するCIの停止・方針変更は本作業では操作していない。

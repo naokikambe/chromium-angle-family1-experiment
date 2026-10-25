@@ -7,7 +7,7 @@
 
 ## 目的と現在地
 
-目的は、MacBookAir6,1／Intel HD Graphics 5000で独自ANGLEを使い、KOOVの描画・操作まで確認すること。
+目的は、Mac上のFamily 1 GPUで独自ANGLEを使い、KOOVの描画・操作まで確認すること。
 
 独自ANGLEのロード、Metal／EGL初期化、WebGL1の最小描画には実機で成功している。一方、Apple Development署名を行った実験用ブラウザのHTTPページ読み込みが停止し、KOOVの画面・操作には到達していない。その直接原因は未特定。
 
@@ -115,4 +115,4 @@ zlibライブラリ、zlib_bench、minigzip、zpipe、brotli、opus_compare、op
 - [無料CI事前確認と小規模ビルドの記録](https://github.com/naokikambe/chromium-angle-family1-experiment/blob/8df3e449d2dff8ca4532bbb44a56dbfc5d86b28b/docs/phase5-ci-preflight-free-decision.md)
 - [確認時点の実行中CI](https://github.com/naokikambe/chromium-angle-family1-experiment/actions/runs/38180664558)
 
-本書は既存文書とGitHub Actionsの状態を照合した整理であり、実機rawログの独立した再解析や、新規署名・起動試験を実施したものではない。
+本書は既存文書とGitHub Actionsの状態を照合した整理であり、新規署名・起動試験を実施したものではない。
