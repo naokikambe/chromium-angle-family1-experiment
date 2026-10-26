@@ -1,5 +1,7 @@
 # Phase 5 ANGLE snapshot build
 
+> Historical build record: this document describes the Chrome 154.0.8037.0 / ANGLE `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448` target. The current Stable 156 build candidate is documented in [Chrome Stable 156 + Family 1 ANGLE](phase5-chrome-stable156-angle-build.md); its full ANGLE build and runtime acceptance remain pending. Do not infer that the historical patch applies to the newer source revision.
+
 The runtime workflow is pinned to Chromium snapshot 1689422. Chromium source revision `82303c21a18acdc256c6264cd2ed0e1588df99d4` reports version `154.0.8037.0`, and its `DEPS` file pins ANGLE revision `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`. The workflow fetches that Chromium commit directly, checks its version and `DEPS` pin, and then checks out the matching ANGLE commit. The release tag is not used as the source identity.
 
 The runtime patch adds diagnostic markers around renderer availability, Metal initialization, EGL config and context creation, and library loading. It also adds a narrowly scoped Family 1 runtime opt-in in `src/common/apple_platform_utils.mm`. The normal Mac GPU Family 2 check remains the default. Setting `ANGLE_PHASE5_ENABLE_METAL_FAMILY1=1` permits the Mac Family 1 capability check for this experiment; any other value fails closed. Family 2 devices continue through the existing Family 2 path when the variable is set.

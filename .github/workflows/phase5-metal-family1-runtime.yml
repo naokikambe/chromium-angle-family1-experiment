@@ -1,14 +1,14 @@
-name: Phase 5 Metal Family 1 runtime artifact
+name: Phase 5 Chrome Stable 156 Metal Family 1 runtime artifact
 
 on:
   workflow_call:
     inputs:
       angle_revision:
-        description: Pinned ANGLE revision from Chromium snapshot 1689422 DEPS
+        description: Pinned ANGLE revision from Chrome Stable 156 DEPS
         required: true
         type: string
       chrome_version:
-        description: Chromium snapshot version for the pinned source revision
+        description: Chrome Stable version for the pinned source revision
         required: true
         type: string
       runtime_patch_sha256:
@@ -18,19 +18,19 @@ on:
   workflow_dispatch:
     inputs:
       angle_revision:
-        description: Pinned ANGLE revision from Chromium snapshot 1689422 DEPS
+        description: Pinned ANGLE revision from Chrome Stable 156 DEPS
         required: true
-        default: 8efd15f71c27cd0bc2a9cf0074d77e899ca9c448
+        default: 3b89d84e9d59f75675ac4e2bef58fc068a9f0577
         type: string
       chrome_version:
-        description: Chromium snapshot version for the pinned source revision
+        description: Chrome Stable version for the pinned source revision
         required: true
-        default: 154.0.8037.0
+        default: 156.0.8078.48
         type: string
       runtime_patch_sha256:
         description: SHA-256 of the checked-in Phase 5 runtime patch
         required: true
-        default: 98c5b573da41d8f0a3d64d6a4352c25adbf89ca823c47b8fa56178cf9f1c1f4b
+        default: dedac2c57daa69b72fe78bbde443f45d5a6cdfe128d4022049a35c0dbbf501b0
         type: string
 
 concurrency:
@@ -53,7 +53,7 @@ jobs:
       DEPOT_TOOLS_UPDATE: "0"
       ANGLE_REVISION: ${{ inputs.angle_revision }}
       CHROME_VERSION: ${{ inputs.chrome_version }}
-      CHROMIUM_REVISION: 82303c21a18acdc256c6264cd2ed0e1588df99d4
+      CHROMIUM_REVISION: d0c02bfad08ec92a6ffcf989e53cd995e6381a4c
       RUNTIME_PATCH_PATH: patches/phase5-metal-family1-runtime.patch
       RUNTIME_PATCH_SHA256: ${{ inputs.runtime_patch_sha256 }}
 
@@ -62,6 +62,19 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+
+      - name: Select pinned Xcode toolchain
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          developer_dir=/Applications/Xcode_16.4.app/Contents/Developer
+          test -d "$developer_dir"
+          export DEVELOPER_DIR="$developer_dir"
+          printf 'DEVELOPER_DIR=%s\n' "$developer_dir" >> "$GITHUB_ENV"
+          test "$(xcodebuild -version | awk '/^Xcode / {print $2; exit}')" = 16.4
+          test "$(xcrun --show-sdk-version)" = 15.5
+          xcrun --find metal >/dev/null
 
       - name: Initialize runner paths
         shell: bash
@@ -95,11 +108,11 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$ANGLE_REVISION" =~ ^[0-9a-f]{40}$ ]]
-          test "$ANGLE_REVISION" = 8efd15f71c27cd0bc2a9cf0074d77e899ca9c448
+          test "$ANGLE_REVISION" = 3b89d84e9d59f75675ac4e2bef58fc068a9f0577
           [[ "$CHROME_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          test "$CHROME_VERSION" = 154.0.8037.0
+          test "$CHROME_VERSION" = 156.0.8078.48
           [[ "$CHROMIUM_REVISION" =~ ^[0-9a-f]{40}$ ]]
-          test "$CHROMIUM_REVISION" = 82303c21a18acdc256c6264cd2ed0e1588df99d4
+          test "$CHROMIUM_REVISION" = d0c02bfad08ec92a6ffcf989e53cd995e6381a4c
           [[ "$RUNTIME_PATCH_SHA256" =~ ^[0-9a-f]{64}$ ]]
           test -f "$RUNTIME_PATCH_PATH"
           test "$(shasum -a 256 "$RUNTIME_PATCH_PATH" | awk '{print $1}')" = "$RUNTIME_PATCH_SHA256"
@@ -215,16 +228,10 @@ jobs:
           git apply --unidiff-zero -- "$GITHUB_WORKSPACE/$RUNTIME_PATCH_PATH"
           expected_source_paths=$(printf '%s\n' \
               'include/GLSLANG/ShaderLang.h' \
-              'src/compiler/translator/msl/EmitMetal.cpp' \
               'src/common/apple_platform_utils.mm' \
-              'src/libANGLE/Context.cpp' \
-              'src/libANGLE/Display.cpp' \
-              'src/libANGLE/renderer/metal/DisplayMtl.mm' \
+              'src/compiler/translator/msl/EmitMetal.cpp' \
               'src/libANGLE/renderer/metal/ShaderMtl.mm' \
-              'src/libANGLE/renderer/metal/mtl_utils.mm' \
-              'src/libANGLE/validationEGL.cpp' \
-              'src/libEGL/libEGL_autogen.cpp' \
-              'src/libGLESv2/entry_points_egl_autogen.cpp' | LC_ALL=C sort)
+              'src/libANGLE/renderer/metal/mtl_utils.mm' | LC_ALL=C sort)
           test "$(git status --short | sed 's/^.. //' | LC_ALL=C sort)" = "$expected_source_paths"
           if ! python3 "$GITHUB_WORKSPACE/tests/phase5-metal-family1-native-query-policy.py" \
               --mtl-utils "$ANGLE_ROOT/src/libANGLE/renderer/metal/mtl_utils.mm" \

@@ -41,11 +41,11 @@ check_sha256() {
   fail 'unexpected runtime artifact schema'
 [[ "$(manifest_value RUNTIME_PROFILE)" == phase5-metal-family1-control-v1 ]] ||
   fail 'unexpected runtime profile'
-[[ "$(manifest_value CHROME_VERSION)" == 154.0.8037.0 ]] || fail 'artifact is not for snapshot 1689422'
-[[ "$(manifest_value CHROMIUM_REVISION)" == 82303c21a18acdc256c6264cd2ed0e1588df99d4 ]] ||
-  fail 'Chromium source revision does not match snapshot 1689422'
-[[ "$(manifest_value ANGLE_REVISION)" == 8efd15f71c27cd0bc2a9cf0074d77e899ca9c448 ]] ||
-  fail 'ANGLE revision does not match the pinned Chromium DEPS entry'
+[[ "$(manifest_value CHROME_VERSION)" == 156.0.8078.48 ]] || fail 'artifact is not for Chrome Stable 156.0.8078.48'
+[[ "$(manifest_value CHROMIUM_REVISION)" == d0c02bfad08ec92a6ffcf989e53cd995e6381a4c ]] ||
+  fail 'Chromium source revision does not match the Chrome Stable tag'
+[[ "$(manifest_value ANGLE_REVISION)" == 3b89d84e9d59f75675ac4e2bef58fc068a9f0577 ]] ||
+  fail 'ANGLE revision does not match the tagged Chrome Stable DEPS entry'
 [[ "$(manifest_value ANGLE_EXPECTED_REVISION)" == "$(manifest_value ANGLE_REVISION)" ]] ||
   fail 'ANGLE expected and recorded revisions differ'
 [[ "$(manifest_value ANGLE_ACTUAL_REVISION)" == "$(manifest_value ANGLE_REVISION)" ]] ||
@@ -60,7 +60,7 @@ patch_path=$(manifest_value RUNTIME_PATCH_PATH)
 [[ "$patch_path" != /* && "$patch_path" != *..* ]] || fail 'runtime patch path is not repository-relative'
 patch_sha=$(manifest_value RUNTIME_PATCH_SHA256)
 [[ "$patch_sha" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid runtime patch SHA-256'
-[[ "$patch_sha" == 98c5b573da41d8f0a3d64d6a4352c25adbf89ca823c47b8fa56178cf9f1c1f4b ]] ||
+[[ "$patch_sha" == dedac2c57daa69b72fe78bbde443f45d5a6cdfe128d4022049a35c0dbbf501b0 ]] ||
   fail 'runtime patch hash does not match the reviewed source patch'
 check_sha256 "$artifact_dir/runtime-patch.diff" "$patch_sha" 'runtime patch provenance'
 [[ "$(manifest_value RUNTIME_PATCH_APPLIED)" == true ]] || fail 'runtime patch was not recorded as applied'
@@ -139,7 +139,7 @@ for library in libEGL.dylib libGLESv2.dylib; do
   [[ "$details" == *'not signed'* ]] || fail "$library signature state could not be confirmed unsigned"
 done
 
-[[ "$(manifest_value ARTIFACT_NAME)" =~ ^angle-macos-x86_64-chrome-154\.0\.8037\.0-angle-8efd15f7-[0-9]+$ ]] ||
+[[ "$(manifest_value ARTIFACT_NAME)" =~ ^angle-macos-x86_64-chrome-156\.0\.8078\.48-angle-3b89d84e-[0-9]+$ ]] ||
   fail 'unexpected artifact name'
 
 printf '%s\n' 'phase5 runtime artifact verification passed'

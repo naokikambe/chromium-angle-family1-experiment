@@ -2,6 +2,12 @@
 
 更新日: 2026-10-26
 
+## 次段階候補: Chrome Stable 156 + Family 1 ANGLE
+
+2026-10-26の公開リリース情報ではChrome 156.0.8078.48がMac向けStableとして告知され、Chrome 157はMacで小規模Early Stable rollout予定とされている。Stableの展開は段階的なため、実際にbuildを開始する日に版を再確認する。Chrome tag `156.0.8078.48`のChromium commitは`d0c02bfad08ec92a6ffcf989e53cd995e6381a4c`で、tagged `DEPS`のANGLE pinは`3b89d84e9d59f75675ac4e2bef58fc068a9f0577`。
+
+これはbuild候補のsource pinであり、ANGLE全体のbuild、Chrome Stable bundleへの組込み、Chrome実行、KOOV受入の完了を意味しない。候補patchとbuild範囲は[Chrome Stable 156 + Family 1 ANGLE build candidate](phase5-chrome-stable156-angle-build.md)を参照。
+
 ## 現在の作業
 
 KOOVの現行対象はChrome for Testing 154.0.8037.0とFamily 1 ANGLE revision `8efd15f71c27cd0bc2a9cf0074d77e899ca9c448`の組み合わせである。Chromiumだけで行ったKOOV向け動画・codec調査は過去の比較であり、KOOVの受入経路ではない。KOOV用途ではそのChromium動画問題を追究せず、Chromeのcodec構成を使う。
