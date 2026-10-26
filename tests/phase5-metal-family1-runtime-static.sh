@@ -6,6 +6,55 @@ patch=${2:?runtime patch path}
 test -f "$workflow"
 test -f "$patch"
 test -f licenses/ANGLE-LICENSE.txt
+python3 - "$workflow" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+workflow = Path(sys.argv[1]).read_text()
+triggers = re.search(r'(?ms)^on:\n(?P<body>.*?)(?=^\S|\Z)', workflow)
+if not triggers:
+    raise SystemExit("runtime workflow lacks an event block")
+event_names = re.findall(r'(?m)^  ([A-Za-z_]+):', triggers["body"])
+if event_names != ["workflow_call", "workflow_dispatch", "push"]:
+    raise SystemExit("runtime workflow trigger set changed")
+push = re.search(r'(?ms)^  push:\n(?P<body>.*?)(?=^(?:  \S|\S)|\Z)', workflow)
+if not push:
+    raise SystemExit("runtime workflow lacks a push trigger")
+actual_scope = [line.strip() for line in push["body"].splitlines() if line.strip()]
+expected_scope = [
+    "branches:",
+    "- phase5-page-recovery",
+    "paths:",
+    "- '.github/workflows/phase5-metal-family1-runtime.yml'",
+    "- 'patches/phase5-metal-family1-runtime.patch'",
+    "- 'scripts/verify-artifact.sh'",
+    "- 'scripts/verify-phase5-runtime-artifact.sh'",
+    "- 'tests/phase5-metal-family1-runtime-static.sh'",
+    "- 'tests/phase5-metal-family1-native-query-policy.py'",
+    "- 'tests/phase5-metal-family1-math-options-policy.py'",
+    "- 'tests/phase5-metal-family1-vertex-unpack-policy.py'",
+]
+if actual_scope != expected_scope:
+    raise SystemExit("push trigger branch/path scope changed")
+
+defaults = {
+    "ANGLE_REVISION": ("angle_revision", "3b89d84e9d59f75675ac4e2bef58fc068a9f0577"),
+    "CHROME_VERSION": ("chrome_version", "156.0.8078.48"),
+    "RUNTIME_PATCH_SHA256": (
+        "runtime_patch_sha256",
+        "dedac2c57daa69b72fe78bbde443f45d5a6cdfe128d4022049a35c0dbbf501b0",
+    ),
+}
+for env_name, (input_name, pinned_value) in defaults.items():
+    pattern = (
+        rf"(?m)^      {env_name}: \$\{{\{{ inputs\.{input_name} \|\| "
+        rf"'{re.escape(pinned_value)}' \}}\}}$"
+    )
+    if not re.search(pattern, workflow):
+        raise SystemExit(f"{env_name} lacks the pinned no-input fallback")
+print("push trigger: branch/path scope and pinned no-input defaults passed")
+PY
 license_sha256=$(shasum -a 256 licenses/ANGLE-LICENSE.txt | awk '{print $1}')
 test "$license_sha256" = bf4da21bd20bcfb5b60b7ecc67fa864a79be049e21d6178076887f178dd6c71a
 grep -F 'patches/phase5-metal-family1-runtime.patch whitespace=-blank-at-eol' .gitattributes >/dev/null

@@ -32,6 +32,18 @@ on:
         required: true
         default: dedac2c57daa69b72fe78bbde443f45d5a6cdfe128d4022049a35c0dbbf501b0
         type: string
+  push:
+    branches:
+      - phase5-page-recovery
+    paths:
+      - '.github/workflows/phase5-metal-family1-runtime.yml'
+      - 'patches/phase5-metal-family1-runtime.patch'
+      - 'scripts/verify-artifact.sh'
+      - 'scripts/verify-phase5-runtime-artifact.sh'
+      - 'tests/phase5-metal-family1-runtime-static.sh'
+      - 'tests/phase5-metal-family1-native-query-policy.py'
+      - 'tests/phase5-metal-family1-math-options-policy.py'
+      - 'tests/phase5-metal-family1-vertex-unpack-policy.py'
 
 concurrency:
   group: phase5-metal-family1-runtime-${{ github.workflow }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -51,11 +63,11 @@ jobs:
       DEPOT_TOOLS_REPOSITORY: https://chromium.googlesource.com/chromium/tools/depot_tools.git
       DEPOT_TOOLS_REVISION: 0306e4682b4ac35287c726fa35a983157a625902
       DEPOT_TOOLS_UPDATE: "0"
-      ANGLE_REVISION: ${{ inputs.angle_revision }}
-      CHROME_VERSION: ${{ inputs.chrome_version }}
+      ANGLE_REVISION: ${{ inputs.angle_revision || '3b89d84e9d59f75675ac4e2bef58fc068a9f0577' }}
+      CHROME_VERSION: ${{ inputs.chrome_version || '156.0.8078.48' }}
       CHROMIUM_REVISION: d0c02bfad08ec92a6ffcf989e53cd995e6381a4c
       RUNTIME_PATCH_PATH: patches/phase5-metal-family1-runtime.patch
-      RUNTIME_PATCH_SHA256: ${{ inputs.runtime_patch_sha256 }}
+      RUNTIME_PATCH_SHA256: ${{ inputs.runtime_patch_sha256 || 'dedac2c57daa69b72fe78bbde443f45d5a6cdfe128d4022049a35c0dbbf501b0' }}
 
     steps:
       - name: Check out workflow repository
