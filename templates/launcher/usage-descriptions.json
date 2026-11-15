@@ -1,0 +1,9 @@
+{
+  "schema": "angle-launcher-usage-v1",
+  "required_features": {
+    "bluetooth": {
+      "info_plist_key": "NSBluetoothAlwaysUsageDescription",
+      "default_text": "Bluetooth is used to communicate with the selected robotics controller."
+    }
+  }
+}

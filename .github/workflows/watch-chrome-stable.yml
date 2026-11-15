@@ -1,0 +1,235 @@
+name: Watch Chrome Stable ANGLE candidates
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Monitor Stable, explicitly retry a failed version, re-acquire an expired success, or recover state
+        required: true
+        default: monitor
+        type: choice
+        options:
+          - monitor
+          - retry_failed_version
+          - reacquire_expired_artifact
+          - recover_state
+      reacquire_version:
+        description: Exact four-part Chrome version with a prior successful artifact that has expired
+        required: false
+        default: ''
+        type: string
+      retry_failed_version:
+        description: Exact four-part Chrome version whose latest attempt failed or was interrupted
+        required: false
+        default: ''
+        type: string
+      confirm_unpinned_retry:
+        description: Explicitly allow resolving the exact version tag when no prior source pins were recorded
+        required: false
+        default: false
+        type: boolean
+      last_processed_version:
+        description: Exact last processed Chrome version, required only when no retained state exists
+        required: false
+        default: ''
+        type: string
+      recovery_reason:
+        description: Generic lowercase audit slug only; do not enter personal, device, or local details
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: chrome-stable-angle-monitor
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  monitor-and-build:
+    if: github.ref == 'refs/heads/main' && inputs.operation != 'recover_state'
+    runs-on: macos-15-intel
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      CANDIDATE_FILE: ${{ runner.temp }}/stable-candidate.json
+      STATE_FILE: ${{ runner.temp }}/stable-monitor-state.json
+      INPUTS_FILE: ${{ runner.temp }}/build-inputs.json
+      ARTIFACT_DIR: ${{ runner.temp }}/angle-candidate
+      FAILURE_STAGE_FILE: ${{ runner.temp }}/angle-failure-stage
+    steps:
+      - name: Check out the reviewed maintenance code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Detect a new fully rolled out Mac Stable release
+        id: monitor
+        shell: bash
+        env:
+          MONITOR_OPERATION: ${{ inputs.operation || 'monitor' }}
+          REACQUIRE_VERSION: ${{ inputs.operation == 'reacquire_expired_artifact' && inputs.reacquire_version || '' }}
+          RETRY_FAILED_VERSION: ${{ inputs.operation == 'retry_failed_version' && inputs.retry_failed_version || '' }}
+          CONFIRM_UNPINNED_RETRY: ${{ inputs.confirm_unpinned_retry }}
+        run: |
+          set -euo pipefail
+          printf 'release-detection\n' > "$FAILURE_STAGE_FILE"
+          begin_args=(--operation "$MONITOR_OPERATION" --repository "$REPOSITORY" --run-id "$GITHUB_RUN_ID"
+            --state "$STATE_FILE" --output "$CANDIDATE_FILE" --github-output "$GITHUB_OUTPUT"
+            --reacquire-version "$REACQUIRE_VERSION" --retry-failed-version "$RETRY_FAILED_VERSION")
+          if [[ "$CONFIRM_UNPINNED_RETRY" == "true" ]]; then
+            begin_args+=(--confirm-unpinned-retry)
+          fi
+          python3 scripts/angle-monitor.py begin \
+            "${begin_args[@]}"
+
+      - name: Save a pre-build recovery checkpoint
+        id: checkpoint
+        if: steps.monitor.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: stable-monitor-checkpoint-${{ github.run_id }}
+          path: ${{ runner.temp }}/stable-monitor-state.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Resolve the exact Chromium release tag and ANGLE pin
+        id: source
+        if: steps.monitor.outputs.status == 'BUILD_CANDIDATE' && steps.checkpoint.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'official-tag-resolution\n' > "$FAILURE_STAGE_FILE"
+          version=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["chrome_version"])' "$CANDIDATE_FILE")
+          mkdir -p "$RUNNER_TEMP/chromium-source"
+          git -C "$RUNNER_TEMP/chromium-source" init -q
+          git -C "$RUNNER_TEMP/chromium-source" remote add origin https://chromium.googlesource.com/chromium/src.git
+          git -C "$RUNNER_TEMP/chromium-source" fetch --depth=1 origin "refs/tags/$version:refs/tags/$version"
+          git -C "$RUNNER_TEMP/chromium-source" checkout --detach "refs/tags/$version"
+          python3 scripts/resolve-chromium-source.py --repo "$RUNNER_TEMP/chromium-source" \
+            --expected-version "$version" > "$RUNNER_TEMP/chromium-inputs.json"
+          printf 'source-pin-comparison\n' > "$FAILURE_STAGE_FILE"
+          python3 scripts/angle-monitor.py record-source --run-id "$GITHUB_RUN_ID" \
+            --state "$STATE_FILE" --candidate "$CANDIDATE_FILE" \
+            --source "$RUNNER_TEMP/chromium-inputs.json"
+          chromium_revision=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["chromium_revision"])' "$RUNNER_TEMP/chromium-inputs.json")
+          angle_revision=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["angle_revision"])' "$RUNNER_TEMP/chromium-inputs.json")
+          printf 'candidate-input-resolution\n' > "$FAILURE_STAGE_FILE"
+          python3 scripts/resolve-build-inputs.py --chrome-version "$version" \
+            --chromium-revision "$chromium_revision" --angle-revision "$angle_revision" \
+            --workflow-revision "$GITHUB_SHA" > "$INPUTS_FILE"
+          python3 scripts/angle-monitor.py record-inputs --run-id "$GITHUB_RUN_ID" \
+            --state "$STATE_FILE" --candidate "$CANDIDATE_FILE" --inputs "$INPUTS_FILE"
+          printf 'input-checkpoint\n' > "$FAILURE_STAGE_FILE"
+          artifact_name="angle-macos-x86_64-chrome-${version}-run-${GITHUB_RUN_ID}"
+          printf 'ARTIFACT_NAME=%s\n' "$artifact_name" >> "$GITHUB_ENV"
+          printf 'BUILD_KEY=%s\n' "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["build_key"])' "$INPUTS_FILE")" >> "$GITHUB_ENV"
+
+      - name: Save the exact resolved source, patch, and recipe checkpoint
+        id: resolved_checkpoint
+        if: steps.source.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: stable-monitor-resolved-checkpoint-${{ github.run_id }}
+          path: ${{ runner.temp }}/stable-monitor-state.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Build the two unsigned ANGLE libraries
+        id: build
+        if: steps.monitor.outputs.status == 'BUILD_CANDIDATE' && steps.checkpoint.outcome == 'success' && steps.source.outcome == 'success' && steps.resolved_checkpoint.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'source-fetch\n' > "$FAILURE_STAGE_FILE"
+          bash scripts/build-angle-candidate.sh "$GITHUB_WORKSPACE" "$INPUTS_FILE" "$ARTIFACT_DIR"
+          printf 'manifest-and-binary-validation\n' > "$FAILURE_STAGE_FILE"
+          bash scripts/verify-artifact.sh "$ARTIFACT_DIR"
+          bash scripts/verify-angle-binaries.sh "$ARTIFACT_DIR" x86_64 13.0
+          python3 scripts/write-angle-manifest.py --artifact-dir "$ARTIFACT_DIR" --inputs "$INPUTS_FILE" \
+            --run-id "$GITHUB_RUN_ID" --artifact-name "$ARTIFACT_NAME" \
+            --xcode-version "$(xcodebuild -version | tr '\n' ';')" \
+            --sdk-version "$(xcrun --show-sdk-version)" \
+            --clang-version "$(xcrun clang --version | head -n 1)" \
+            --ninja-version "$(ninja --version)"
+          python3 scripts/verify-angle-artifact.py "$ARTIFACT_DIR" \
+            --version "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["chrome_version"])' "$INPUTS_FILE")" \
+            --architecture x86_64 --build-key "$BUILD_KEY"
+
+      - name: Upload the candidate artifact for 90 days
+        id: artifact
+        if: steps.monitor.outputs.status == 'BUILD_CANDIDATE' && steps.build.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ARTIFACT_DIR }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Finalize the version index and monitor state
+        id: finish
+        if: always() && steps.monitor.outcome == 'success'
+        shell: bash
+        env:
+          JOB_STATUS: ${{ job.status }}
+          MONITOR_STATUS: ${{ steps.monitor.outputs.status }}
+        run: |
+          set -euo pipefail
+          failure_stage=$(cat "$FAILURE_STAGE_FILE" 2>/dev/null || printf 'monitor-finalization')
+          version=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("chrome_version","none"))' "$CANDIDATE_FILE")
+          artifact_name="angle-macos-x86_64-chrome-${version}-run-${GITHUB_RUN_ID}"
+          python3 scripts/angle-monitor.py finish --repository "$REPOSITORY" \
+            --run-id "$GITHUB_RUN_ID" --state "$STATE_FILE" --candidate "$CANDIDATE_FILE" \
+            --artifact-name "$artifact_name" --job-status "$JOB_STATUS" \
+            --failure-stage "$failure_stage" --build-key "${BUILD_KEY:-}" \
+            --manifest "$ARTIFACT_DIR/ANGLE_ARTIFACT_MANIFEST.json"
+
+      - name: Persist monitor state for the next run
+        if: always() && steps.monitor.outcome == 'success' && steps.finish.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: stable-monitor-state
+          path: ${{ runner.temp }}/stable-monitor-state.json
+          if-no-files-found: error
+          retention-days: 90
+
+  recover-monitor-state:
+    if: github.ref == 'refs/heads/main' && inputs.operation == 'recover_state'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      STATE_FILE: ${{ runner.temp }}/stable-monitor-state.json
+    steps:
+      - name: Check out the reviewed maintenance code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Restore retained state or write an owner-audited baseline
+        shell: bash
+        env:
+          LAST_PROCESSED_VERSION: ${{ inputs.last_processed_version }}
+          RECOVERY_REASON: ${{ inputs.recovery_reason }}
+        run: |
+          set -euo pipefail
+          python3 scripts/angle-monitor.py recover --repository "$REPOSITORY" \
+            --run-id "$GITHUB_RUN_ID" --state "$STATE_FILE" \
+            --last-processed-version "$LAST_PROCESSED_VERSION" --reason "$RECOVERY_REASON"
+
+      - name: Persist recovered monitor state
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: stable-monitor-state
+          path: ${{ runner.temp }}/stable-monitor-state.json
+          if-no-files-found: error
+          retention-days: 90

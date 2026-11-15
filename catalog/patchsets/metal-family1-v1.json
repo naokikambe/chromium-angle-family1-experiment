@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "kind": "patchset",
+  "id": "metal-family1-v1",
+  "candidate_for_new_angle": true,
+  "angle_revision": "3b89d84e9d59f75675ac4e2bef58fc068a9f0577",
+  "patch_path": "patches/phase5-metal-family1-runtime.patch",
+  "patch_sha256": "dedac2c57daa69b72fe78bbde443f45d5a6cdfe128d4022049a35c0dbbf501b0",
+  "apply_order": [
+    "include/GLSLANG/ShaderLang.h",
+    "src/common/apple_platform_utils.mm",
+    "src/compiler/translator/msl/EmitMetal.cpp",
+    "src/libANGLE/renderer/metal/ShaderMtl.mm",
+    "src/libANGLE/renderer/metal/mtl_utils.mm"
+  ],
+  "source_blobs": {
+    "include/GLSLANG/ShaderLang.h": "e59c7e773209f35d4422b9d7051b1df595a2750b",
+    "src/common/apple_platform_utils.mm": "635abb6f2f9040e6efa8488beac7ebf0822a6906",
+    "src/compiler/translator/msl/EmitMetal.cpp": "b7aa310e48414e89d912d7c1c886549947a5983b",
+    "src/libANGLE/renderer/metal/ShaderMtl.mm": "5fb6ca47c0979ebfd58f4bb6c206f3e683aeaffb",
+    "src/libANGLE/renderer/metal/mtl_utils.mm": "6912d1cf0d70fc483a49815be223b7c8f5f7a7b3"
+  }
+}

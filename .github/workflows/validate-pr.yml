@@ -1,0 +1,46 @@
+name: Validate maintenance pull requests
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  synthetic-validation:
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    steps:
+      - name: Check out the pull request head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Validate catalog and local synthetic suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/validate-catalog.py
+          python3 -m unittest discover -s tests -v
+
+      - name: Validate publication guard fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/test_safe_push.py
+          python3 scripts/test_safe_push_launcher.py
+
+      - name: Scan the pull request head for publication privacy
+        shell: bash
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/check-publication-privacy.py --tree "$PR_HEAD"

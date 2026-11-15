@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "kind": "chrome_source",
+  "chrome_version": "156.0.8078.48",
+  "chromium_revision": "d0c02bfad08ec92a6ffcf989e53cd995e6381a4c",
+  "angle_revision": "3b89d84e9d59f75675ac4e2bef58fc068a9f0577",
+  "baseline_inputs": {
+    "patchset_id": "metal-family1-v1",
+    "patch_sha256": "dedac2c57daa69b72fe78bbde443f45d5a6cdfe128d4022049a35c0dbbf501b0",
+    "recipe_id": "macos-x64-metal-v1",
+    "recipe_sha256": "bea88d9ec894cb1ab875755be52c93b85ed9029d2f00a9f31363123e4d43d7ba"
+  }
+}
