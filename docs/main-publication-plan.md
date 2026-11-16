@@ -14,7 +14,7 @@ For any further branch update:
 4. Keep the PR in draft unless the owner separately approves a ready-for-review change. Do not submit or resolve a GitHub review without approval.
 5. Obtain separate approval before integrating into `main`. A squash merge is the proposed method because it keeps the integration linear and the reviewed PR is the unit of history.
 
-No direct commit or push to `main` is allowed. Branch-update approval does not authorize PR metadata changes, manual Actions runs, main integration, old-branch cleanup, legacy workflow shutdown, repository settings changes, or external guard changes.
+No direct commit or push to `main` is allowed. Source removal of obsolete workflows is part of this branch cleanup. Branch-update approval does not authorize PR metadata changes, manual Actions runs, main integration, old-branch cleanup, GitHub-side workflow disablement, old run/artifact deletion, repository settings changes, or external guard changes.
 
 ## Publication protections
 
@@ -28,7 +28,7 @@ The publication route only authorizes updates to `migration/angle-maintenance`. 
 
 The Stable monitor schedule is guarded to `refs/heads/main`; it does not run from the work branch or its PR. Integration into the default branch activates the six-hour schedule. A later scheduled run can start a macOS ANGLE build if it finds a new fully rolled out Stable release. Include that effect in any PR description update and main-integration approval.
 
-The `reproduce-156.yml` workflow is a manual, fixed-input baseline build. GitHub only accepts `workflow_dispatch` for a workflow file present on the default branch, so this PR's new reproduction workflow is not a pre-main build route. If a full build is required before integration, agree on and approve a separate route such as an owner-run local build; do not add a main-branch validation workflow without approval. The state-recovery operation only restores retained state or writes an owner-audited exact-version baseline; it does not build. Do not dispatch, rerun, or cancel Actions without the owner's approval for that specific operation.
+The `reproduce-baseline.yml` workflow is a manual, fixed-input Chrome 156 baseline build. GitHub only accepts `workflow_dispatch` for a workflow file present on the default branch, so this PR's renamed reproduction workflow is not a pre-main build route. If a full build is required before integration, agree on and approve a separate route such as an owner-run local build; do not add a main-branch validation workflow without approval. The state-recovery operation only restores retained state or writes an owner-audited exact-version baseline; it does not build. Do not dispatch, rerun, or cancel Actions without the owner's approval for that specific operation.
 
 ## Scope and verification limits
 

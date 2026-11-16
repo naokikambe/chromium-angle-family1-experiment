@@ -29,8 +29,19 @@ def runner_contexts_in_job_env(text):
 
 
 class WorkflowContractTests(unittest.TestCase):
+    def test_only_current_maintenance_workflows_remain(self):
+        workflow_names = sorted(
+            path.name
+            for path in (ROOT / ".github/workflows").iterdir()
+            if path.suffix in {".yml", ".yaml"}
+        )
+        self.assertEqual(
+            workflow_names,
+            ["reproduce-baseline.yml", "validate-pr.yml", "watch-chrome-stable.yml"],
+        )
+
     def test_workflows_are_read_only_and_actions_are_immutable_pins(self):
-        for relative in (".github/workflows/watch-chrome-stable.yml", ".github/workflows/reproduce-156.yml",
+        for relative in (".github/workflows/watch-chrome-stable.yml", ".github/workflows/reproduce-baseline.yml",
                          ".github/workflows/validate-pr.yml"):
             text = (ROOT / relative).read_text(encoding="utf-8")
             self.assertIn("contents: read", text)
@@ -60,7 +71,7 @@ class WorkflowContractTests(unittest.TestCase):
         recovery_init = watch.index("name: Initialize runner-local recovery path")
         self.assertLess(recovery_init, watch.index("name: Restore retained state or write an owner-audited baseline"))
 
-        reproduce = (ROOT / ".github/workflows/reproduce-156.yml").read_text(encoding="utf-8")
+        reproduce = (ROOT / ".github/workflows/reproduce-baseline.yml").read_text(encoding="utf-8")
         initialize = reproduce.index("name: Initialize runner-local reproduction paths")
         self.assertLess(initialize, reproduce.index("name: Resolve the pinned Chromium 156 release inputs"))
         self.assertIn("printf 'INPUTS_FILE=%s/build-inputs.json\\n' \"$RUNNER_TEMP\"", reproduce)
@@ -109,7 +120,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("ninja", text)
 
     def test_exact_156_reproduction_entry_is_manual_only(self):
-        text = (ROOT / ".github/workflows/reproduce-156.yml").read_text(encoding="utf-8")
+        text = (ROOT / ".github/workflows/reproduce-baseline.yml").read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", text)
         self.assertNotIn("schedule:", text)
         self.assertIn("156.0.8078.48", text)
@@ -125,10 +136,10 @@ class WorkflowContractTests(unittest.TestCase):
         text = (ROOT / "scripts/build-angle-candidate.sh").read_text(encoding="utf-8")
         self.assertIn('"apply","--check"', text)
         self.assertIn('inputs["patch_candidate_status"] == "catalog-match"', text)
-        self.assertIn("phase5-metal-family1-native-query-policy.py", text)
-        self.assertIn("phase5-metal-family1-math-options-policy.py", text)
+        self.assertIn("tests/angle-policy/native-query-policy.py", text)
+        self.assertIn("tests/angle-policy/math-options-policy.py", text)
         self.assertEqual(text.count('--mtl-utils "$angle_root/src/libANGLE/renderer/metal/mtl_utils.mm"'), 2)
-        self.assertIn("phase5-metal-family1-vertex-unpack-policy.py", text)
+        self.assertIn("tests/angle-policy/vertex-unpack-policy.py", text)
         self.assertIn('test "$actual_sdk" = "$expected_sdk"', text)
 
 

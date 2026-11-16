@@ -28,8 +28,10 @@ CI output states include `STABLE_RELEASE_DETECTED`, `RETRY_REQUESTED`, `CI_BUILD
 
 The catalog is reviewed source, not an automated database. The monitor writes no catalog changes, commits, PRs, issues, tags, releases, or notifications.
 
-## Existing experiment material
+## Supported entrypoints and retired experiments
 
-The common CDP and synthetic media/WebGL probes live under `src/probes/` and use package imports. They no longer import from `scripts/page-recovery`. Older full-Chromium, URL-diagnostic, preflight, test-stub, and page-recovery workflows remain separate legacy entrypoints pending a separately approved cleanup. They are not part of the ordinary ANGLE build path.
+The supported workflow entrypoints are the Stable monitor/candidate builder, read-only pull request validation, and fixed Chrome 156 baseline reproduction. The local helper is `scripts/local-angle.py`.
+
+This migration removes the old standalone ANGLE, Phase 3D, full-Chromium diagnostic, preflight, test-stub, and unsigned-browser workflows together with their dedicated support files. Shared CDP and synthetic media/WebGL probes remain under `src/probes/` and use package imports. They no longer import from `scripts/page-recovery`. Source removal on this branch does not erase workflow files on `main` before integration, old runs/artifacts, or copies on other branches.
 
 The existing publication privacy files and hooks retain their paths and contents. The migration is under review in Draft PR #2 from `migration/angle-maintenance`. Branch publication used a separate local checkout and dedicated guard; the existing experiment checkout and guard remain unchanged. Main integration requires separate owner approval and does not use a direct push. See the [publication plan](main-publication-plan.md).

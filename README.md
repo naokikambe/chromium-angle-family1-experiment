@@ -14,7 +14,13 @@ The maintenance candidate is based on the existing `main` base and is reviewed o
 - Recipe: `macos-x64-metal-v1` (build-recipe SHA-256 `bea88d9ec894cb1ab875755be52c93b85ed9029d2f00a9f31363123e4d43d7ba`)
 - Recipe target: x86_64, `macos-15-intel`, Xcode 16.4, SDK 15.5, deployment target 13.0
 
-The 156 source, patchset, and recipe binding is versioned under [`catalog/`](catalog/README.md). The resolver uses that exact binding for the known version; changing the new-version candidate defaults does not change the 156 reproduction. A separately selected alternate recipe is recorded as an explicit trial. Unregistered versions continue to use the unique designated candidate patchset and default recipe. The current workflow can reproduce the baseline by manual dispatch; it has not been run as part of this migration. The PR validation runs synthetic and static checks only. The scheduled monitor is guarded to `main` and activates only after a separately approved integration to the default branch.
+The 156 source, patchset, and recipe binding is versioned under [`catalog/`](catalog/README.md). The resolver uses that exact binding for the known version; changing the new-version candidate defaults does not change the 156 reproduction. A separately selected alternate recipe is recorded as an explicit trial. Unregistered versions continue to use the unique designated candidate patchset and default recipe. The baseline reproduction workflow is manual and fixed to the catalog binding; it has not been run as part of this migration. The PR validation runs synthetic and static checks only. The scheduled monitor is guarded to `main` and activates only after a separately approved integration to the default branch.
+
+## Workflows
+
+- [Stable monitor and candidate build](.github/workflows/watch-chrome-stable.yml) checks fully rolled out Mac Stable releases, resolves exact source inputs, and builds validated candidates.
+- [Pull request validation](.github/workflows/validate-pr.yml) runs catalog, synthetic, privacy, and safe-push fixture checks with read-only permissions.
+- [Baseline reproduction](.github/workflows/reproduce-baseline.yml) manually reproduces the exact Chrome 156 source, patchset, and recipe binding. It is not a general arbitrary-version build entrypoint.
 
 ## Automation and local tools
 

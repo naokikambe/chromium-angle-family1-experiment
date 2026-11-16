@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: angle-reproduce-156-${{ github.run_id }}
+  group: angle-reproduce-baseline-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:

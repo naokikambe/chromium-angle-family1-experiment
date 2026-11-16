@@ -98,11 +98,11 @@ if paths != inputs["patch_apply_order"]:
 subprocess.run(["git","-C",root,"diff","--cached","--check"], check=True)
 PY
 printf 'synthetic-source-policy-tests\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
-python3 "$repo_root/tests/angle-policy/phase5-metal-family1-native-query-policy.py" \
+python3 "$repo_root/tests/angle-policy/native-query-policy.py" \
   --mtl-utils "$angle_root/src/libANGLE/renderer/metal/mtl_utils.mm"
-python3 "$repo_root/tests/angle-policy/phase5-metal-family1-math-options-policy.py" \
+python3 "$repo_root/tests/angle-policy/math-options-policy.py" \
   --mtl-utils "$angle_root/src/libANGLE/renderer/metal/mtl_utils.mm"
-python3 "$repo_root/tests/angle-policy/phase5-metal-family1-vertex-unpack-policy.py" --source-root "$angle_root"
+python3 "$repo_root/tests/angle-policy/vertex-unpack-policy.py" --source-root "$angle_root"
 printf 'angle-build\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
 mkdir -p out/Release
 python3 - "$inputs_json" out/Release/args.gn <<'PY'

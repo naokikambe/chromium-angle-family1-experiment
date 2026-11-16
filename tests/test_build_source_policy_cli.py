@@ -18,8 +18,8 @@ class BuildSourcePolicyCliTests(unittest.TestCase):
             build_script = (ROOT / "scripts/build-angle-candidate.sh").read_text(encoding="utf-8")
             expected_contract = '--mtl-utils "$angle_root/src/libANGLE/renderer/metal/mtl_utils.mm"'
             self.assertGreaterEqual(build_script.count(expected_contract), 2)
-            for helper in ("phase5-metal-family1-native-query-policy.py",
-                           "phase5-metal-family1-math-options-policy.py"):
+            for helper in ("native-query-policy.py",
+                           "math-options-policy.py"):
                 with self.subTest(helper=helper):
                     result = subprocess.run(
                         [sys.executable, str(ROOT / "tests/angle-policy" / helper),
