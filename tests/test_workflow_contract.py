@@ -5,6 +5,29 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def runner_contexts_in_job_env(text):
+    """Return runner-context references from job-level env blocks only."""
+    in_jobs = False
+    in_job_env = False
+    matches = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        indent = len(line) - len(line.lstrip())
+        stripped = line.strip()
+        if indent == 0 and stripped == "jobs:":
+            in_jobs = True
+            continue
+        if not in_jobs or not stripped or stripped.startswith("#"):
+            continue
+        if indent == 4 and stripped == "env:":
+            in_job_env = True
+            continue
+        if in_job_env and indent <= 4:
+            in_job_env = False
+        if in_job_env and re.search(r"\brunner\.", line):
+            matches.append((number, line.strip()))
+    return matches
+
+
 class WorkflowContractTests(unittest.TestCase):
     def test_workflows_are_read_only_and_actions_are_immutable_pins(self):
         for relative in (".github/workflows/watch-chrome-stable.yml", ".github/workflows/reproduce-156.yml",
@@ -17,6 +40,31 @@ class WorkflowContractTests(unittest.TestCase):
                     self.assertRegex(line, r"@[0-9a-f]{40}(?:\s+#.*)?$")
             self.assertNotRegex(text, r"(?m)^  push:")
             self.assertNotIn("contents: write", text)
+            self.assertEqual(runner_contexts_in_job_env(text), [])
+
+        invalid = "jobs:\n  build:\n    env:\n      VALUE: ${{ runner.temp }}\n    steps:\n      - env:\n          VALUE: ${{ runner.temp }}\n"
+        self.assertEqual(runner_contexts_in_job_env(invalid), [(4, "VALUE: ${{ runner.temp }}")])
+
+    def test_runner_temp_paths_are_initialized_on_the_runner_before_use(self):
+        watch = (ROOT / ".github/workflows/watch-chrome-stable.yml").read_text(encoding="utf-8")
+        monitor_init = watch.index("name: Initialize runner-local monitor paths")
+        self.assertLess(monitor_init, watch.index("name: Detect a new fully rolled out Mac Stable release"))
+        for variable, path in (
+            ("CANDIDATE_FILE", "stable-candidate.json"),
+            ("STATE_FILE", "stable-monitor-state.json"),
+            ("INPUTS_FILE", "build-inputs.json"),
+            ("ARTIFACT_DIR", "angle-candidate"),
+            ("FAILURE_STAGE_FILE", "angle-failure-stage"),
+        ):
+            self.assertIn(f"printf '{variable}=%s/{path}\\n' \"$RUNNER_TEMP\"", watch)
+        recovery_init = watch.index("name: Initialize runner-local recovery path")
+        self.assertLess(recovery_init, watch.index("name: Restore retained state or write an owner-audited baseline"))
+
+        reproduce = (ROOT / ".github/workflows/reproduce-156.yml").read_text(encoding="utf-8")
+        initialize = reproduce.index("name: Initialize runner-local reproduction paths")
+        self.assertLess(initialize, reproduce.index("name: Resolve the pinned Chromium 156 release inputs"))
+        self.assertIn("printf 'INPUTS_FILE=%s/build-inputs.json\\n' \"$RUNNER_TEMP\"", reproduce)
+        self.assertIn("printf 'ARTIFACT_DIR=%s/angle-baseline-156\\n' \"$RUNNER_TEMP\"", reproduce)
 
     def test_monitor_is_scheduled_and_serialized_with_bounded_artifacts(self):
         text = (ROOT / ".github/workflows/watch-chrome-stable.yml").read_text(encoding="utf-8")

@@ -1,43 +1,37 @@
-# Main publication plan
+# Main publication and integration plan
 
-## Branch and review route
+## Current review route
 
-The migration candidate is based on the reviewed `main` base `0eb2fcc6323c0ed3c938077bb772e57bc5b880a3` and is prepared on the dedicated branch `migration/angle-maintenance`. The source worktree on `phase5-page-recovery` remains separate. The candidate does not merge or import that experiment history.
+The migration is under review in Draft PR #2, from `migration/angle-maintenance` to `main`. It is based on the reviewed `main` commit `0eb2fcc6323c0ed3c938077bb772e57bc5b880a3`; it does not import the old experiment branch history. The PR already exists and must be updated in place.
 
-Publication is limited to this route:
+The branch was published from an independent local checkout with a dedicated owner-controlled publication guard. The existing experiment checkout and its guard were left unchanged. Local guard paths and contents do not belong in this repository.
 
-1. Review the complete local diff, run the documented local checks, and request separate approval before creating a commit on `migration/angle-maintenance`.
-2. After commit, report its ID, exact publication checks, and the CI events that the branch push and Draft PR will start. Ask for a second approval covering both the branch push and creation of a **Draft PR targeting `main`**.
-3. Review the Draft PR and its PR-only synthetic validation results. Do not auto-merge.
-4. Ask separately before integrating into `main`. A squash merge is the proposed option because it keeps the integration linear and makes the reviewed PR the unit of history.
+For any further branch update:
 
-There is no direct commit or push to `main`. The commit and branch publication approvals do not include main integration, old-branch cleanup, legacy workflow shutdown, repository settings, or external guard changes.
+1. Review the complete local diff and run the documented focused checks.
+2. Obtain the owner's explicit approval before creating a commit on `migration/angle-maintenance`.
+3. After the commit is reviewable, obtain separate approval before pushing that exact branch update. A push starts the PR-only validation workflow. Do not create a second PR.
+4. Keep the PR in draft unless the owner separately approves a ready-for-review change. Do not submit or resolve a GitHub review without approval.
+5. Obtain separate approval before integrating into `main`. A squash merge is the proposed method because it keeps the integration linear and the reviewed PR is the unit of history.
 
-## Publication guard boundary
+No direct commit or push to `main` is allowed. Branch-update approval does not authorize PR metadata changes, manual Actions runs, main integration, old-branch cleanup, legacy workflow shutdown, repository settings changes, or external guard changes.
 
-The installed owner-controlled guard is bound to the older `phase5-page-recovery` branch and its fixed anchor. The candidate remote push URL remains `disabled://phase5-safety-repair-required`; checked-in privacy checks, hooks, and safe-push scripts remain unchanged. This existing setup does not authorize publication of the new branch.
+## Publication protections
 
-A separate review and approval is required for this narrowly scoped external guard update before any branch push. The proposed guard behavior is:
+The published work branch uses the reviewed, dedicated publication route. Keep the canonical repository identity, exact branch restriction, fixed base ancestry, privacy checks, hook integrity, and single-parent history requirements. Do not weaken `.gitignore`, privacy scanners, hooks, or the safe-push launcher. Do not use `--no-verify`, force push, direct-URL push, push-URL overrides, or another guard bypass.
 
-- Keep the canonical fetch URL, owner-only guard directory, hook integrity checks, prohibited-path rules, history privacy scan, and staged-content privacy scan.
-- Allow only `refs/heads/migration/angle-maintenance`; reject `refs/heads/main`, all other branches, tags, deletions, multiple refs, force options, and direct-URL publication.
-- For the first remote ref creation, require the local branch to descend from the exact base `0eb2fcc6323c0ed3c938077bb772e57bc5b880a3`. Require single-parent commits from that base and scan the complete added history for privacy violations. Do not auto-advance or infer a replacement base.
-- For later updates, require the current remote work-branch tip to be an ancestor of the candidate tip. Keep the same ancestry, parent-count, privacy, and ref-name checks.
-- Explicitly refuse a direct `main` push even if the work-branch checks pass. A reviewed Draft PR is the only proposed integration route.
-- Keep the disabled push URL until the owner separately approves the exact external guard and local Git-config change. Do not install or modify that guard in this migration.
+The publication route only authorizes updates to `migration/angle-maintenance`. It does not authorize a direct `main` update. Main integration remains through the Draft PR and requires its own approval.
 
-Do not use `--no-verify`, force push, an alternate URL, or ordinary push-URL reconfiguration to bypass the existing guard. If a local hook blocks an operation, stop and report it.
+## PR checks and workflow effects
 
-## PR validation and workflow effects
+`validate-pr.yml` runs catalog, unit, synthetic, privacy, and safe-push fixture checks for a PR targeting `main`. It has read-only repository permissions and pinned Actions. It does not run the scheduled monitor, dispatch the reproduction workflow, fetch a full ANGLE checkout, or start the full ANGLE build.
 
-The PR validation workflow runs catalog, unit, static, privacy, and safe-push fixture checks on a PR targeting `main`, with read-only repository permissions and pinned Actions. It does not run the scheduled monitor, dispatch the reproduction workflow, fetch a full ANGLE checkout, or start the costly ANGLE build.
+The Stable monitor schedule is guarded to `refs/heads/main`; it does not run from the work branch or its PR. Integration into the default branch activates the six-hour schedule. A later scheduled run can start a macOS ANGLE build if it finds a new fully rolled out Stable release. Include that effect in any PR description update and main-integration approval.
 
-The Stable monitor schedule is guarded to `refs/heads/main`. It will not run from the dedicated branch or its PR. A separately approved squash integration into the default branch activates the six-hour schedule, which may later start a macOS ANGLE build when an eligible Stable release appears. The PR title/body and every push approval must state this effect.
+The `reproduce-156.yml` workflow is a manual, fixed-input baseline build. GitHub only accepts `workflow_dispatch` for a workflow file present on the default branch, so this PR's new reproduction workflow is not a pre-main build route. If a full build is required before integration, agree on and approve a separate route such as an owner-run local build; do not add a main-branch validation workflow without approval. The state-recovery operation only restores retained state or writes an owner-audited exact-version baseline; it does not build. Do not dispatch, rerun, or cancel Actions without the owner's approval for that specific operation.
 
-The manual state-recovery operation only restores retained state or writes an owner-audited exact-version baseline. It does not build. Actions must not be manually dispatched during this migration.
+## Scope and verification limits
 
-## Candidate scope and verification limits
+Do not add a project-wide `LICENSE`. Preserve third-party license and notice files, privacy protections, and publication hooks. Do not add a Chrome app, profile, local receipt, signing identity, real-device information, credentials, build logs, or generated binaries to Git, CI, or the PR body.
 
-No project-wide `LICENSE` is added. Existing third-party license and notice files, privacy protections, and publication hook files remain unchanged. No Chrome app, profile, local receipt, signing identity, real-device information, credentials, build log, or generated binary belongs in Git, CI, or the PR body.
-
-Before requesting commit approval, the handoff must list the branch, base, exact diff scope, regression results, privacy/license/guard checks, unrun ANGLE build and Actions work, residual risks, proposed commit message, and Draft PR title/body. Test count alone is not evidence that a real Chrome, KOOV, Metal, Bluetooth, USB, or device workflow has been accepted.
+The PR validation is synthetic. It does not prove a full ANGLE build, Chrome launch, KOOV operation, signing/freeze, Bluetooth/USB behavior, or owner adoption. If a full build is needed before main integration, request approval for the exact workflow, ref, inputs, runner, expected duration, artifact retention, and failure handling. The main-integration decision must summarize the current PR head/base and checks, resolved findings, remaining limits, exact integration commit/method, and schedule activation effect.

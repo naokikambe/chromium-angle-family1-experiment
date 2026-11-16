@@ -57,16 +57,23 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
-      CANDIDATE_FILE: ${{ runner.temp }}/stable-candidate.json
-      STATE_FILE: ${{ runner.temp }}/stable-monitor-state.json
-      INPUTS_FILE: ${{ runner.temp }}/build-inputs.json
-      ARTIFACT_DIR: ${{ runner.temp }}/angle-candidate
-      FAILURE_STAGE_FILE: ${{ runner.temp }}/angle-failure-stage
     steps:
       - name: Check out the reviewed maintenance code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+
+      - name: Initialize runner-local monitor paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf 'CANDIDATE_FILE=%s/stable-candidate.json\n' "$RUNNER_TEMP"
+            printf 'STATE_FILE=%s/stable-monitor-state.json\n' "$RUNNER_TEMP"
+            printf 'INPUTS_FILE=%s/build-inputs.json\n' "$RUNNER_TEMP"
+            printf 'ARTIFACT_DIR=%s/angle-candidate\n' "$RUNNER_TEMP"
+            printf 'FAILURE_STAGE_FILE=%s/angle-failure-stage\n' "$RUNNER_TEMP"
+          } >> "$GITHUB_ENV"
 
       - name: Detect a new fully rolled out Mac Stable release
         id: monitor
@@ -208,12 +215,17 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
-      STATE_FILE: ${{ runner.temp }}/stable-monitor-state.json
     steps:
       - name: Check out the reviewed maintenance code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+
+      - name: Initialize runner-local recovery path
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'STATE_FILE=%s/stable-monitor-state.json\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
 
       - name: Restore retained state or write an owner-audited baseline
         shell: bash

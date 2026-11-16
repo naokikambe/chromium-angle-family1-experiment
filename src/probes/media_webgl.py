@@ -447,6 +447,33 @@ def base_summary(mode: str, expected_version: str, expected_architecture: str) -
     }
 
 
+def browser_command(
+    executable: Path,
+    profile: Path,
+    expected_architecture: str,
+    mode: str,
+) -> list[str]:
+    if expected_architecture not in {"x86_64", "arm64"}:
+        raise ValueError("unsupported-browser-architecture")
+    command = [
+        "/usr/bin/arch",
+        f"-{expected_architecture}",
+        str(executable),
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-sync",
+        "--disable-background-networking",
+        "--disable-component-update",
+        "--remote-debugging-address=127.0.0.1",
+        "--remote-debugging-port=0",
+        f"--user-data-dir={profile}",
+    ]
+    if mode == "family1":
+        command.extend(FAMILY1_ARGUMENTS)
+    command.append("about:blank")
+    return command
+
+
 def run(args) -> tuple[dict, Path]:
     output = Path(args.out_dir).expanduser()
     if output.exists():
@@ -503,21 +530,9 @@ def run(args) -> tuple[dict, Path]:
         stage = "browser-startup"
         environment = os.environ.copy()
         environment.pop(FAMILY1_OPT_IN_ENV, None)
-        command = [
-            str(executable),
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--disable-sync",
-            "--disable-background-networking",
-            "--disable-component-update",
-            "--remote-debugging-address=127.0.0.1",
-            "--remote-debugging-port=0",
-            f"--user-data-dir={profile}",
-        ]
+        command = browser_command(executable, profile, args.expected_architecture, args.mode)
         if args.mode == "family1":
-            command.extend(FAMILY1_ARGUMENTS)
             environment[FAMILY1_OPT_IN_ENV] = "1"
-        command.append("about:blank")
         process = subprocess.Popen(
             command,
             stdin=subprocess.DEVNULL,
@@ -637,10 +652,16 @@ class SafeArgumentParser(argparse.ArgumentParser):
         raise SystemExit(2)
 
 
-def main() -> int:
-    parser = SafeArgumentParser(description="Probe synthetic video and WebGL in Chrome for Testing 154.")
+def build_parser() -> SafeArgumentParser:
+    parser = SafeArgumentParser(description="Probe synthetic video and WebGL in an exact Chrome build.")
     parser.add_argument("--app", required=True, help="Path to the Chrome for Testing application bundle")
     parser.add_argument("--expected-version", required=True, help="Exact four-part browser version")
+    parser.add_argument(
+        "--expected-architecture",
+        required=True,
+        choices=("x86_64", "arm64"),
+        help="Architecture to verify and launch",
+    )
     parser.add_argument("--mode", choices=("default", "family1"), required=True)
     parser.add_argument("--h264-fixture", required=True, help="Path to a rights-cleared H.264 MP4 fixture")
     parser.add_argument("--h264-sha256", required=True, type=parse_sha256)
@@ -652,7 +673,11 @@ def main() -> int:
         help="Confirm both media inputs are synthetic and cleared for use",
     )
     parser.add_argument("--out-dir", required=True, help="New directory for the safe summary")
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
     if sys.platform != "darwin":
         print(json.dumps({"schema": "chrome-media-webgl-summary-v1",
                           "pass": False, "failure_stage": "unsupported-platform"}))
