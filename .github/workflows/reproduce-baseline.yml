@@ -1,0 +1,88 @@
+name: Reproduce the Chrome 156 ANGLE baseline
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: angle-reproduce-baseline-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  reproduce:
+    runs-on: macos-15-intel
+    timeout-minutes: 240
+    steps:
+      - name: Check out the reviewed maintenance code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Initialize runner-local reproduction paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf 'INPUTS_FILE=%s/build-inputs.json\n' "$RUNNER_TEMP"
+            printf 'ARTIFACT_DIR=%s/angle-baseline-156\n' "$RUNNER_TEMP"
+          } >> "$GITHUB_ENV"
+
+      - name: Resolve the pinned Chromium 156 release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          chromium_revision=d0c02bfad08ec92a6ffcf989e53cd995e6381a4c
+          mkdir -p "$RUNNER_TEMP/chromium-156"
+          git -C "$RUNNER_TEMP/chromium-156" init -q
+          git -C "$RUNNER_TEMP/chromium-156" remote add origin https://chromium.googlesource.com/chromium/src.git
+          git -C "$RUNNER_TEMP/chromium-156" fetch --depth=1 origin "$chromium_revision"
+          git -C "$RUNNER_TEMP/chromium-156" checkout --detach FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/chromium-156" rev-parse HEAD)" = "$chromium_revision"
+          python3 scripts/resolve-chromium-source.py --repo "$RUNNER_TEMP/chromium-156" \
+            --expected-version 156.0.8078.48 > "$RUNNER_TEMP/chromium-156-inputs.json"
+          test "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["angle_revision"])' "$RUNNER_TEMP/chromium-156-inputs.json")" = 3b89d84e9d59f75675ac4e2bef58fc068a9f0577
+          python3 scripts/resolve-build-inputs.py --chrome-version 156.0.8078.48 \
+            --chromium-revision "$chromium_revision" \
+            --angle-revision 3b89d84e9d59f75675ac4e2bef58fc068a9f0577 \
+            --workflow-revision "$GITHUB_SHA" \
+            --expect-patchset-id metal-family1-v1 \
+            --expect-patch-sha256 dedac2c57daa69b72fe78bbde443f45d5a6cdfe128d4022049a35c0dbbf501b0 \
+            --expect-recipe-id macos-x64-metal-v1 \
+            --expect-recipe-sha256 bea88d9ec894cb1ab875755be52c93b85ed9029d2f00a9f31363123e4d43d7ba \
+            > "$INPUTS_FILE"
+          python3 - "$INPUTS_FILE" <<'PY'
+          import json, sys
+          inputs = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert inputs["selection_mode"] == "catalog-baseline"
+          assert inputs["patchset_id"] == "metal-family1-v1"
+          assert inputs["patch_sha256"] == "dedac2c57daa69b72fe78bbde443f45d5a6cdfe128d4022049a35c0dbbf501b0"
+          assert inputs["recipe_id"] == "macos-x64-metal-v1"
+          assert inputs["recipe_sha256"] == "bea88d9ec894cb1ab875755be52c93b85ed9029d2f00a9f31363123e4d43d7ba"
+          PY
+
+      - name: Build, run synthetic policy checks, and assemble licenses
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/build-angle-candidate.sh "$GITHUB_WORKSPACE" "$INPUTS_FILE" "$ARTIFACT_DIR"
+          artifact_name="angle-macos-x86_64-chrome-156.0.8078.48-run-${GITHUB_RUN_ID}"
+          bash scripts/verify-artifact.sh "$ARTIFACT_DIR"
+          bash scripts/verify-angle-binaries.sh "$ARTIFACT_DIR" x86_64 13.0
+          python3 scripts/write-angle-manifest.py --artifact-dir "$ARTIFACT_DIR" --inputs "$INPUTS_FILE" \
+            --run-id "$GITHUB_RUN_ID" --artifact-name "$artifact_name" \
+            --xcode-version "$(xcodebuild -version | tr '\n' ';')" \
+            --sdk-version "$(xcrun --show-sdk-version)" \
+            --clang-version "$(xcrun clang --version | head -n 1)" \
+            --ninja-version "$(ninja --version)"
+          python3 scripts/verify-angle-artifact.py "$ARTIFACT_DIR" \
+            --version 156.0.8078.48 --architecture x86_64
+
+      - name: Upload the verified reproduction for 90 days
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: angle-macos-x86_64-chrome-156.0.8078.48-run-${{ github.run_id }}
+          path: ${{ env.ARTIFACT_DIR }}
+          if-no-files-found: error
+          retention-days: 90
