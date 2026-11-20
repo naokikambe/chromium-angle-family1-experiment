@@ -4,11 +4,12 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
-from urllib.request import Request, urlopen
+from urllib.parse import quote, urljoin, urlsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 import zipfile
 
 from .artifact import ArtifactError, is_unexpired
@@ -16,6 +17,65 @@ from .artifact import ArtifactError, is_unexpired
 
 class GitHubError(RuntimeError):
     pass
+
+
+class _NoRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+class _ArtifactRedirectHandler(HTTPRedirectHandler):
+    """Allow the single HTTPS API-to-blob redirect used for artifact ZIPs."""
+
+    def __init__(self):
+        super().__init__()
+        self.redirect_count = 0
+        self.rejected = False
+
+    @staticmethod
+    def _is_allowed_storage_url(source_url: str, target_url: str) -> bool:
+        try:
+            source = urlsplit(source_url)
+            target = urlsplit(target_url)
+            source_port = source.port
+            target_port = target.port
+        except ValueError:
+            return False
+
+        host = (target.hostname or "").lower()
+        is_github_artifact_storage = re.fullmatch(
+            r"productionresultssa[0-9]+\.blob\.core\.windows\.net", host
+        ) is not None
+        return (
+            source.scheme == "https"
+            and source.hostname == "api.github.com"
+            and source.username is None
+            and source.password is None
+            and source_port in (None, 443)
+            and target.scheme == "https"
+            and target.username is None
+            and target.password is None
+            and target_port in (None, 443)
+            and is_github_artifact_storage
+            and not target.fragment
+        )
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        self.redirect_count += 1
+        try:
+            target_url = urljoin(req.full_url, newurl)
+        except (TypeError, ValueError):
+            self.rejected = True
+            return None
+        if (self.redirect_count != 1 or code != 302 or
+                not self._is_allowed_storage_url(req.full_url, target_url)):
+            self.rejected = True
+            return None
+
+        # Whitelist only the ZIP accept header. In particular, never copy
+        # Authorization, cookies, or GitHub-specific headers to storage.
+        return Request(target_url, headers={"Accept": "application/zip"},
+                       origin_req_host=req.origin_req_host, unverifiable=True)
 
 
 class GitHubActionsArtifacts:
@@ -26,16 +86,26 @@ class GitHubActionsArtifacts:
         self.repository = repository
         self.token = token or os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
 
-    def _request(self, path: str) -> bytes:
+    def _github_api_request(self, path: str) -> Request:
         headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
-        request = Request(f"https://api.github.com/repos/{self.repository}/{path}", headers=headers)
+        return Request(f"https://api.github.com/repos/{self.repository}/{path}", headers=headers)
+
+    def _request(self, path: str) -> bytes:
+        request = self._github_api_request(path)
+        opener = build_opener(_NoRedirectHandler())
         try:
-            with urlopen(request, timeout=30) as response:
+            with opener.open(request, timeout=30) as response:
+                if response.status != 200:
+                    raise GitHubError(f"GitHub Actions API request failed (HTTP {response.status})")
                 return response.read()
-        except (HTTPError, URLError, TimeoutError) as exc:
-            raise GitHubError("GitHub Actions API request failed") from exc
+        except HTTPError as exc:
+            status = exc.code
+            exc.close()
+            raise GitHubError(f"GitHub Actions API request failed (HTTP {status})") from None
+        except (URLError, TimeoutError, OSError):
+            raise GitHubError("GitHub Actions API request failed (network)") from None
 
     def _pages(self, path: str, key: str, *, branch: str | None = None) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
@@ -66,7 +136,22 @@ class GitHubActionsArtifacts:
     def download_artifact(self, artifact_id: int) -> bytes:
         if not isinstance(artifact_id, int) or artifact_id <= 0:
             raise GitHubError("invalid artifact ID")
-        return self._request(f"actions/artifacts/{artifact_id}/zip")
+        request = self._github_api_request(f"actions/artifacts/{artifact_id}/zip")
+        redirects = _ArtifactRedirectHandler()
+        opener = build_opener(redirects)
+        try:
+            with opener.open(request, timeout=30) as response:
+                if response.status != 200:
+                    raise GitHubError(f"GitHub artifact download failed (HTTP {response.status})")
+                return response.read()
+        except HTTPError as exc:
+            status = exc.code
+            exc.close()
+            if redirects.rejected:
+                raise GitHubError("GitHub artifact download redirect rejected") from None
+            raise GitHubError(f"GitHub artifact download failed (HTTP {status})") from None
+        except (URLError, TimeoutError, OSError):
+            raise GitHubError("GitHub artifact download failed (network)") from None
 
     def read_json_artifact(self, artifact: dict[str, Any], filename: str) -> dict[str, Any]:
         if artifact.get("expired") is True or not is_unexpired(artifact.get("expires_at", "")):

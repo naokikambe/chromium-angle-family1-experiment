@@ -4,7 +4,7 @@
 
 The initial recipe targets macOS x86_64 on `macos-15-intel`, Xcode 16.4, macOS SDK 15.5, and deployment target 13.0. It checks out the exact Chromium `DEPS` ANGLE commit and the pinned `depot_tools` commit. The GN file comes from the catalog; Ninja builds only `libEGL` and `libGLESv2`. A runner image or Xcode/SDK drift stops the job instead of silently changing the recipe.
 
-Before GN/Ninja, the job resolves the exact patchset/recipe binding for a known Chrome version or the unique candidate defaults for an unregistered version. It applies the selected patch, verifies the expected source blobs for the known baseline, checks patch paths/order, and runs three focused synthetic C++ policy tests on the actual patched sources. These tests do not launch Metal or claim device support.
+Before GN/Ninja, the job resolves the exact patchset/recipe binding for a known Chrome version or the unique candidate defaults for an unregistered version. It applies the selected patch, verifies source blobs when the input is the patchset's exact mapped ANGLE revision, checks patch paths/order, and runs three focused source-policy harnesses against the patched sources. They compile extracted policy logic and include an offline MSL helper check; they do not compile ANGLE, launch a Metal device, or claim device support.
 
 ## Artifact contents
 

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "kind": "patchset",
   "id": "metal-family1-v1",
-  "candidate_for_new_angle": true,
+  "candidate_for_new_angle": false,
   "angle_revision": "3b89d84e9d59f75675ac4e2bef58fc068a9f0577",
   "patch_path": "patches/metal-family1-v1/runtime.patch",
   "patch_sha256": "dedac2c57daa69b72fe78bbde443f45d5a6cdfe128d4022049a35c0dbbf501b0",

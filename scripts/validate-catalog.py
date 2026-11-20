@@ -79,6 +79,12 @@ def validate_catalog(root: Path) -> None:
         angle_ref = item.get("angle_revision")
         require(bool(HEX40.fullmatch(str(angle_ref))) and angle_ref in angle_by_revision,
                 f"missing or malformed ANGLE mapping for Chrome {version}")
+        candidate_only = item.get("candidate_only", False)
+        require(type(candidate_only) is bool, f"Chrome {version} has a malformed source role")
+        if candidate_only:
+            require("baseline_inputs" not in item,
+                    f"candidate-only Chrome {version} must not have fixed baseline inputs")
+            continue
         binding = item.get("baseline_inputs")
         require(isinstance(binding, dict) and set(binding) == BASELINE_FIELDS,
                 f"Chrome {version} has no complete fixed baseline input binding")
@@ -92,9 +98,19 @@ def validate_catalog(root: Path) -> None:
     for item in angles:
         require(item.get("kind") == "angle_source", "invalid ANGLE source kind")
         require(bool(HEX40.fullmatch(str(item.get("revision", "")))), "malformed ANGLE revision")
+        if "shader_api_version" in item:
+            require(type(item["shader_api_version"]) is int and item["shader_api_version"] > 0,
+                    "malformed ANGLE shader API version")
     for item in patches:
         require(item.get("kind") == "patchset", "invalid patchset kind")
         require(item.get("angle_revision") in angle_by_revision, "patchset references unsupported ANGLE revision")
+        if "patched_shader_api_version" in item:
+            source_version = angle_by_revision[item["angle_revision"]].get("shader_api_version")
+            patched_version = item.get("patched_shader_api_version")
+            require(type(source_version) is int and source_version > 0,
+                    "patchset API version requires an exact source API version")
+            require(type(patched_version) is int and patched_version == source_version + 1,
+                    "patchset shader API version must bump the mapped source version exactly once")
         require(bool(HEX64.fullmatch(str(item.get("patch_sha256", "")))), "malformed patch SHA-256")
         apply_order = item.get("apply_order")
         blobs = item.get("source_blobs")
@@ -154,7 +170,12 @@ def validate_catalog(root: Path) -> None:
     require(default_recipe.get("patchset") == default_patch["id"] and
             default_recipe.get("angle_revision") == default_patch.get("angle_revision"),
             "candidate default recipe and patchset do not form a consistent pair")
+    default_source = chrome_by_version[default_recipe["chrome_source"]]
+    require(default_source.get("candidate_only") is True,
+            "candidate default recipe must reference a separate candidate-only source mapping")
     for item in chrome:
+        if item.get("candidate_only") is True:
+            continue
         binding = item["baseline_inputs"]
         patch = patch_by_id.get(binding["patchset_id"])
         recipe = recipe_by_id.get(binding["recipe_id"])

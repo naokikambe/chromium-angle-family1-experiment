@@ -3,6 +3,7 @@
 
 import argparse
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 
@@ -85,11 +86,16 @@ int main() {
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-root", type=Path, required=True)
+    parser.add_argument("--expected-sh-version", type=int)
     args = parser.parse_args()
     root = args.source_root
     shader = (root / "src/libANGLE/renderer/metal/ShaderMtl.mm").read_text()
     emitter = (root / "src/compiler/translator/msl/EmitMetal.cpp").read_text()
     header = (root / "include/GLSLANG/ShaderLang.h").read_text()
+    if args.expected_sh_version is not None:
+        match = re.search(r"^#define ANGLE_SH_VERSION ([0-9]+)$", header, re.MULTILINE)
+        if not match or int(match.group(1)) != args.expected_sh_version:
+            raise SystemExit("patched ANGLE_SH_VERSION does not match the selected patchset")
     gate = function(shader, "static bool UsePhase5VertexUnpackSnorm4x8")
     for old, new in [("id<MTLDevice> metalDevice", "Device *metalDevice"),
                      ("[metalDevice supportsFamily:MTLGPUFamilyMac1]", "metalDevice->supportsFamily(Mac1)"),
@@ -111,6 +117,11 @@ def main():
         raise SystemExit("compatibility option must default to false")
     if "UsePhase5VertexUnpackSnorm4x8(mState.getShaderType(), displayMtl->getMetalDevice())" not in shader:
         raise SystemExit("production shader-stage/device gate is disconnected")
+    if args.expected_sh_version == 427:
+        removed_options = ("generateShareableShaders", "injectAsmStatementIntoLoopBodies",
+                           "mInjectAsmStatementIntoLoopBodies")
+        if any(option in header + emitter + shader for option in removed_options):
+            raise SystemExit("ANGLE 158 obsolete compile-option state was reintroduced")
     with tempfile.TemporaryDirectory(prefix="synthetic-vertex-unpack-") as temp:
         temp = Path(temp)
         for mac, catalyst in [(1, 0), (1, 1), (0, 0)]:

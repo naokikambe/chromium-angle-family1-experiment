@@ -85,7 +85,8 @@ inputs=json.load(open(sys.argv[1], encoding="utf-8"))
 patch=open(sys.argv[2], "rb").read()
 assert hashlib.sha256(patch).hexdigest() == inputs["patch_sha256"]
 root=sys.argv[3]
-if inputs["patch_candidate_status"] == "catalog-match":
+if (inputs["patch_candidate_status"] == "catalog-match" or
+        inputs["angle_revision"] == inputs["patch_source_revision"]):
     for path, expected in inputs["patch_source_blobs"].items():
         actual=subprocess.run(["git","-C",root,"hash-object",path], check=True, capture_output=True, text=True).stdout.strip()
         if actual != expected:
@@ -99,10 +100,16 @@ subprocess.run(["git","-C",root,"diff","--cached","--check"], check=True)
 PY
 printf 'synthetic-source-policy-tests\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
 python3 "$repo_root/tests/angle-policy/native-query-policy.py" \
+  --apple-platform-utils "$angle_root/src/common/apple_platform_utils.mm" \
   --mtl-utils "$angle_root/src/libANGLE/renderer/metal/mtl_utils.mm"
 python3 "$repo_root/tests/angle-policy/math-options-policy.py" \
   --mtl-utils "$angle_root/src/libANGLE/renderer/metal/mtl_utils.mm"
-python3 "$repo_root/tests/angle-policy/vertex-unpack-policy.py" --source-root "$angle_root"
+policy_args=(--source-root "$angle_root")
+policy_api_version=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("patch_expected_shader_api_version") or "")' "$inputs_json")
+if [[ -n "$policy_api_version" ]]; then
+  policy_args+=(--expected-sh-version "$policy_api_version")
+fi
+python3 "$repo_root/tests/angle-policy/vertex-unpack-policy.py" "${policy_args[@]}"
 printf 'angle-build\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
 mkdir -p out/Release
 python3 - "$inputs_json" out/Release/args.gn <<'PY'

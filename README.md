@@ -2,7 +2,7 @@
 
 This repository prepares exact-version, unsigned `libEGL.dylib` and `libGLESv2.dylib` candidates for Chrome Stable on macOS x86_64. It keeps the Chrome → Chromium commit → ANGLE commit mapping, the reviewed Family 1 patch, the fixed Chrome 156 recipe, candidate defaults for unregistered versions, and the artifact checks together.
 
-The maintenance candidate is based on the existing `main` base and is reviewed on the dedicated `migration/angle-maintenance` branch. Integration is through a Draft PR and a separately approved squash merge; this repository does not use direct commits or pushes to `main`. The migration does not import the old experiment branch history. The publication guard and privacy checks remain in place; see [the main publication plan](docs/main-publication-plan.md).
+The previous migration PR #2 is merged at `84594c238ae9e55285caf153f5af9772a1067a26`. The Chrome 158 patch work is on a new local branch based on that exact `main` commit. The old branch and its publication guard remain unchanged; the new branch requires a separate publication-guard review before any push. See [the main publication plan](docs/main-publication-plan.md).
 
 ## Current pinned baseline
 
@@ -15,6 +15,8 @@ The maintenance candidate is based on the existing `main` base and is reviewed o
 - Recipe target: x86_64, `macos-15-intel`, Xcode 16.4, SDK 15.5, deployment target 13.0
 
 The 156 source, patchset, and recipe binding is versioned under [`catalog/`](catalog/README.md). The resolver uses that exact binding for the known version; changing the new-version candidate defaults does not change the 156 reproduction. A separately selected alternate recipe is recorded as an explicit trial. Unregistered versions continue to use the unique designated candidate patchset and default recipe. The baseline reproduction workflow is manual and fixed to the catalog binding; it has not been run as part of this migration. The PR validation runs synthetic and static checks only. The scheduled monitor is guarded to `main` and activates only after a separately approved integration to the default branch.
+
+Chrome 158.0.8127.37 is recorded as a candidate-only source mapping with an independent patchset and recipe. It is not a fixed baseline. Its migration does not change the Chrome 156 reproduction pins or patch bytes.
 
 ## Workflows
 
@@ -45,6 +47,7 @@ The PR check also runs privacy and safe-push fixture checks. These commands vali
 - [Acceptance checklist](docs/acceptance-checklist.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Automation operations](docs/automation-operations.md)
+- [Chrome 158 candidate and retry plan](docs/158-candidate-retry-plan.md)
 - [Chrome 156 baseline](docs/156-baseline.md)
 - [Project history and migration scope](docs/history.md)
 - [Publication privacy](docs/publication-privacy.md)

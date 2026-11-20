@@ -27,6 +27,8 @@ Two manual operations handle different cases:
 
 Neither operation runs automatically. A retry is one explicit new workflow run, not a retry loop. Re-dispatching the same run ID is rejected. A later failed retry may be retried only through another explicit dispatch, and an expired successful artifact stays on the separate re-acquire path.
 
+For the recorded Chrome 158 failure (`44480771895`), use the separate approval plan in [`158-candidate-retry-plan.md`](158-candidate-retry-plan.md) after the fix is published and available on `main`. Dispatch `watch-chrome-stable.yml` on `main` with `operation=retry_failed_version`, `retry_failed_version=158.0.8127.37`, and `confirm_unpinned_retry=false`. The workflow must resolve Chromium `b8c2be851f62f6a394ec57955d7f31335d7cb6d4` and ANGLE `1f6526a566c27c7c33aa73a78517450a4a2a1714` or stop. Do not rerun the historical failed run; a rerun and a new audited retry are different operations.
+
 ## PR validation and activation
 
 `validate-pr.yml` runs read-only catalog, unit, synthetic, privacy, and safe-push fixture checks for a PR targeting `main`. It does not trigger this monitor, fetch an ANGLE checkout, or run the full ANGLE build. The dedicated migration branch and its Draft PR do not activate the scheduled monitor.
