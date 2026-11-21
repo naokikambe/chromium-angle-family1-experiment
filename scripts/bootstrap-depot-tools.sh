@@ -20,6 +20,9 @@ actual_revision=$(git -C "$depot_tools_root" rev-parse HEAD 2>/dev/null) || \
 [[ "$actual_revision" == "$expected_revision" ]] || \
   fail "checkout revision before bootstrap is $actual_revision, expected $expected_revision"
 
+if [[ -n "${FAILURE_STAGE_FILE:-}" ]]; then
+  printf 'depot-tools-python-bootstrap\n' > "$FAILURE_STAGE_FILE"
+fi
 [[ -x "$depot_tools_root/ensure_bootstrap" ]] || \
   fail 'pinned checkout does not contain executable ensure_bootstrap'
 
@@ -29,15 +32,12 @@ export DEPOT_TOOLS_UPDATE=0
 export DEPOT_TOOLS_BOOTSTRAP_PYTHON3=1
 export PATH="$depot_tools_root/python-bin:$depot_tools_root:$PATH"
 
-if [[ -n "${FAILURE_STAGE_FILE:-}" ]]; then
-  printf 'depot-tools-bootstrap\n' > "$FAILURE_STAGE_FILE"
-fi
 if ! "$depot_tools_root/ensure_bootstrap"; then
   fail 'pinned ensure_bootstrap exited unsuccessfully'
 fi
 
 if [[ -n "${FAILURE_STAGE_FILE:-}" ]]; then
-  printf 'depot-tools-tool-validation\n' > "$FAILURE_STAGE_FILE"
+  printf 'depot-tools-python-validation\n' > "$FAILURE_STAGE_FILE"
 fi
 actual_revision=$(git -C "$depot_tools_root" rev-parse HEAD 2>/dev/null) || \
   fail 'cannot read depot_tools checkout revision after bootstrap'
@@ -64,23 +64,12 @@ esac
   fail 'the dedicated Python binary named by python3_bin_reldir.txt is unavailable'
 
 python_entry="$depot_tools_root/python-bin/python3"
-gn_entry="$depot_tools_root/gn"
-ninja_entry="$depot_tools_root/ninja"
-for entry in "$python_entry" "$gn_entry" "$ninja_entry"; do
-  [[ -f "$entry" && -x "$entry" && ! -L "$entry" ]] || \
-    fail "pinned tool entry is missing, non-executable, or a symlink: ${entry##*/}"
-done
+[[ -f "$python_entry" && -x "$python_entry" && ! -L "$python_entry" ]] || \
+  fail 'depot_tools/python-bin/python3 is missing, non-executable, or a symlink'
 
-for tool in python3 gn ninja; do
-  resolved=$(command -v "$tool" || true)
-  case "$tool" in
-    python3) expected_path=$python_entry ;;
-    gn) expected_path=$gn_entry ;;
-    ninja) expected_path=$ninja_entry ;;
-  esac
-  [[ "$resolved" == "$expected_path" ]] || \
-    fail "$tool resolves outside the pinned depot_tools checkout"
-done
+resolved_python=$(command -v python3 || true)
+[[ "$resolved_python" == "$python_entry" ]] || \
+  fail 'python3 resolves outside the pinned depot_tools checkout'
 
 python_version=$("$python_entry" --version 2>&1) || \
   fail 'the dedicated depot_tools Python could not start'
@@ -90,12 +79,7 @@ case "$python_executable" in
   "$python_bin_dir"/*) ;;
   *) fail 'python-bin/python3 did not start the Python binary selected by python3_bin_reldir.txt' ;;
 esac
-gn_version=$("$gn_entry" --version 2>&1) || \
-  fail 'the pinned depot_tools GN could not start'
-ninja_version=$("$ninja_entry" --version 2>&1) || \
-  fail 'the pinned depot_tools Ninja could not start'
 
 printf 'depot_tools revision: %s\n' "$expected_revision"
 printf 'depot_tools/python-bin/python3: %s\n' "$python_version"
-printf 'depot_tools/gn: %s\n' "$gn_version"
-printf 'depot_tools/ninja: %s\n' "$ninja_version"
+printf 'depot_tools Python path: python-bin/python3 -> %s\n' "${python_reldir%/}/python3"

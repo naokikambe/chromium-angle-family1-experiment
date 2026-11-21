@@ -34,13 +34,13 @@ print(value["recipe"]["depot_tools_revision"])
 PY
 )
 build_depot_tools_revision=$(sed -n 's/^DEPOT_TOOLS_REVISION=//p' "$artifact_dir/build-environment.txt")
-ninja_version=$(sed -n 's/^DEPOT_TOOLS_NINJA=//p' "$artifact_dir/build-environment.txt")
+ninja_version=$(sed -n 's/^ANGLE_NINJA_VERSION=//p' "$artifact_dir/build-environment.txt")
 [[ "$build_depot_tools_revision" == "$depot_tools_revision" ]] || {
   printf 'build environment does not record the pinned depot_tools revision\n' >&2
   exit 1
 }
 [[ -n "$ninja_version" ]] || {
-  printf 'build environment does not record the pinned depot_tools Ninja version\n' >&2
+  printf 'build environment does not record the pinned ANGLE dependency Ninja version\n' >&2
   exit 1
 }
 bash "$repo_root/scripts/verify-angle-binaries.sh" "$artifact_dir" "$architecture" "$deployment_target"

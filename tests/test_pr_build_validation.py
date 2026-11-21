@@ -45,7 +45,7 @@ class SharedBuildPathTests(unittest.TestCase):
         for name in ("build-angle-candidate.sh", "verify-artifact.sh", "verify-angle-binaries.sh"):
             build_environment = (
                 'mkdir -p "$3"\n'
-                f'printf "DEPOT_TOOLS_REVISION={"f" * 40}\\nDEPOT_TOOLS_NINJA=fixture depot Ninja 1.2\\n" '
+                f'printf "DEPOT_TOOLS_REVISION={"f" * 40}\\nANGLE_NINJA_VERSION=fixture ANGLE Ninja 1.2\\n" '
                 '> "$3/build-environment.txt"\n'
                 if name == "build-angle-candidate.sh" else ""
             )
@@ -88,7 +88,7 @@ class SharedBuildPathTests(unittest.TestCase):
             self.assertIn("--build-key", verify)
             self.assertEqual(verify[-1], "a" * 64)
             manifest = json.loads(next(line for line in lines if '"write-angle-manifest.py"' in line))
-            self.assertEqual(manifest[manifest.index("--ninja-version") + 1], "fixture depot Ninja 1.2")
+            self.assertEqual(manifest[manifest.index("--ninja-version") + 1], "fixture ANGLE Ninja 1.2")
 
     def test_build_or_binary_failure_prevents_manifest_creation(self):
         for failure in ("build-angle-candidate.sh", "verify-angle-binaries.sh"):

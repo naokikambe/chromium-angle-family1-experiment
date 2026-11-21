@@ -84,9 +84,13 @@ printf 'angle-dependency-sync\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
 gclient sync --no-history
 test "$(git rev-parse HEAD)" = "$angle_revision"
 test "$(git -C "$depot_tools_root" rev-parse HEAD)" = "$depot_tools_revision" || {
-  printf 'depot_tools revision changed before GN; refusing to continue\n' >&2
+  printf 'depot_tools revision changed after dependency sync; refusing to continue\n' >&2
   exit 1
 }
+bash "$repo_root/scripts/validate-angle-build-tools.sh" \
+  "$angle_root" "$angle_revision" "$depot_tools_root" "$depot_tools_revision"
+angle_gn="$angle_root/buildtools/mac/gn"
+angle_ninja="$angle_root/third_party/ninja/ninja"
 printf 'patch-and-function-checks\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
 python3 - "$inputs_json" "$patch_path" "$angle_root" <<'PY'
 import hashlib, json, subprocess, sys
@@ -130,8 +134,10 @@ for name, item in value.items():
     lines.append(f'{name} = {rendered}')
 open(sys.argv[2], 'w', encoding='utf-8').write('\n'.join(lines)+'\n')
 PY
-"$depot_tools_root/gn" gen out/Release
-"$depot_tools_root/ninja" -C out/Release libEGL libGLESv2
+printf 'angle-gn-generation\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
+"$angle_gn" gen out/Release
+printf 'angle-ninja-compilation\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
+"$angle_ninja" -C out/Release libEGL libGLESv2
 
 printf 'artifact-assembly\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
 mkdir -p "$artifact_dir/licenses"
@@ -159,7 +165,9 @@ printf '%s\n' "$angle_revision" > "$artifact_dir/ANGLE_REVISION"
   printf 'MACOS_SDK_VERSION=%s\n' "$(xcrun --show-sdk-version)"
   xcrun clang --version
   printf 'DEPOT_TOOLS_PYTHON=%s\n' "$("$depot_tools_root/python-bin/python3" --version 2>&1)"
-  printf 'DEPOT_TOOLS_GN=%s\n' "$("$depot_tools_root/gn" --version)"
-  printf 'DEPOT_TOOLS_NINJA=%s\n' "$("$depot_tools_root/ninja" --version)"
+  printf 'ANGLE_GN_PATH=buildtools/mac/gn\n'
+  printf 'ANGLE_GN_VERSION=%s\n' "$("$angle_gn" --version)"
+  printf 'ANGLE_NINJA_PATH=third_party/ninja/ninja\n'
+  printf 'ANGLE_NINJA_VERSION=%s\n' "$("$angle_ninja" --version)"
   printf 'NINJA_TARGETS=libEGL libGLESv2\n'
 } > "$artifact_dir/build-environment.txt"
