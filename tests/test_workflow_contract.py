@@ -86,10 +86,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertEqual(text.count("retention-days: 90"), 5)
         self.assertIn("--run-id \"$GITHUB_RUN_ID\"", text)
         self.assertIn("scripts/resolve-chromium-source.py", text)
-        self.assertIn("scripts/build-angle-candidate.sh", text)
-        self.assertIn("scripts/verify-artifact.sh", text)
-        self.assertIn("scripts/verify-angle-binaries.sh", text)
-        self.assertIn("scripts/write-angle-manifest.py", text)
+        self.assertIn("scripts/build-and-verify-angle.sh", text)
         self.assertIn("stable-monitor-checkpoint-${{ github.run_id }}", text)
         self.assertIn("steps.checkpoint.outcome == 'success'", text)
         self.assertIn("stable-monitor-state.json", text)
@@ -105,7 +102,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotRegex(text, r"(?i)gh\s+(pr|issue|release|repo)\s+(create|edit)")
         self.assertNotRegex(text, r"(?i)git\s+(commit|tag|push)")
 
-    def test_pr_validation_is_synthetic_read_only_and_does_not_trigger_monitor_build(self):
+    def test_pr_validation_checks_merge_and_builds_without_monitor_state(self):
         text = (ROOT / ".github/workflows/validate-pr.yml").read_text(encoding="utf-8")
         self.assertIn("pull_request:", text)
         self.assertIn("- main", text)
@@ -116,8 +113,30 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("scripts/check-publication-privacy.py --tree", text)
         self.assertNotIn("schedule:", text)
         self.assertNotIn("workflow_dispatch:", text)
-        self.assertNotIn("scripts/build-angle-candidate.sh", text)
-        self.assertNotIn("ninja", text)
+        self.assertEqual(text.count('ref: ${{ github.sha }}'), 2)
+        self.assertIn("needs: synthetic-validation", text)
+        self.assertIn("fail-fast: false", text)
+        self.assertIn("max-parallel: 2", text)
+        self.assertIn("'156.0.8078.48', '158.0.8127.37'", text)
+        self.assertIn("scripts/prepare-pr-angle-inputs.py", text)
+        self.assertIn("scripts/build-and-verify-angle.sh", text)
+        self.assertIn("retention-days: 7", text)
+        self.assertIn('"stable_indexed": False', text)
+        self.assertIn('parents == [os.environ["PR_BASE"], os.environ["PR_HEAD"]]', text)
+        self.assertNotIn("scripts/angle-monitor.py", text)
+        self.assertNotIn("stable-monitor-state", text)
+        self.assertNotIn("GH_TOKEN", text)
+        self.assertNotIn("pull_request_target", text)
+
+    def test_all_build_workflows_use_the_same_verification_path(self):
+        for name in ("validate-pr.yml", "watch-chrome-stable.yml", "reproduce-baseline.yml"):
+            text = (ROOT / ".github/workflows" / name).read_text()
+            self.assertIn("scripts/build-and-verify-angle.sh", text)
+        shared = (ROOT / "scripts/build-and-verify-angle.sh").read_text()
+        for name in ("build-angle-candidate.sh", "verify-artifact.sh", "verify-angle-binaries.sh",
+                     "write-angle-manifest.py", "verify-angle-artifact.py"):
+            self.assertIn(name, shared)
+        self.assertIn('--build-key "$build_key"', shared)
 
     def test_exact_156_reproduction_entry_is_manual_only(self):
         text = (ROOT / ".github/workflows/reproduce-baseline.yml").read_text(encoding="utf-8")

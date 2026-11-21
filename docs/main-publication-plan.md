@@ -24,7 +24,7 @@ The earlier publication route authorized only `migration/angle-maintenance`. A n
 
 ## Workflow effects
 
-`validate-pr.yml` runs catalog, unit, synthetic, privacy, and safe-push fixture checks for a PR targeting `main`. It has read-only repository permissions and pinned Actions. It does not run the Stable monitor, dispatch the fixed 156 reproduction workflow, fetch a full ANGLE checkout, or start the full ANGLE build.
+`validate-pr.yml` checks the proposed merge with `main`, first running synthetic/privacy checks and then full 156/158 builds for same-repository PRs. It has read-only repository permissions and pinned Actions. Updating this PR starts up to two macOS build jobs, each with a 240-minute timeout. PR artifacts are seven-day validation outputs with merge provenance and are not indexed as Stable candidates. It does not run the Stable monitor, change monitor state, or dispatch another workflow. Both matrix builds must be reviewed before integration; synthetic success alone is insufficient.
 
 The Stable monitor schedule is guarded to `refs/heads/main`; it does not run from the work branch or its PR. Integrating this change updates the candidate defaults. A later scheduled run can start a macOS ANGLE build when it finds a newly detected fully rolled out Stable version.
 

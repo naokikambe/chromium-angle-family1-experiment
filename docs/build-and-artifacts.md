@@ -6,6 +6,14 @@ The initial recipe targets macOS x86_64 on `macos-15-intel`, Xcode 16.4, macOS S
 
 Before GN/Ninja, the job resolves the exact patchset/recipe binding for a known Chrome version or the unique candidate defaults for an unregistered version. It applies the selected patch, verifies source blobs when the input is the patchset's exact mapped ANGLE revision, checks patch paths/order, and runs three focused source-policy harnesses against the patched sources. They compile extracted policy logic and include an offline MSL helper check; they do not compile ANGLE, launch a Metal device, or claim device support.
 
+## Pre-merge build validation
+
+`validate-pr.yml` checks the GitHub-generated merge commit for the PR and its current `main` base. After synthetic/privacy checks pass, same-repository PRs build both catalog versions `156.0.8078.48` and `158.0.8127.37` on `macos-15-intel`, at most two jobs in parallel, each with a 240-minute timeout. Fork PRs run the synthetic job only; a skipped build is not full-build acceptance.
+
+`prepare-pr-angle-inputs.py` fetches the real Chromium version tag, verifies its VERSION/DEPS and catalog pins, and requires a patch/recipe mapped to that exact source. The PR, Stable monitor, and manual 156 reproduction all call `build-and-verify-angle.sh` for the same dependency checkout, patch/policy checks, GN/Ninja targets, binary inspection, license assembly, manifest, and hash validation. PR jobs never invoke monitor state operations.
+
+Successful PR outputs use the existing manifest-compatible artifact name and include `PR_VALIDATION.json` recording role, PR number, base/head/merge commits, and merge tree. They are retained for seven days and are not added to the Stable state/index; normal local match/fetch cannot select them. The manifest workflow revision is the tested merge SHA, not the eventual squash commit. These outputs do not become formal Stable artifacts by merging. If `main` changes, validate the new merge result before integration. A successful build does not prove Chrome/GPU/device compatibility or actual scheduled execution.
+
 ## Artifact contents
 
 A successful artifact contains the two top-level dylibs, the unchanged `runtime-patch.diff`, `LICENSE`, collected upstream `LICENSE*`/`NOTICE*` files, `args.gn`, `ANGLE_REVISION`, build environment data, `file`/`lipo`/`otool`/`codesign` verification reports, library checksums, `ANGLE_ARTIFACT_MANIFEST.json`, and its SHA-256 file. The manifest binds Chrome, Chromium, ANGLE, patch ID/hash, recipe ID/hash, the `selection_mode`, workflow revision, depot_tools, actual toolchain, GN args, library hashes, license hashes, inspection-report hashes, run ID, artifact name, and the not-assessed compatibility/adoption state. The `angle-build-key-v2` fingerprint includes the selected source, patch, recipe, selection mode, and workflow commit.

@@ -154,19 +154,7 @@ jobs:
         run: |
           set -euo pipefail
           printf 'source-fetch\n' > "$FAILURE_STAGE_FILE"
-          bash scripts/build-angle-candidate.sh "$GITHUB_WORKSPACE" "$INPUTS_FILE" "$ARTIFACT_DIR"
-          printf 'manifest-and-binary-validation\n' > "$FAILURE_STAGE_FILE"
-          bash scripts/verify-artifact.sh "$ARTIFACT_DIR"
-          bash scripts/verify-angle-binaries.sh "$ARTIFACT_DIR" x86_64 13.0
-          python3 scripts/write-angle-manifest.py --artifact-dir "$ARTIFACT_DIR" --inputs "$INPUTS_FILE" \
-            --run-id "$GITHUB_RUN_ID" --artifact-name "$ARTIFACT_NAME" \
-            --xcode-version "$(xcodebuild -version | tr '\n' ';')" \
-            --sdk-version "$(xcrun --show-sdk-version)" \
-            --clang-version "$(xcrun clang --version | head -n 1)" \
-            --ninja-version "$(ninja --version)"
-          python3 scripts/verify-angle-artifact.py "$ARTIFACT_DIR" \
-            --version "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["chrome_version"])' "$INPUTS_FILE")" \
-            --architecture x86_64 --build-key "$BUILD_KEY"
+          bash scripts/build-and-verify-angle.sh "$GITHUB_WORKSPACE" "$INPUTS_FILE" "$ARTIFACT_DIR" "$ARTIFACT_NAME"
 
       - name: Upload the candidate artifact for 90 days
         id: artifact

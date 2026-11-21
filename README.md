@@ -14,14 +14,14 @@ The previous migration PR #2 is merged at `84594c238ae9e55285caf153f5af9772a1067
 - Recipe: `macos-x64-metal-v1` (build-recipe SHA-256 `bea88d9ec894cb1ab875755be52c93b85ed9029d2f00a9f31363123e4d43d7ba`)
 - Recipe target: x86_64, `macos-15-intel`, Xcode 16.4, SDK 15.5, deployment target 13.0
 
-The 156 source, patchset, and recipe binding is versioned under [`catalog/`](catalog/README.md). The resolver uses that exact binding for the known version; changing the new-version candidate defaults does not change the 156 reproduction. A separately selected alternate recipe is recorded as an explicit trial. Unregistered versions continue to use the unique designated candidate patchset and default recipe. The baseline reproduction workflow is manual and fixed to the catalog binding; it has not been run as part of this migration. The PR validation runs synthetic and static checks only. The scheduled monitor is guarded to `main` and activates only after a separately approved integration to the default branch.
+The 156 source, patchset, and recipe binding is versioned under [`catalog/`](catalog/README.md). The resolver uses that exact binding for the known version; changing the new-version candidate defaults does not change the 156 reproduction. A separately selected alternate recipe is recorded as an explicit trial. Unregistered versions continue to use the unique designated candidate patchset and default recipe. PR validation checks the proposed merge with `main`, then builds the exact 156 and 158 sources through the same build and verification script as the monitor and baseline reproduction. A configured build is not evidence of a successful run; inspect both matrix results before integration. The scheduled monitor remains guarded to `main`.
 
 Chrome 158.0.8127.37 is recorded as a candidate-only source mapping with an independent patchset and recipe. It is not a fixed baseline. Its migration does not change the Chrome 156 reproduction pins or patch bytes.
 
 ## Workflows
 
 - [Stable monitor and candidate build](.github/workflows/watch-chrome-stable.yml) checks fully rolled out Mac Stable releases, resolves exact source inputs, and builds validated candidates.
-- [Pull request validation](.github/workflows/validate-pr.yml) runs catalog, synthetic, privacy, and safe-push fixture checks with read-only permissions.
+- [Pull request validation](.github/workflows/validate-pr.yml) runs synthetic checks followed by full 156/158 ANGLE builds for same-repository PRs, with read-only repository permissions and seven-day validation artifacts.
 - [Baseline reproduction](.github/workflows/reproduce-baseline.yml) manually reproduces the exact Chrome 156 source, patchset, and recipe binding. It is not a general arbitrary-version build entrypoint.
 
 ## Automation and local tools

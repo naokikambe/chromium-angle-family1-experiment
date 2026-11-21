@@ -31,7 +31,9 @@ For the recorded Chrome 158 failure (`44480771895`), use the separate approval p
 
 ## PR validation and activation
 
-`validate-pr.yml` runs read-only catalog, unit, synthetic, privacy, and safe-push fixture checks for a PR targeting `main`. It does not trigger this monitor, fetch an ANGLE checkout, or run the full ANGLE build. The dedicated migration branch and its Draft PR do not activate the scheduled monitor.
+`validate-pr.yml` runs read-only catalog, unit, synthetic, privacy, and safe-push fixture checks against the proposed merge with `main`. For same-repository PRs, success gates a two-version matrix of full ANGLE builds (156 and 158), each with the same pinned toolchain and shared build/verification entrypoint as the monitor. Inspect the synthetic job and both matrix jobs. A skipped build or a pass on an older head/base is not current full-build acceptance. Fork PRs receive only the synthetic checks.
+
+PR builds do not trigger the monitor, update state/index, or retry the recorded failed version. Their outputs are marked PR-only, retain merge provenance, and expire in seven days. The workflow has no push, schedule, or dispatch trigger. A PR update automatically starts these checks and can consume two macOS build jobs, each up to 240 minutes. The recorded 45–150-minute estimate per 158 build remains unmeasured. The branch's PR does not activate the scheduled monitor.
 
 The schedule becomes active only after separately approved integration into the default branch. A squash merge is the proposed linear-history method. Publishing to `main` can later start a macOS build when a new fully rolled out Stable version appears, so this side effect must be stated in the Draft PR and integration approval. The `reproduce-baseline.yml` workflow and all manual dispatches remain owner-approved actions.
 

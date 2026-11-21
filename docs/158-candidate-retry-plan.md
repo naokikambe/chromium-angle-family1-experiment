@@ -18,6 +18,8 @@ The exact source is Chrome `158.0.8127.37`, Chromium `b8c2be851f62f6a394ec57955d
 
 ## Dispatch to approve after publication and main integration
 
+Before integration, PR #3 now has a planned full-build validation route in `validate-pr.yml`: synthetic checks followed by exact 156/158 builds from the proposed merge with `main`, using `build-and-verify-angle.sh`. Wait for both actual matrix results; adding the workflow is not build evidence. These jobs do not retry the historical failed attempt or update its state. Their seven-day artifacts include PR-only merge provenance and are not formal Stable candidates. After integration, the explicit retry below still performs the main workflow's state/checkpoint/index lifecycle and requires its own approval.
+
 The workflow only runs build jobs for `refs/heads/main`, and GitHub dispatches a workflow file from the default branch. After the fix is reviewed and integrated, record the exact `main` SHA that contains the new catalog and code, then use:
 
 | Field | Value |
