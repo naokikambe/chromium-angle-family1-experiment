@@ -6,6 +6,10 @@
 | VersionHistory payload has no fraction | Full rollout cannot be established safely | Check the official API response and update the selector only after review. |
 | Chromium tag missing or `chrome/VERSION` differs | Release metadata and source tag do not agree | Record the failure; do not build from `main` or another tag. |
 | Known Chrome mapping differs from fetched source | Catalog and upstream source disagree | Stop and review the mapping; automation does not rewrite catalog. |
+| `depot-tools-python-bootstrap` or `depot-tools-python-validation` | The pinned `ensure_bootstrap` failed or its dedicated Python marker/binary was unavailable | Repair the initialization failure; do not write `python3_bin_reldir.txt` by hand or substitute another Python. ANGLE setup, patching, GN, and Ninja have not started. |
+| `angle-checkout-bootstrap` or `angle-dependency-sync` | Chromium/ANGLE dependency setup failed after depot_tools Python was validated | Inspect the matching stage and preserve the exact source revisions before retrying. |
+| `angle-build-tool-validation` | A fixed ANGLE checkout dependency is missing, outside the checkout, the wrong executable format, or cannot start | Confirm `gclient sync` completed and inspect the pinned ANGLE DEPS tool paths. Do not accept a depot_tools or PATH fallback. Patch, GN generation, and Ninja compilation have not started. |
+| `angle-gn-generation` or `angle-ninja-compilation` | The validated ANGLE DEPS GN or Ninja binary failed during the build | Preserve the source pins, tool paths, versions, and stage log for diagnosis. |
 | Patch does not apply, paths differ, source blobs differ, or policy test fails | Candidate source is not covered by the reviewed patch | Preserve the failure record; prepare a reviewed patch update. Do not reduce checks. |
 | Xcode/SDK differs | Hosted runner no longer matches the fixed recipe | Review and update the recipe explicitly. |
 | `CI_BUILD_FAILED` | The recorded stage failed before artifact publication | Inspect the public workflow result; synthetic tests and CI build are distinct from device acceptance. |

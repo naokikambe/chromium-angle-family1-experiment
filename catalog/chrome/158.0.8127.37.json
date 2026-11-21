@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "kind": "chrome_source",
+  "chrome_version": "158.0.8127.37",
+  "chromium_revision": "b8c2be851f62f6a394ec57955d7f31335d7cb6d4",
+  "angle_revision": "1f6526a566c27c7c33aa73a78517450a4a2a1714",
+  "candidate_only": true
+}

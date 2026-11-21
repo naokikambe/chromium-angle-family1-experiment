@@ -2,7 +2,7 @@
   "schema_version": 1,
   "kind": "build_recipe",
   "id": "macos-x64-metal-v1",
-  "candidate_default": true,
+  "candidate_default": false,
   "chrome_source": "156.0.8078.48",
   "angle_revision": "3b89d84e9d59f75675ac4e2bef58fc068a9f0577",
   "patchset": "metal-family1-v1",
@@ -12,7 +12,10 @@
   "xcode_version": "16.4",
   "macos_sdk_version": "15.5",
   "macos_deployment_target": "13.0",
-  "ninja_targets": ["libEGL", "libGLESv2"],
+  "ninja_targets": [
+    "libEGL",
+    "libGLESv2"
+  ],
   "gn_args": {
     "is_debug": false,
     "is_component_build": false,

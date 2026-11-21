@@ -36,6 +36,42 @@ def extract_helper(source: str) -> str:
     raise ValueError("unbalanced SupportsMacGPUFamily body")
 
 
+def extract_renderer_gate(source: str) -> str:
+    signature = "bool IsMetalRendererAvailable()"
+    start = source.index(signature)
+    brace = source.index("{", start)
+    depth = 0
+    for index in range(brace, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start : index + 1]
+    raise ValueError("unbalanced IsMetalRendererAvailable body")
+
+
+def audit_renderer_gate(source: str) -> None:
+    gate = extract_renderer_gate(source)
+    required = (
+        'GetEnvironmentVar("ANGLE_PHASE5_ENABLE_METAL_FAMILY1") == "1"',
+        "if (!machineModelSufficient && !family1RuntimeOptIn)",
+        "const bool supportsFamily2 = [device supportsFamily:MTLGPUFamilyMac2];",
+        "if (supportsFamily2 || !family1RuntimeOptIn)",
+        "const bool supportsFamily1 = [device supportsFamily:MTLGPUFamilyMac1];",
+        "return supportsFamily1;",
+        "#elif TARGET_OS_MACCATALYST || TARGET_OS_OSX",
+        "return supportsFamily2;",
+    )
+    if any(value not in gate for value in required):
+        raise ValueError("renderer Family 1 opt-in or native family2-first gate changed")
+    family2 = gate.index("const bool supportsFamily2")
+    fallback = gate.index("if (supportsFamily2 || !family1RuntimeOptIn)")
+    family1 = gate.index("const bool supportsFamily1")
+    if not family2 < fallback < family1:
+        raise ValueError("native Family 2 must remain the first renderer availability path")
+
+
 PRELUDE = r"""#include <cstdint>
 #include <cstdio>
 #include <string>
@@ -139,6 +175,7 @@ int main() {
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mtl-utils", required=True, type=Path)
+    parser.add_argument("--apple-platform-utils", required=True, type=Path)
     args = parser.parse_args()
     compiler = shutil.which("clang++")
     if compiler is None:
@@ -147,8 +184,9 @@ def main() -> int:
 
     try:
         helper = extract_helper(args.mtl_utils.read_text(encoding="utf-8"))
+        audit_renderer_gate(args.apple_platform_utils.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
-        print(f"native Mac-family source audit failed: {error}", file=sys.stderr)
+        print(f"native Mac-family/renderer source audit failed: {error}", file=sys.stderr)
         return 1
 
     variants = (
@@ -176,7 +214,7 @@ def main() -> int:
                 print(f"{name} policy failed:\n{executed.stderr}", file=sys.stderr)
                 return 1
 
-    print("native Mac-family policy: extracted helper passed macOS 12/13 and Catalyst 15/16 synthetic harnesses")
+    print("native Mac-family policy: helper passed macOS 12/13 and Catalyst 15/16 harnesses; renderer gate retains opt-in and Family 2 priority")
     return 0
 
 

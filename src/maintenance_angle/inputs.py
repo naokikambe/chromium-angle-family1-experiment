@@ -110,14 +110,27 @@ def resolve_inputs(root: Path, chrome_version: str, chromium_revision: str,
     chrome_matches = [entry for entry in chrome_entries if entry.get("chrome_version") == chrome_version]
     if len(chrome_matches) > 1:
         raise InputError("known Chrome source mapping is ambiguous")
-    chrome_match = chrome_matches[0] if chrome_matches else None
+    chrome_source_match = chrome_matches[0] if chrome_matches else None
+    if chrome_source_match is not None and type(chrome_source_match.get("candidate_only", False)) is not bool:
+        raise InputError("Chrome source mapping has a malformed source role")
+    candidate_source_match = chrome_source_match if chrome_source_match and chrome_source_match.get("candidate_only") else None
+    chrome_match = chrome_source_match if chrome_source_match and not chrome_source_match.get("candidate_only") else None
     if chrome_match and (chrome_match.get("chromium_revision") != chromium_revision or
                          chrome_match.get("angle_revision") != angle_revision):
         raise InputError("known Chrome catalog entry disagrees with resolved Chromium tag or DEPS")
+    if candidate_source_match and (candidate_source_match.get("chromium_revision") != chromium_revision or
+                                   candidate_source_match.get("angle_revision") != angle_revision):
+        raise InputError("candidate Chrome source mapping disagrees with resolved Chromium tag or DEPS")
+    if candidate_source_match and "baseline_inputs" in candidate_source_match:
+        raise InputError("candidate-only Chrome source mapping cannot define a fixed baseline")
     if chrome_match:
         angle_matches = [entry for entry in angle_entries if entry.get("revision") == angle_revision]
         if len(angle_matches) != 1 or angle_matches[0].get("kind") != "angle_source":
             raise InputError("known Chrome mapping has a missing or ambiguous ANGLE source record")
+    if candidate_source_match:
+        angle_matches = [entry for entry in angle_entries if entry.get("revision") == angle_revision]
+        if len(angle_matches) != 1 or angle_matches[0].get("kind") != "angle_source":
+            raise InputError("candidate Chrome mapping has a missing or ambiguous ANGLE source record")
 
     # Reject duplicate IDs rather than allowing sort order or the last file to win.
     for entries, key, label in ((patch_entries, "id", "patchset"),
@@ -181,6 +194,11 @@ def resolve_inputs(root: Path, chrome_version: str, chromium_revision: str,
         if len(candidate_patches) != 1 or len(default_recipes) != 1:
             raise InputError("unlisted revisions require exactly one candidate patchset and one default recipe")
         patch, recipe = candidate_patches[0], default_recipes[0]
+        recipe_sources = [entry for entry in chrome_entries
+                          if entry.get("chrome_version") == recipe.get("chrome_source")]
+        if (len(recipe_sources) != 1 or recipe_sources[0].get("candidate_only") is not True or
+                "baseline_inputs" in recipe_sources[0]):
+            raise InputError("candidate default recipe must reference a separate candidate-only source mapping")
         _validate_pair(patch, recipe, chrome_version=chrome_version,
                        angle_revision=angle_revision, known_version=False)
         selection_mode = "new-revision-candidate"
@@ -205,6 +223,8 @@ def resolve_inputs(root: Path, chrome_version: str, chromium_revision: str,
         "patch_path": patch["patch_path"],
         "patch_apply_order": patch["apply_order"],
         "patch_source_blobs": patch["source_blobs"],
+        "patch_source_revision": patch["angle_revision"],
+        "patch_expected_shader_api_version": patch.get("patched_shader_api_version"),
         "patch_candidate_status": "catalog-match" if chrome_match else "unlisted-revision-candidate",
         "recipe": recipe,
         "architecture": recipe["architecture"],
