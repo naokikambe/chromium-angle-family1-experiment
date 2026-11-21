@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import re
 import unittest
@@ -137,6 +138,33 @@ class WorkflowContractTests(unittest.TestCase):
                      "write-angle-manifest.py", "verify-angle-artifact.py"):
             self.assertIn(name, shared)
         self.assertIn('--build-key "$build_key"', shared)
+
+    def test_common_build_bootstraps_and_uses_the_pinned_depot_tools(self):
+        text = (ROOT / "scripts/build-angle-candidate.sh").read_text(encoding="utf-8")
+        checkout_check = text.index('test "$(git -C "$depot_tools_root" rev-parse HEAD)" = "$depot_tools_revision"')
+        bootstrap = text.index('scripts/bootstrap-depot-tools.sh')
+        gclient = text.index('gclient sync --no-history')
+        gn = text.index('"$depot_tools_root/gn" gen out/Release')
+        ninja = text.index('"$depot_tools_root/ninja" -C out/Release libEGL libGLESv2')
+        self.assertLess(checkout_check, bootstrap)
+        self.assertLess(bootstrap, gclient)
+        self.assertLess(gclient, gn)
+        self.assertLess(gn, ninja)
+        self.assertIn('export DEPOT_TOOLS_UPDATE=0', text)
+        self.assertIn('export DEPOT_TOOLS_BOOTSTRAP_PYTHON3=1', text)
+        helper = (ROOT / "scripts/bootstrap-depot-tools.sh").read_text(encoding="utf-8")
+        self.assertIn('python3_bin_reldir.txt', helper)
+        self.assertEqual(text.count("scripts/bootstrap-depot-tools.sh"), 1)
+        wrapper = (ROOT / "scripts/build-and-verify-angle.sh").read_text(encoding="utf-8")
+        self.assertIn('"$ninja_version"', wrapper)
+        self.assertNotIn('"$(ninja --version)"', wrapper)
+
+    def test_156_and_158_keep_the_same_pinned_depot_tools_source(self):
+        revisions = {
+            json.loads((ROOT / "catalog/recipes" / name).read_text(encoding="utf-8"))["depot_tools_revision"]
+            for name in ("macos-x64-metal-v1.json", "macos-x64-metal-158-v1.json")
+        }
+        self.assertEqual(revisions, {"0306e4682b4ac35287c726fa35a983157a625902"})
 
     def test_exact_156_reproduction_entry_is_manual_only(self):
         text = (ROOT / ".github/workflows/reproduce-baseline.yml").read_text(encoding="utf-8")

@@ -6,6 +6,9 @@
 | VersionHistory payload has no fraction | Full rollout cannot be established safely | Check the official API response and update the selector only after review. |
 | Chromium tag missing or `chrome/VERSION` differs | Release metadata and source tag do not agree | Record the failure; do not build from `main` or another tag. |
 | Known Chrome mapping differs from fetched source | Catalog and upstream source disagree | Stop and review the mapping; automation does not rewrite catalog. |
+| `depot-tools-bootstrap` | The pinned checkout's `ensure_bootstrap` failed | Keep the source pin and auto-update disablement; inspect the bootstrap log before any retry. Patch, GN, and Ninja have not started. |
+| `depot-tools-tool-validation` | Bootstrap returned, but its Python marker or pinned Python/GN/Ninja wrapper check failed | Repair the initialization failure; do not write `python3_bin_reldir.txt` by hand or substitute another Python. Patch, GN generation, and Ninja compilation have not started. |
+| `angle-checkout-bootstrap` or `angle-dependency-sync` | Chromium/ANGLE dependency setup failed after depot_tools was validated | Inspect the matching stage and preserve the exact source revisions before retrying. |
 | Patch does not apply, paths differ, source blobs differ, or policy test fails | Candidate source is not covered by the reviewed patch | Preserve the failure record; prepare a reviewed patch update. Do not reduce checks. |
 | Xcode/SDK differs | Hosted runner no longer matches the fixed recipe | Review and update the recipe explicitly. |
 | `CI_BUILD_FAILED` | The recorded stage failed before artifact publication | Inspect the public workflow result; synthetic tests and CI build are distinct from device acceptance. |

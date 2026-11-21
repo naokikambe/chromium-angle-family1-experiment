@@ -27,12 +27,28 @@ chrome_version=$(printf '%s\n' "$readarray_input" | sed -n '1p')
 architecture=$(printf '%s\n' "$readarray_input" | sed -n '2p')
 deployment_target=$(printf '%s\n' "$readarray_input" | sed -n '3p')
 build_key=$(printf '%s\n' "$readarray_input" | sed -n '4p')
+depot_tools_revision=$(python3 - "$inputs_json" <<'PY'
+import json, sys
+value = json.load(open(sys.argv[1], encoding="utf-8"))
+print(value["recipe"]["depot_tools_revision"])
+PY
+)
+build_depot_tools_revision=$(sed -n 's/^DEPOT_TOOLS_REVISION=//p' "$artifact_dir/build-environment.txt")
+ninja_version=$(sed -n 's/^DEPOT_TOOLS_NINJA=//p' "$artifact_dir/build-environment.txt")
+[[ "$build_depot_tools_revision" == "$depot_tools_revision" ]] || {
+  printf 'build environment does not record the pinned depot_tools revision\n' >&2
+  exit 1
+}
+[[ -n "$ninja_version" ]] || {
+  printf 'build environment does not record the pinned depot_tools Ninja version\n' >&2
+  exit 1
+}
 bash "$repo_root/scripts/verify-angle-binaries.sh" "$artifact_dir" "$architecture" "$deployment_target"
 python3 "$repo_root/scripts/write-angle-manifest.py" --artifact-dir "$artifact_dir" --inputs "$inputs_json" \
   --run-id "$GITHUB_RUN_ID" --artifact-name "$artifact_name" \
   --xcode-version "$(xcodebuild -version | tr '\n' ';')" \
   --sdk-version "$(xcrun --show-sdk-version)" \
   --clang-version "$(xcrun clang --version | head -n 1)" \
-  --ninja-version "$(ninja --version)"
+  --ninja-version "$ninja_version"
 python3 "$repo_root/scripts/verify-angle-artifact.py" "$artifact_dir" \
   --version "$chrome_version" --architecture "$architecture" --build-key "$build_key"

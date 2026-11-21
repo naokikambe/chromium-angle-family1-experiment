@@ -51,10 +51,14 @@ git -C "$depot_tools_root" remote add origin https://chromium.googlesource.com/c
 git -C "$depot_tools_root" fetch --depth=1 origin "$depot_tools_revision"
 git -C "$depot_tools_root" checkout --detach FETCH_HEAD
 test "$(git -C "$depot_tools_root" rev-parse HEAD)" = "$depot_tools_revision"
-export PATH="$depot_tools_root:$PATH"
+export DEPOT_TOOLS_DIR="$depot_tools_root"
 export DEPOT_TOOLS_UPDATE=0
+export DEPOT_TOOLS_BOOTSTRAP_PYTHON3=1
+export PATH="$depot_tools_root/python-bin:$depot_tools_root:$PATH"
+bash "$repo_root/scripts/bootstrap-depot-tools.sh" "$depot_tools_root" "$depot_tools_revision"
 
 cd "$angle_root"
+printf 'angle-checkout-bootstrap\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
 python3 scripts/bootstrap.py
 python3 - <<'PY'
 from pathlib import Path
@@ -76,8 +80,13 @@ for name in ('checkout_angle_cl_deps','checkout_angle_dawn_deps','checkout_angle
 solutions[0]['custom_vars']=custom_vars
 path.write_text('solutions = ' + pformat(solutions, sort_dicts=False) + '\n', encoding='utf-8')
 PY
+printf 'angle-dependency-sync\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
 gclient sync --no-history
 test "$(git rev-parse HEAD)" = "$angle_revision"
+test "$(git -C "$depot_tools_root" rev-parse HEAD)" = "$depot_tools_revision" || {
+  printf 'depot_tools revision changed before GN; refusing to continue\n' >&2
+  exit 1
+}
 printf 'patch-and-function-checks\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
 python3 - "$inputs_json" "$patch_path" "$angle_root" <<'PY'
 import hashlib, json, subprocess, sys
@@ -121,8 +130,8 @@ for name, item in value.items():
     lines.append(f'{name} = {rendered}')
 open(sys.argv[2], 'w', encoding='utf-8').write('\n'.join(lines)+'\n')
 PY
-gn gen out/Release
-ninja -C out/Release libEGL libGLESv2
+"$depot_tools_root/gn" gen out/Release
+"$depot_tools_root/ninja" -C out/Release libEGL libGLESv2
 
 printf 'artifact-assembly\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
 mkdir -p "$artifact_dir/licenses"
@@ -149,7 +158,8 @@ printf '%s\n' "$angle_revision" > "$artifact_dir/ANGLE_REVISION"
   xcodebuild -version
   printf 'MACOS_SDK_VERSION=%s\n' "$(xcrun --show-sdk-version)"
   xcrun clang --version
-  python3 --version
-  printf 'NINJA_VERSION=%s\n' "$(ninja --version)"
+  printf 'DEPOT_TOOLS_PYTHON=%s\n' "$("$depot_tools_root/python-bin/python3" --version 2>&1)"
+  printf 'DEPOT_TOOLS_GN=%s\n' "$("$depot_tools_root/gn" --version)"
+  printf 'DEPOT_TOOLS_NINJA=%s\n' "$("$depot_tools_root/ninja" --version)"
   printf 'NINJA_TARGETS=libEGL libGLESv2\n'
 } > "$artifact_dir/build-environment.txt"

@@ -43,10 +43,17 @@ class SharedBuildPathTests(unittest.TestCase):
         scripts.mkdir(parents=True)
         trace = directory / "calls.jsonl"
         for name in ("build-angle-candidate.sh", "verify-artifact.sh", "verify-angle-binaries.sh"):
+            build_environment = (
+                'mkdir -p "$3"\n'
+                f'printf "DEPOT_TOOLS_REVISION={"f" * 40}\\nDEPOT_TOOLS_NINJA=fixture depot Ninja 1.2\\n" '
+                '> "$3/build-environment.txt"\n'
+                if name == "build-angle-candidate.sh" else ""
+            )
             (scripts / name).write_text(
                 '#!/bin/sh\nset -eu\n'
                 f'printf \'%s\\n\' \'{name}\' >> "$FIXTURE_TRACE"\n'
-                f'if [ "$FIXTURE_FAILURE" = "{name}" ]; then exit 9; fi\n')
+                f'if [ "$FIXTURE_FAILURE" = "{name}" ]; then exit 9; fi\n'
+                + build_environment)
         for name in ("write-angle-manifest.py", "verify-angle-artifact.py"):
             (scripts / name).write_text(
                 'import json, os, sys\n'
@@ -60,7 +67,8 @@ class SharedBuildPathTests(unittest.TestCase):
             command.chmod(0o755)
         inputs = directory / "inputs.json"
         inputs.write_text(json.dumps({"chrome_version": "158.0.8127.37", "architecture": "x86_64",
-                                      "recipe": {"macos_deployment_target": "13.0"}, "build_key": "a" * 64}))
+                                      "recipe": {"macos_deployment_target": "13.0",
+                                                 "depot_tools_revision": "f" * 40}, "build_key": "a" * 64}))
         env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ["PATH"],
                    GITHUB_RUN_ID="123", FIXTURE_TRACE=str(trace), FIXTURE_FAILURE=failure)
         return repo, inputs, trace, env
@@ -79,6 +87,8 @@ class SharedBuildPathTests(unittest.TestCase):
             verify = json.loads(lines[-1])
             self.assertIn("--build-key", verify)
             self.assertEqual(verify[-1], "a" * 64)
+            manifest = json.loads(next(line for line in lines if '"write-angle-manifest.py"' in line))
+            self.assertEqual(manifest[manifest.index("--ninja-version") + 1], "fixture depot Ninja 1.2")
 
     def test_build_or_binary_failure_prevents_manifest_creation(self):
         for failure in ("build-angle-candidate.sh", "verify-angle-binaries.sh"):
