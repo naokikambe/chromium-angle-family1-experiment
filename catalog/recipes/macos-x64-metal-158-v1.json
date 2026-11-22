@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "kind": "build_recipe",
+  "id": "macos-x64-metal-158-v1",
+  "candidate_default": true,
+  "chrome_source": "158.0.8127.37",
+  "angle_revision": "1f6526a566c27c7c33aa73a78517450a4a2a1714",
+  "patchset": "metal-family1-158-v1",
+  "depot_tools_revision": "0306e4682b4ac35287c726fa35a983157a625902",
+  "runner": "macos-15-intel",
+  "architecture": "x86_64",
+  "xcode_version": "16.4",
+  "macos_sdk_version": "15.5",
+  "macos_deployment_target": "13.0",
+  "ninja_targets": [
+    "libEGL",
+    "libGLESv2"
+  ],
+  "gn_args": {
+    "is_debug": false,
+    "is_component_build": false,
+    "target_cpu": "x64",
+    "use_system_xcode": true,
+    "clang_use_chrome_plugins": false,
+    "mac_deployment_target": "13.0",
+    "mac_min_system_version": "13.0",
+    "angle_assert_always_on": false,
+    "angle_enable_metal": true,
+    "angle_enable_gl": false,
+    "angle_enable_vulkan": false,
+    "angle_enable_swiftshader": false,
+    "angle_enable_null": false,
+    "angle_enable_wgpu": false,
+    "angle_enable_cl": false,
+    "angle_build_tests": false,
+    "build_angle_deqp_tests": false,
+    "symbol_level": 0
+  }
+}

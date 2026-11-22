@@ -51,10 +51,14 @@ git -C "$depot_tools_root" remote add origin https://chromium.googlesource.com/c
 git -C "$depot_tools_root" fetch --depth=1 origin "$depot_tools_revision"
 git -C "$depot_tools_root" checkout --detach FETCH_HEAD
 test "$(git -C "$depot_tools_root" rev-parse HEAD)" = "$depot_tools_revision"
-export PATH="$depot_tools_root:$PATH"
+export DEPOT_TOOLS_DIR="$depot_tools_root"
 export DEPOT_TOOLS_UPDATE=0
+export DEPOT_TOOLS_BOOTSTRAP_PYTHON3=1
+export PATH="$depot_tools_root/python-bin:$depot_tools_root:$PATH"
+bash "$repo_root/scripts/bootstrap-depot-tools.sh" "$depot_tools_root" "$depot_tools_revision"
 
 cd "$angle_root"
+printf 'angle-checkout-bootstrap\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
 python3 scripts/bootstrap.py
 python3 - <<'PY'
 from pathlib import Path
@@ -76,8 +80,17 @@ for name in ('checkout_angle_cl_deps','checkout_angle_dawn_deps','checkout_angle
 solutions[0]['custom_vars']=custom_vars
 path.write_text('solutions = ' + pformat(solutions, sort_dicts=False) + '\n', encoding='utf-8')
 PY
+printf 'angle-dependency-sync\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
 gclient sync --no-history
 test "$(git rev-parse HEAD)" = "$angle_revision"
+test "$(git -C "$depot_tools_root" rev-parse HEAD)" = "$depot_tools_revision" || {
+  printf 'depot_tools revision changed after dependency sync; refusing to continue\n' >&2
+  exit 1
+}
+bash "$repo_root/scripts/validate-angle-build-tools.sh" \
+  "$angle_root" "$angle_revision" "$depot_tools_root" "$depot_tools_revision"
+angle_gn="$angle_root/buildtools/mac/gn"
+angle_ninja="$angle_root/third_party/ninja/ninja"
 printf 'patch-and-function-checks\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
 python3 - "$inputs_json" "$patch_path" "$angle_root" <<'PY'
 import hashlib, json, subprocess, sys
@@ -85,7 +98,8 @@ inputs=json.load(open(sys.argv[1], encoding="utf-8"))
 patch=open(sys.argv[2], "rb").read()
 assert hashlib.sha256(patch).hexdigest() == inputs["patch_sha256"]
 root=sys.argv[3]
-if inputs["patch_candidate_status"] == "catalog-match":
+if (inputs["patch_candidate_status"] == "catalog-match" or
+        inputs["angle_revision"] == inputs["patch_source_revision"]):
     for path, expected in inputs["patch_source_blobs"].items():
         actual=subprocess.run(["git","-C",root,"hash-object",path], check=True, capture_output=True, text=True).stdout.strip()
         if actual != expected:
@@ -99,10 +113,16 @@ subprocess.run(["git","-C",root,"diff","--cached","--check"], check=True)
 PY
 printf 'synthetic-source-policy-tests\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
 python3 "$repo_root/tests/angle-policy/native-query-policy.py" \
+  --apple-platform-utils "$angle_root/src/common/apple_platform_utils.mm" \
   --mtl-utils "$angle_root/src/libANGLE/renderer/metal/mtl_utils.mm"
 python3 "$repo_root/tests/angle-policy/math-options-policy.py" \
   --mtl-utils "$angle_root/src/libANGLE/renderer/metal/mtl_utils.mm"
-python3 "$repo_root/tests/angle-policy/vertex-unpack-policy.py" --source-root "$angle_root"
+policy_args=(--source-root "$angle_root")
+policy_api_version=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("patch_expected_shader_api_version") or "")' "$inputs_json")
+if [[ -n "$policy_api_version" ]]; then
+  policy_args+=(--expected-sh-version "$policy_api_version")
+fi
+python3 "$repo_root/tests/angle-policy/vertex-unpack-policy.py" "${policy_args[@]}"
 printf 'angle-build\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
 mkdir -p out/Release
 python3 - "$inputs_json" out/Release/args.gn <<'PY'
@@ -114,8 +134,10 @@ for name, item in value.items():
     lines.append(f'{name} = {rendered}')
 open(sys.argv[2], 'w', encoding='utf-8').write('\n'.join(lines)+'\n')
 PY
-gn gen out/Release
-ninja -C out/Release libEGL libGLESv2
+printf 'angle-gn-generation\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
+"$angle_gn" gen out/Release
+printf 'angle-ninja-compilation\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
+"$angle_ninja" -C out/Release libEGL libGLESv2
 
 printf 'artifact-assembly\n' > "${FAILURE_STAGE_FILE:-/dev/null}"
 mkdir -p "$artifact_dir/licenses"
@@ -142,7 +164,10 @@ printf '%s\n' "$angle_revision" > "$artifact_dir/ANGLE_REVISION"
   xcodebuild -version
   printf 'MACOS_SDK_VERSION=%s\n' "$(xcrun --show-sdk-version)"
   xcrun clang --version
-  python3 --version
-  printf 'NINJA_VERSION=%s\n' "$(ninja --version)"
+  printf 'DEPOT_TOOLS_PYTHON=%s\n' "$("$depot_tools_root/python-bin/python3" --version 2>&1)"
+  printf 'ANGLE_GN_PATH=buildtools/mac/gn\n'
+  printf 'ANGLE_GN_VERSION=%s\n' "$("$angle_gn" --version)"
+  printf 'ANGLE_NINJA_PATH=third_party/ninja/ninja\n'
+  printf 'ANGLE_NINJA_VERSION=%s\n' "$("$angle_ninja" --version)"
   printf 'NINJA_TARGETS=libEGL libGLESv2\n'
 } > "$artifact_dir/build-environment.txt"
