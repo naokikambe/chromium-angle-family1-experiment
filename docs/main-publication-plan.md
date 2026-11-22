@@ -1,37 +1,30 @@
 # Main publication and integration plan
 
-## Current state
+## Current protections
 
-PR #2 was merged into `main` at `84594c238ae9e55285caf153f5af9772a1067a26`. The Chrome 158 patch work is prepared on the new local branch `migration/angle158-metal-family1`, based on that exact commit. The earlier `migration/angle-maintenance` branch and its history remain intact.
+Start maintenance work from the verified current GitHub `main` tip on a dedicated local branch/worktree. A cached `origin/main` is not proof of the latest remote state. Preserve existing checkouts, branches, workflow runs, artifacts, and evidence.
 
-The publication route previously reviewed for `migration/angle-maintenance` does not authorize a new branch. Review the exact new branch against the current `main` and obtain a separate publication-guard decision before any push. Do not update PR #2, create another PR, or change the guard as part of this preparation. The work is currently staged for review; no commit, push, PR operation, or Actions dispatch has been performed.
+The existing safe-push document and installed guard define the publication route and restrictions. This plan does not change or extend them. If a reviewed branch is outside the allowed route, stop and request a separate review of a concrete guard change; do not bypass or modify the guard as part of routine work.
 
-For a later publication:
+The approval boundaries are separate:
 
-1. Review the full staged snapshot and its focused checks.
-2. Obtain explicit approval before creating the commit.
-3. Obtain a separate guard review and approval to push the exact new branch. If the installed guard rejects the branch, stop; do not bypass or modify it.
-4. After a reviewable push, create or update a PR only with separate approval. State that merging the change to `main` changes the defaults for unregistered Chrome/ANGLE candidates while leaving the fixed Chrome 156 binding intact.
-5. Obtain separate approval before integration into `main`. The monitor schedule runs only from `main`; integration can therefore activate a future Stable build.
+1. Explicit owner approval is required before creating a commit.
+2. A separate approval is required before pushing the exact reviewed branch, subject to the existing guard.
+3. PR creation or editing requires its own approval.
+4. Integration into `main` requires a separate approval after the current PR head, base, and required checks have been reviewed.
 
-No direct commit or push to `main` is allowed. Commit approval does not authorize push, PR creation or editing, Actions dispatch/rerun/cancel, main integration, branch cleanup, old run/artifact deletion, repository setting changes, or external guard changes.
+No direct commit or push to `main` is allowed. Commit approval does not authorize push, PR operations, Actions dispatch/rerun/cancel, main integration, branch cleanup, artifact deletion, repository setting changes, or external guard changes.
 
-## Publication protections
+## Current workflow effects
 
-Preserve the canonical repository identity, approved branch restriction, fixed base ancestry, privacy checks, hook integrity, and single-parent history requirements. Do not weaken `.gitignore`, privacy scanners, hooks, or the safe-push launcher. Do not use `--no-verify`, force push, direct-URL push, push-URL overrides, or another guard bypass.
+`.github/workflows/validate-pr.yml` runs on pull requests targeting `main`. Its read-only synthetic job validates the catalog, unit suite, safe-push fixtures, and privacy scan. For same-repository PRs, that job gates full ANGLE builds for the catalog versions 156 and 158 on `macos-15-intel`, with up to two jobs in parallel and a 240-minute timeout. Fork PRs receive the synthetic job only. Review current results for the exact PR head and base; a stale or skipped build is not full-build acceptance.
 
-The earlier publication route authorized only `migration/angle-maintenance`. A new route for `migration/angle158-metal-family1` requires its own review. Main integration remains through a reviewed PR and its separate approval.
+The `watch-chrome-stable.yml` schedule runs every six hours only on `main`. Integrating changes can therefore affect future Stable candidate builds. Its manual operations and `reproduce-baseline.yml` dispatch remain owner-approved actions. Do not run, rerun, or cancel Actions without approval for that specific operation.
 
-## Workflow effects
+PR validation artifacts are temporary validation outputs with merge provenance. They are not indexed Stable artifacts and do not establish runtime, device, KOOV, Bluetooth, USB, or owner acceptance. A full CI build is separate from those acceptance decisions.
 
-`validate-pr.yml` checks the proposed merge with `main`, first running synthetic/privacy checks and then full 156/158 builds for same-repository PRs. It has read-only repository permissions and pinned Actions. Updating this PR starts up to two macOS build jobs, each with a 240-minute timeout. PR artifacts are seven-day validation outputs with merge provenance and are not indexed as Stable candidates. It does not run the Stable monitor, change monitor state, or dispatch another workflow. Both matrix builds must be reviewed before integration; synthetic success alone is insufficient.
+## Scope and verification
 
-The Stable monitor schedule is guarded to `refs/heads/main`; it does not run from the work branch or its PR. Integrating this change updates the candidate defaults. A later scheduled run can start a macOS ANGLE build when it finds a newly detected fully rolled out Stable version.
+Preserve the existing project license scope, ANGLE and Chromium notices, privacy checks, hooks, safe-push behavior, and prohibited publication targets. Do not add Chrome or KOOV binaries, local profiles, receipts, signing identity data, device evidence, credentials, build logs, or generated test videos to Git, CI, or a PR body.
 
-The `reproduce-baseline.yml` workflow is a manual, fixed-input Chrome 156 baseline build. The retry for Chrome 158 is a separate `retry_failed_version` dispatch and requires the fixed update on `main`. Its exact approval inputs and failure handling are documented in [`158-candidate-retry-plan.md`](158-candidate-retry-plan.md). Do not rerun the historical failed run as a substitute. Do not dispatch, rerun, or cancel Actions without specific approval.
-
-## Scope and verification limits
-
-Preserve ANGLE's upstream license and notices, privacy protections, and publication hooks. Do not add a project-wide `LICENSE`, Chrome app, profile, local receipt, signing identity, device information, credentials, build logs, or generated binaries to Git, CI, or a PR body.
-
-Catalog, patch application, source-policy harnesses, and synthetic tests do not prove a full ANGLE build, Chrome launch, KOOV operation, signing/freeze, Bluetooth/USB behavior, or owner adoption. The local machine has Xcode 16.4 and SDK 15.5 on x86_64, but about 20 GiB free; this request does not run a full local build. The retry plan uses the pinned `macos-15-intel` runner with the workflow's 240-minute timeout. The main-integration decision must summarize the then-current PR head/base and checks, resolved findings, remaining limits, exact integration commit/method, and schedule activation effect.
+Before integration, review the exact diff and current workflow effects, including possible schedule activation. Keep synthetic checks, CI builds, owner-run local operations, and real-device acceptance as separate evidence types. See [publication privacy](publication-privacy.md), [safe-push procedure](safe-push-and-gc-procedure.md), and [workflow operations](automation-operations.md).

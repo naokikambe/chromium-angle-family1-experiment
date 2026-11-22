@@ -31,4 +31,4 @@ CI acceptance and device acceptance are separate.
 - [ ] If applicable, owner tests Bluetooth/USB, save/reload, normal shutdown/restart, and a sustained session.
 - [ ] Owner decides whether to adopt or retain the candidate. A CI pass is not that decision.
 
-No device test, Chrome launch, signing operation, profile change, or Bluetooth/USB operation was performed in this migration.
+No device test, Chrome launch, signing operation, profile change, or Bluetooth/USB operation was performed as part of the earlier maintenance migration or this documentation repair.

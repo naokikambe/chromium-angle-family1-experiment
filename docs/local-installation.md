@@ -34,7 +34,7 @@ python3 scripts/local-angle.py finder-launchers --app-copy "/path/to/Chrome Fami
   --bundle-id-prefix "org.example.angle"
 ```
 
-`KOOV Registration.app` opens the supplied URL in the selected Chrome copy for first-time setup; account registration and login remain owner actions. `KOOV ANGLE Family1.app` uses Chrome’s `--app-id=<ID>` mode for daily launch. Both scripts use the absolute selected Chrome path, explicit runtime architecture, dedicated profile, and reviewed ANGLE switches. Each Finder app’s own `Info.plist` contains `NSBluetoothAlwaysUsageDescription`; the copied Chrome app also receives the reviewed Bluetooth purpose string. This migration generates and inspects the bundles but does not compile AppleScript, sign or launch them, change TCC permissions, or interact with a controller. The owner must separately review local signing and test the Finder/TCC behavior.
+`KOOV Registration.app` opens the supplied URL in the selected Chrome copy for first-time setup; account registration and login remain owner actions. `KOOV ANGLE Family1.app` uses Chrome’s `--app-id=<ID>` mode for daily launch. Both scripts use the absolute selected Chrome path, explicit runtime architecture, dedicated profile, and reviewed ANGLE switches. Each Finder app’s own `Info.plist` contains `NSBluetoothAlwaysUsageDescription`; the copied Chrome app also receives the reviewed Bluetooth purpose string. The generator prepares and inspects the bundles but does not compile AppleScript, sign or launch them, change TCC permissions, or interact with a controller. The owner must separately review local signing and test the Finder/TCC behavior.
 
 The generator creates the dedicated profile directory with a binding marker containing the installation ID, exact Chrome app path/version, runtime architecture, and artifact build key. Daily launches reuse that same profile only while the marker and copied-app binding match. The launcher rejects another app, another version or architecture, a changed installation binding, or an unbound existing profile.
 
@@ -64,6 +64,6 @@ python3 scripts/local-angle.py freeze --app-copy "/path/to/Chrome Family1.app" \
   --artifact-dir "/path/to/new-artifact" --receipt "/path/to/private-local/angle-receipt.json" --execute
 ```
 
-`freeze --execute` requires signed verification and a valid receipt before applying the immutable flag. `freeze --unfreeze` reverses the flag. These commands are not run by CI or by this migration. Login, OS prompts, runtime observation, real hardware, adoption, and deletion decisions remain with the owner.
+`freeze --execute` requires signed verification and a valid receipt before applying the immutable flag. `freeze --unfreeze` reverses the flag. These are local owner operations; CI does not run them. Login, OS prompts, runtime observation, real hardware, adoption, and deletion decisions remain with the owner.
 
 Keep app bundles, profiles, downloaded artifacts, generated launcher apps, signatures, receipts, and test results outside the repository. Never commit them.
