@@ -28,4 +28,4 @@ The candidate ZIP and `stable-monitor-state` index are GitHub Actions artifacts 
 
 After expiry, the local tool refuses the artifact. The owner can manually request a rebuild for the exact indexed version; that is a new candidate with a new ID and hashes. For long-term preservation, the owner downloads and retains a verified artifact outside GitHub Actions and outside the repository. There is no automatic Release or long-term cloud store in this initial design.
 
-The repository contains the upstream ANGLE license for the source used here. Each artifact carries the source license and discovered notices. This does not create a project-wide license or expand ANGLE’s terms to unrelated material.
+The repository's [BSD 3-Clause project license](../LICENSE) applies to repository-authored workflow files, scripts, and documentation as scoped in the [README](../README.md). ANGLE remains under its upstream license; each artifact carries the applicable source license and discovered notices. Neither license statement assigns a blanket license to every file in the repository or expands ANGLE's terms to unrelated material.

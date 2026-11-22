@@ -2,7 +2,7 @@
 
 This repository prepares exact-version, unsigned `libEGL.dylib` and `libGLESv2.dylib` candidates for Chrome Stable on macOS x86_64. It keeps the Chrome → Chromium commit → ANGLE commit mapping, the reviewed Family 1 patch, the fixed Chrome 156 recipe, candidate defaults for unregistered versions, and the artifact checks together.
 
-The previous migration PR #2 is merged at `84594c238ae9e55285caf153f5af9772a1067a26`. The Chrome 158 patch work is on a new local branch based on that exact `main` commit. The old branch and its publication guard remain unchanged; the new branch requires a separate publication-guard review before any push. See [the main publication plan](docs/main-publication-plan.md).
+Repository changes are reviewed on a dedicated local branch based on a verified GitHub `main` tip. Publication, pull request changes, and integration into `main` each require their own approval. See [the main publication plan](docs/main-publication-plan.md).
 
 ## Current pinned baseline
 
@@ -16,7 +16,7 @@ The previous migration PR #2 is merged at `84594c238ae9e55285caf153f5af9772a1067
 
 The 156 source, patchset, and recipe binding is versioned under [`catalog/`](catalog/README.md). The resolver uses that exact binding for the known version; changing the new-version candidate defaults does not change the 156 reproduction. A separately selected alternate recipe is recorded as an explicit trial. Unregistered versions continue to use the unique designated candidate patchset and default recipe. PR validation checks the proposed merge with `main`, then builds the exact 156 and 158 sources through the same build and verification script as the monitor and baseline reproduction. A configured build is not evidence of a successful run; inspect both matrix results before integration. The scheduled monitor remains guarded to `main`.
 
-Chrome 158.0.8127.37 is recorded as a candidate-only source mapping with an independent patchset and recipe. It is not a fixed baseline. Its migration does not change the Chrome 156 reproduction pins or patch bytes.
+Chrome 158.0.8127.37 is recorded as a candidate-only source mapping with its own patchset and recipe; it is not a fixed baseline. Its addition left the Chrome 156 reproduction pins and patch bytes unchanged.
 
 ## Workflows
 
@@ -46,6 +46,7 @@ The PR check also runs privacy and safe-push fixture checks. These commands vali
 - [Local installation tools](docs/local-installation.md)
 - [Acceptance checklist](docs/acceptance-checklist.md)
 - [Troubleshooting](docs/troubleshooting.md)
+- [Probe provenance and media/WebGL check](docs/probes.md)
 - [Automation operations](docs/automation-operations.md)
 - [Chrome 158 candidate and retry plan](docs/158-candidate-retry-plan.md)
 - [Chrome 156 baseline](docs/156-baseline.md)
@@ -53,4 +54,10 @@ The PR check also runs privacy and safe-push fixture checks. These commands vali
 - [Publication privacy](docs/publication-privacy.md)
 - [Safe-push procedure](docs/safe-push-and-gc-procedure.md)
 
-The repository has no project-wide license file. The ANGLE license is retained for the upstream source covered by the patch and build artifact; it does not license this repository as a whole.
+## License
+
+Repository-authored workflow files, scripts (including the retained probe scripts under `src/probes/`), and documentation are licensed under the BSD 3-Clause License; see [LICENSE](LICENSE). This scoped grant does not make a blanket statement about the origin or license of every file in the current tree.
+
+ANGLE, Chromium, and other third-party components and generated artifacts remain subject to their respective licenses. The workflow collects applicable ANGLE and third-party notices in its build artifact.
+
+Google Chrome and KOOV binaries, teaching materials, and assets are outside this repository's license. This is an independent project, is not affiliated with or endorsed by Google, the Chromium project, the ANGLE project, or KOOV, and provides no warranty or safety guarantee.
