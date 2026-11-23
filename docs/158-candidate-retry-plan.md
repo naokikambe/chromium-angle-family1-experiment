@@ -1,6 +1,6 @@
 # Chrome 158 candidate and explicit retry plan
 
-## State retrieval prerequisite added 2026-11-20
+## State retrieval prerequisite found before the redirect fix
 
 The latest scheduled run is `44611811768` (run number 3, workflow revision `84594c238ae9e55285caf153f5af9772a1067a26`). It failed in `Detect a new fully rolled out Mac Stable release`; source resolution, checkpoint, build, and upload steps were skipped, and the run has no artifacts. Its log reports a generic `GitHub Actions API request failed` and does not identify the failing endpoint.
 
@@ -8,19 +8,19 @@ The most recent saved state is still artifact `14508194597` from run `4448077189
 
 An independent read-only reproduction found that the current artifact client sends its GitHub API Bearer header on the cross-origin redirect to the signed artifact-storage URL: downloading the state ZIP through that path returns HTTP 401. A test request to the same redirect without GitHub credentials returned HTTP 200 with a 976-byte ZIP. The saved state was not changed. The generic run log alone cannot attribute its API failure to this redirect, but the next explicit retry needs this saved state and will encounter the defect unless the reader is fixed.
 
-Before authorizing the retry, the fixed reader must pass the redirect regression tests and a read-only state-load preflight against the retained artifact. Confirm the preflight returns the recorded failed 158 attempt and exact source pins; do not begin a retry, recover/reset state, or rewrite `last_detected_version` during this check. If the retained state cannot be read, stop and keep the state artifacts for diagnosis.
+At that time, retry approval depended on the redirect regression and a read-only state-load preflight. PR #3 later merged the artifact redirect fix into `main` at `5ba61b9f043905cf0f67ef0449a4781f1bf22055`. This historical finding does not establish that the old artifact IDs are still available or that the failed attempt remains the latest eligible retry. Before any future retry, read the current state with the merged code and verify the latest failed 158 record, source pins, checkpoints, and artifact availability. Do not recover/reset state or rewrite `last_detected_version` as part of that check.
 
-## Recorded failure
+## Recorded failure (historical)
 
 The Stable monitor run `44480771895` completed as a failure on workflow revision `84594c238ae9e55285caf153f5af9772a1067a26`. The live run and job records show that the build step stopped at `patch-and-function-checks` during `git apply --check`; the candidate upload was skipped. The retained `stable-monitor-state` artifact records `CI_BUILD_FAILED`, `last_detected_version=158.0.8127.37`, and the resolved source pins below. Its artifact ID is `14508194597`, with pre-build and resolved checkpoints `14507983612` and `14507964810`. No successful ANGLE build artifact exists for this run.
 
 The exact source is Chrome `158.0.8127.37`, Chromium `b8c2be851f62f6a394ec57955d7f31335d7cb6d4`, and ANGLE `1f6526a566c27c7c33aa73a78517450a4a2a1714`. The patch selection was `metal-family1-v1` and recipe `macos-x64-metal-v1`, with mode `new-revision-candidate`. The corrected candidate defaults are `metal-family1-158-v1` and `macos-x64-metal-158-v1`; the resolver must still report `new-revision-candidate`, never `catalog-baseline`, for Chrome 158.
 
-## Dispatch to approve after publication and main integration
+## Explicit retry on current `main` (owner approval required)
 
-Before integration, PR #3 now has a planned full-build validation route in `validate-pr.yml`: synthetic checks followed by exact 156/158 builds from the proposed merge with `main`, using `build-and-verify-angle.sh`. Wait for both actual matrix results; adding the workflow is not build evidence. These jobs do not retry the historical failed attempt or update its state. Their seven-day artifacts include PR-only merge provenance and are not formal Stable candidates. After integration, the explicit retry below still performs the main workflow's state/checkpoint/index lifecycle and requires its own approval.
+PR #3 was merged at `5ba61b9f043905cf0f67ef0449a4781f1bf22055`. The current `validate-pr.yml` runs synthetic/privacy checks and then exact 156/158 builds for same-repository PRs. Those jobs do not retry a historical failed monitor attempt or update its state. Their seven-day artifacts include PR-only merge provenance and are not formal Stable candidates.
 
-The workflow only runs build jobs for `refs/heads/main`, and GitHub dispatches a workflow file from the default branch. After the fix is reviewed and integrated, record the exact `main` SHA that contains the new catalog and code, then use:
+GitHub dispatches a workflow file from the default branch, and the monitor build job runs only on `refs/heads/main`. A dispatch is not authorized by this plan. First confirm the current failed-state record and exact pins; only after separate owner approval for one run, use these inputs on the then-current reviewed `main`:
 
 | Field | Value |
 | --- | --- |

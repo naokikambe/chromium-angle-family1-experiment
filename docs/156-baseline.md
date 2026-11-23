@@ -23,4 +23,4 @@ GN settings and blob IDs are in [`catalog/recipes/macos-x64-metal-v1.json`](../c
 
 Unregistered Chrome/ANGLE versions still use the uniquely designated candidate patchset and default recipe. Passing explicit patchset and recipe IDs for Chrome 156 creates an `explicit-known-version-trial`; it is not recorded as reproduction of this baseline.
 
-The workflow was added as a reproduction entrypoint but was not run during this migration. No claim is made here that the new workflow completed an ANGLE build or runtime/device acceptance.
+The original maintenance migration added the reproduction entrypoint but did not run it. This document does not establish whether a later run completed; check the exact Actions run and revision for build evidence. CI completion does not establish runtime or device acceptance.

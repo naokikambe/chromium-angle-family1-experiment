@@ -14,7 +14,7 @@ For Chrome Stable 156.0.8078.48, Chromium commit `d0c02bfad08ec92a6ffcf989e53cd9
 
 The patch sources are recorded against the public ANGLE repository at their exact revisions. The build verifies the mapped source blobs whenever the resolved revision equals the patchset source revision; otherwise, candidate compatibility is checked by exact `git apply --check`, diff/path checks, and all focused policy tests. Those checks do not prove compilation or runtime compatibility. Automation never edits a patch.
 
-The upstream ANGLE license is kept at [`licenses/ANGLE-LICENSE.txt`](../licenses/ANGLE-LICENSE.txt). It covers the upstream ANGLE material under its terms and is not a license grant for the repository as a whole. The artifact includes upstream license and notice files from the checked-out source. No root `LICENSE` is added.
+The project license is scoped in the [README](../README.md) to repository-authored workflow files, scripts, and documentation. It does not make a blanket rights statement for every current file or replace a third-party license. The upstream ANGLE license is kept at [`licenses/ANGLE-LICENSE.txt`](../licenses/ANGLE-LICENSE.txt) and applies to upstream ANGLE material under its terms. The artifact includes upstream license and notice files from the checked-out source. Chrome, KOOV, and unrelated third-party materials remain outside that scope.
 
 Useful immutable references:
 

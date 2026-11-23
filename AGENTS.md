@@ -7,8 +7,8 @@ This repository maintains exact-version macOS ANGLE build candidates for Chrome 
 - Keep local Chrome bundles, profiles, downloaded artifacts, signing identity data, logs, receipts, and device evidence outside tracked source. Do not send them to CI.
 - Use synthetic fixtures for automated tests. A task that requires a real browser, device, account, Keychain, signature, Bluetooth, or USB operation belongs to the owner.
 - Do not run GitHub Actions manually unless the owner approves that specific run. A new schedule in the default branch starts on publication and must be described before push approval.
-- Work on the dedicated `migration/angle-maintenance` branch based on the reviewed `main` tip. Do not commit or push directly to `main`; main integration is through a reviewed PR and separate approval.
-- Do not commit without explicit owner approval. After a commit, request a separate approval before pushing the exact work branch. This migration branch already has Draft PR #2 targeting `main`; update that PR rather than creating a duplicate. A PR status or metadata change still needs separate approval.
+- Before work, verify the latest GitHub `main` tip instead of assuming a cached `origin/main` is current. Use a dedicated local repair branch/worktree and preserve other checkouts and their changes. Do not reuse completed migration branches or merged PRs.
+- Do not commit without explicit owner approval. A separate approval is required to push the exact reviewed branch, create or edit a PR, or integrate into `main`. Never commit or push directly to `main`.
 - Do not use `--no-verify`, force push, direct-URL push, push-URL override, or other guard bypasses. If the existing external guard does not allow the new work branch, stop and request separate review of the exact guard change.
 - Preserve `.gitignore`, publication privacy checks, hooks, and safe-push behavior. Ask for separate review before changing an installed external guard or GitHub repository settings.
-- Run focused syntax, static, and synthetic checks for changed code. Do not claim an Actions build or real-device acceptance unless it was actually run by the owner.
+- Run focused syntax, static, and synthetic checks appropriate to changed code. Do not claim an Actions build or real-device acceptance unless it was actually run by the owner.

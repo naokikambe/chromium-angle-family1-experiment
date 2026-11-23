@@ -2,7 +2,7 @@
 """Observe existing Mac browser bundles without modifying their contents.
 
 All browser runs use fresh profiles and a local fixture. The CDP transport
-helper is maintained in this project; see README.md for provenance.
+helper is maintained in this project; see ../../docs/probes.md for provenance.
 """
 from __future__ import annotations
 

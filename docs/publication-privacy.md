@@ -30,9 +30,11 @@ This includes source code and patches (including upstream context), documents
 and quotations or translations, images, fonts, audio, video, fixtures,
 generated outputs, binaries, and bundled dependencies. Public availability,
 synthetic content, absent metadata, or generation by a tool does not establish
-redistribution rights. The absence of a selected project-wide license is not
-permission to reuse project material; do not add or change a project-wide
-license without owner approval.
+redistribution rights. The BSD 3-Clause license in the root `LICENSE` applies
+only to repository-authored workflow files, scripts, and documentation within
+the scope stated in the README; third-party and other material remain subject
+to their own terms. Do not change the project license or its documented scope
+without owner approval.
 
 For third-party or derived material, record the source URL and immutable
 revision or version, a content hash where practical, copyright holder, license
