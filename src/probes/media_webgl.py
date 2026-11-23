@@ -339,7 +339,7 @@ def collect_gpu_mapping(app: Path, profile: Path, browser_process: subprocess.Po
 
 def stop_browser(process: subprocess.Popen | None, profile: Path | None, client) -> bool:
     if process is None:
-        return True
+        return False
 
     # Browser.close belongs to the browser target, not the page target used
     # for navigation and input. Ask the browser-level endpoint to exit first.
