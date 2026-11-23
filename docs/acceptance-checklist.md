@@ -12,7 +12,7 @@ CI acceptance and device acceptance are separate.
 - [ ] Xcode, SDK, architecture, GN recipe, depot_tools, and deployment target match pins.
 - [ ] Only `libEGL` and `libGLESv2` were built; both pass Mach-O, architecture, minimum OS, unsigned, and test-symbol checks.
 - [ ] Manifest, license/notice list, library hashes, run ID, artifact ID, and expiry agree.
-- [ ] Final-state and pre-build checkpoint archives use the `stable-monitor-state.json` member; interrupted checkpoints are never indexed as success or automatically rebuilt.
+- [ ] Final-state and pre-build checkpoint archives use the `stable-monitor-state.json` member; interrupted checkpoints preserve their fingerprint, are never indexed as success, and are not rebuilt automatically for the same inputs.
 - [ ] CI status is recorded as candidate generation only, with compatibility and adoption left `not-assessed`.
 
 ## Owner-controlled app and runtime

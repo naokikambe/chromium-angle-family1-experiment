@@ -14,19 +14,23 @@ flowchart LR
   PATCH --> POLICY[Synthetic Family 1 policy tests]
   POLICY --> BUILD[Two-library ANGLE build]
   BUILD --> VERIFY[Manifest, license, architecture, unsigned checks]
-  VERIFY --> INDEX[Actions artifact and version index]
+  VERIFY --> PUBLISH[Upload candidate artifact]
+  PUBLISH --> INDEX[Persist successful index and state]
+  INDEX --> WATERMARK[Advance last successful version]
   INDEX -. manual exact-version fetch .-> LOCAL[Owner-selected Chrome copy]
   LOCAL --> SIGN[Owner signing, strict verification]
   SIGN --> ACCEPT[Owner device acceptance and adoption decision]
 ```
 
-CI output states include `STABLE_RELEASE_DETECTED`, `RETRY_REQUESTED`, `CI_BUILD_FAILED`, `CI_BUILD_INTERRUPTED`, `ARTIFACT_METADATA_MISMATCH`, and `CI_BUILD_SUCCEEDED`. A successful candidate still reports `device_compatibility=not-assessed` and `adoption_status=not-assessed`.
+The monitor keeps four separate pieces of state: `last_detected_version` is a history marker; `monitor_start_version` is the configured starting boundary and is not a success; `last_successful_version` is the comparison watermark; and the per-version candidate ledger retains attempts, fingerprints, failure reasons, and source pins. Detection and checkpoints do not move the success watermark. A new success is first written as `CI_BUILD_SUCCEEDED_PENDING_STATE`; only a validated build artifact and manifest followed by publication of the final monitor-state artifact can be promoted to `CI_BUILD_SUCCEEDED` and advance the watermark when that final artifact is read back. A PR artifact is not eligible for this path.
+
+The candidate ledger records same-input failures and suppresses a matching automatic attempt with `ACTION_REQUIRED`. A different effective-input fingerprint may be attempted once; a repeat failure stores the new fingerprint and suppresses that condition. An interrupted checkpoint is converted to a failed attempt with the checkpoint's fingerprint. A successful record is never erased by a later failed attempt for the same Chrome version. CI success still reports `device_compatibility=not-assessed` and `adoption_status=not-assessed`.
 
 ## Source of truth
 
 `catalog/chrome/` maps a Chrome four-part version to its Chromium commit, DEPS-pinned ANGLE commit, and exact baseline patchset/recipe IDs and hashes. `catalog/angle-revisions/` records ANGLE source revisions. `catalog/patchsets/` binds the patch hash, source blobs, ordered diff paths, and the default-selection marker for unregistered ANGLE. `catalog/recipes/` fixes target, runner, Xcode/SDK, GN arguments, depot_tools revision, and the new-version default marker. Known versions use their source-record binding; unregistered versions require one unique candidate patchset and recipe pair. Ambiguous or missing mappings fail closed, and an explicit alternate pair is marked as a trial. Build keys hash the selected source, patch, recipe, selection mode, and workflow commit.
 
-The catalog is reviewed source, not an automated database. The monitor writes no catalog changes, commits, PRs, issues, tags, releases, or notifications.
+The catalog is reviewed source, not an automated database. The automatic-retry fingerprint hashes the exact Chrome version plus the tracked Stable workflow, build and verification scripts/modules, catalog and recipe data, patch bytes, license files, and the synthetic policy tests that run in the build. It hashes file contents, not the workflow commit SHA, so documentation-only and unrelated commits do not create a new retry condition. The exact Chromium and ANGLE pins are separately recorded and compared; a different pin for the same Chrome version stops before build. The monitor writes no catalog changes, commits, PRs, issues, tags, releases, or notifications.
 
 ## Supported entrypoints and retired experiments
 

@@ -1,5 +1,9 @@
 # Chrome 158 candidate and explicit retry plan
 
+## Current monitor behavior
+
+The historical records below predate the success-watermark and effective-fingerprint state. On the first scheduled run after that change reaches `main`, a schema-v1 failure for 158 has no fingerprint and is therefore kept as `ACTION_REQUIRED`; migration alone does not trigger a retry. The monitor first chooses the newest fully rolled-out Mac Stable above the last formally successful version. If 158 is still the newest eligible release, it is suppressed pending review. If a newer release exists, that newer version can be attempted without being blocked by 158. A normal scheduled attempt after a relevant-input change is limited to once for that new fingerprint. The explicit retry and expired-artifact re-acquire operations remain separate.
+
 ## State retrieval prerequisite found before the redirect fix
 
 The latest scheduled run is `44611811768` (run number 3, workflow revision `84594c238ae9e55285caf153f5af9772a1067a26`). It failed in `Detect a new fully rolled out Mac Stable release`; source resolution, checkpoint, build, and upload steps were skipped, and the run has no artifacts. Its log reports a generic `GitHub Actions API request failed` and does not identify the failing endpoint.
@@ -51,6 +55,6 @@ The artifact is only a build candidate. It does not establish Chrome or device c
 
 ## Failure and state handling
 
-This is one new, explicit workflow run. Do not rerun run `44480771895`, delete the recorded state/checkpoints, lower `last_detected_version`, or replace the pins. On failure, retain the new run's checkpoints and final state, inspect the failed job and exact `failure_stage`, and leave the version marked failed/interrupted for diagnosis. The schedule will not automatically retry this version. Any further attempt requires a separate explicit approval and a new dispatch. An expired success uses `reacquire_expired_artifact`, not this retry operation.
+This is one new, explicit workflow run. Do not rerun run `44480771895`, delete the recorded state/checkpoints, lower `last_detected_version`, or replace the pins. On failure, retain the new run's checkpoints and final state, inspect the failed job and exact `failure_stage`, and leave the version marked failed/interrupted for diagnosis. Normal monitoring suppresses the same failed fingerprint, allows one attempt for changed relevant inputs, and suppresses that new fingerprint after failure. An expired success uses `reacquire_expired_artifact`, not this retry operation.
 
 This plan does not authorize dispatch, rerun, commit, push, PR creation/editing, or main integration.

@@ -87,16 +87,21 @@ class GitHubStateTests(unittest.TestCase):
 
     def test_latest_completed_run_final_state_is_returned(self):
         artifact = self.artifact("stable-monitor-state", 17)
-        state = {"schema": "angle-stable-monitor-state-v1", "records": []}
+        state = {"schema": "angle-stable-monitor-state-v1", "baseline": "156.0.8078.48",
+                 "last_detected_version": "157.0.300.2", "records": []}
         with patch.object(self.client, "artifacts", return_value=[artifact]), \
                 patch.object(self.client, "workflow_runs", return_value=[self.workflow_run(17)]), \
                 patch.object(self.client, "read_json_artifact", return_value=state) as read:
-            self.assertEqual(self.client.load_latest_state("watch-chrome-stable.yml"), state)
+            loaded = self.client.load_latest_state("watch-chrome-stable.yml")
+        self.assertEqual(loaded["schema"], "angle-stable-monitor-state-v2")
+        self.assertEqual(loaded["last_detected_version"], "157.0.300.2")
+        self.assertIsNone(loaded["last_successful_version"])
         read.assert_called_once_with(artifact, "stable-monitor-state.json")
 
     def test_checkpoint_recovery_marks_pending_build_interrupted_without_success(self):
         artifact = self.artifact("stable-monitor-checkpoint-18", 18)
-        state = {"schema": "angle-stable-monitor-state-v1", "last_detected_version": INTERRUPTED_VERSION,
+        state = {"schema": "angle-stable-monitor-state-v1", "baseline": "156.0.8078.48",
+                 "last_detected_version": INTERRUPTED_VERSION,
                  "records": [{"run_id": "18", "chrome_version": INTERRUPTED_VERSION,
                               "status": "STABLE_RELEASE_DETECTED"}]}
         with patch.object(self.client, "artifacts", return_value=[artifact]), \
@@ -109,7 +114,8 @@ class GitHubStateTests(unittest.TestCase):
 
     def test_resolved_input_checkpoint_preserves_retry_pins_for_explicit_next_attempt(self):
         artifact = self.artifact("stable-monitor-resolved-checkpoint-18", 18)
-        state = {"schema": "angle-stable-monitor-state-v1", "last_detected_version": INTERRUPTED_VERSION,
+        state = {"schema": "angle-stable-monitor-state-v1", "baseline": "156.0.8078.48",
+                 "last_detected_version": INTERRUPTED_VERSION,
                  "records": [{"run_id": "18", "chrome_version": INTERRUPTED_VERSION,
                               "status": "RETRY_REQUESTED", "retry_of_run_id": "17",
                               "chromium_revision": "a" * 40, "angle_revision": "b" * 40,
@@ -129,12 +135,15 @@ class GitHubStateTests(unittest.TestCase):
 
     def test_run_without_checkpoint_safely_falls_back_to_prior_valid_state(self):
         artifact = self.artifact("stable-monitor-state", 16)
-        state = {"schema": "angle-stable-monitor-state-v1", "last_detected_version": "157.0.300.2", "records": []}
+        state = {"schema": "angle-stable-monitor-state-v1", "baseline": "156.0.8078.48",
+                 "last_detected_version": "157.0.300.2", "records": []}
         with patch.object(self.client, "artifacts", return_value=[artifact]), \
                 patch.object(self.client, "workflow_runs", return_value=[self.workflow_run(17, "2026-11-15T00:01:00Z"),
                                                                             self.workflow_run(16)]), \
                 patch.object(self.client, "read_json_artifact", return_value=state):
-            self.assertEqual(self.client.load_latest_state("watch-chrome-stable.yml"), state)
+            loaded = self.client.load_latest_state("watch-chrome-stable.yml")
+        self.assertEqual(loaded["last_detected_version"], "157.0.300.2")
+        self.assertEqual(loaded["schema"], "angle-stable-monitor-state-v2")
 
     def test_expired_checkpoint_fails_closed_instead_of_rebuilding_from_older_state(self):
         old = self.artifact("stable-monitor-state", 16)
