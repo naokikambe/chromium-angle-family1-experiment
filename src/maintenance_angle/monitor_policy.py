@@ -64,7 +64,10 @@ def _tracked_paths(root: Path) -> list[str]:
 def _is_effective_input(path: str) -> bool:
     if path in {".gitattributes", ".github/workflows/watch-chrome-stable.yml", "LICENSE"}:
         return True
-    if path.startswith(("catalog/", "patches/", "licenses/", "tests/angle-policy/")):
+    if path.startswith(("catalog/chrome/", "catalog/angle-revisions/",
+                        "catalog/patchsets/", "catalog/recipes/")):
+        return Path(path).suffix.lower() == ".json"
+    if path.startswith(("patches/", "licenses/", "tests/angle-policy/")):
         return True
     if path.startswith("scripts/"):
         name = Path(path).name
@@ -79,8 +82,9 @@ def effective_input_fingerprint(root: Path, chrome_version: str) -> str:
 
     The Chrome four-part tag is itself a source identity. Its resolved Chromium and
     ANGLE pins are separately recorded and checked; a changed pin for the same tag
-    is rejected before any build. All tracked catalog/patch/recipe bytes and every
-    tracked monitor/build/verification script used by the workflow are inspected.
+    is rejected before any build. Tracked JSON catalog data, patch/recipe bytes,
+    licenses, and monitor/build/verification inputs are inspected; catalog prose
+    and other documentation are excluded.
     """
     if not _valid_version(chrome_version):
         raise FingerprintError("candidate version is malformed")
@@ -118,7 +122,8 @@ def effective_input_fingerprint(root: Path, chrome_version: str) -> str:
 
 def _summary(record: dict[str, Any]) -> dict[str, Any]:
     fields = (
-        "chrome_version", "run_id", "status", "artifact_id", "artifact_name", "created_at",
+        "chrome_version", "platform", "architecture", "run_id", "status", "artifact_id",
+        "artifact_name", "created_at",
         "expires_at", "chromium_revision", "angle_revision", "patchset_id", "patch_sha256",
         "recipe_id", "recipe_sha256", "selection_mode", "build_key", "workflow_revision",
         "effective_fingerprint", "device_compatibility", "adoption_status",

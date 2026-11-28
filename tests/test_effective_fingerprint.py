@@ -22,7 +22,8 @@ class EffectiveFingerprintTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             paths = [*REQUIRED, ".gitattributes", "catalog/recipes/recipe.json",
-                     "patches/runtime.patch", "tests/angle-policy/policy.py", "README.md"]
+                     "catalog/README.md", "patches/runtime.patch",
+                     "tests/angle-policy/policy.py", "README.md"]
             for relative in paths:
                 path = root / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -34,6 +35,8 @@ class EffectiveFingerprintTests(unittest.TestCase):
                 initial = monitor_policy.effective_input_fingerprint(root, "158.0.8127.37")
                 (root / "README.md").write_text("documentation-only change")
                 after_docs = monitor_policy.effective_input_fingerprint(root, "158.0.8127.37")
+                (root / "catalog/README.md").write_text("catalog documentation-only change")
+                after_catalog_docs = monitor_policy.effective_input_fingerprint(root, "158.0.8127.37")
                 (root / "catalog/recipes/recipe.json").write_text("changed effective recipe")
                 after_recipe = monitor_policy.effective_input_fingerprint(root, "158.0.8127.37")
                 (root / "patches/runtime.patch").write_text("changed reviewed patch bytes")
@@ -43,6 +46,7 @@ class EffectiveFingerprintTests(unittest.TestCase):
                 another_version = monitor_policy.effective_input_fingerprint(root, "159.0.1000.2")
 
             self.assertEqual(initial, after_docs)
+            self.assertEqual(initial, after_catalog_docs)
             self.assertNotEqual(initial, after_recipe)
             self.assertNotEqual(after_recipe, after_patch)
             self.assertNotEqual(after_patch, after_build_script)

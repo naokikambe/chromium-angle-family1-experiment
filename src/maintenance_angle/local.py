@@ -136,9 +136,21 @@ def find_index_record(repository: str, version: str, architecture: str,
     state = client.load_latest_state(WORKFLOW_FILE)
     if not state:
         raise LocalError("no monitor index is available")
-    matches = [r for r in state.get("records", [])
+    records = state.get("records", [])
+    success_index = state.get("success_index", {})
+    if not isinstance(records, list) or not isinstance(success_index, dict):
+        raise LocalError("monitor success index is malformed")
+    matches = [r for r in records
                if r.get("chrome_version") == version and r.get("platform") == "macOS"
                and r.get("architecture") == architecture and r.get("status") == "CI_BUILD_SUCCEEDED"]
+    indexed_success = success_index.get(version)
+    if (isinstance(indexed_success, dict) and indexed_success.get("chrome_version") == version
+            and indexed_success.get("platform") == "macOS"
+            and indexed_success.get("architecture") == architecture
+            and indexed_success.get("status") == "CI_BUILD_SUCCEEDED"
+            and not any(r.get("run_id") == indexed_success.get("run_id")
+                        and r.get("artifact_id") == indexed_success.get("artifact_id") for r in matches)):
+        matches.append(indexed_success)
     matches.sort(key=lambda r: str(r.get("created_at", "")), reverse=True)
     for record in matches:
         try:

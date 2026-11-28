@@ -9,8 +9,9 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-from src.maintenance_angle.local import fetch_artifact, find_index_record
+from src.maintenance_angle.local import LocalError, fetch_artifact, find_index_record
 from src.maintenance_angle.artifact import sha256
+from src.maintenance_angle.github_artifacts import GitHubActionsArtifacts
 from src.maintenance_angle.monitor_policy import confirm_final_state, normalize_state, update_outcome
 from tests.test_artifact_handling import make_artifact
 
@@ -147,6 +148,91 @@ class MonitorStateTests(unittest.TestCase):
         self.assertEqual(candidate["chromium_revision"], "a" * 40)
         self.assertEqual(state["records"][-1]["run_id"], "101")
         self.assertEqual(state["last_detected_version"], "157.0.300.2")
+
+    def test_trimmed_success_index_survives_state_roundtrip_and_local_fetch(self):
+        version = "156.0.8078.48"
+        run_id = "9000"
+        artifact_id = 73
+        artifact_dir = self.root / "artifact"
+        manifest = make_artifact(artifact_dir, chrome_version=version, run_id=run_id)
+        expiry = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        artifact_name = manifest["artifact_name"]
+        success = {
+            "chrome_version": version, "platform": "macOS", "architecture": "x86_64",
+            "status": "CI_BUILD_SUCCEEDED", "run_id": run_id, "artifact_id": artifact_id,
+            "artifact_name": artifact_name, "created_at": manifest["created_at"], "expires_at": expiry,
+            "build_key": manifest["build_key"], "chromium_revision": manifest["chromium_revision"],
+            "angle_revision": manifest["angle_revision"],
+        }
+        audit_records = [{"chrome_version": version, "status": "STATE_RECOVERY_AUDIT",
+                          "run_id": str(index), "detected_at": "2026-11-15T00:00:00Z"}
+                         for index in range(1000)]
+        FakeClient.state = {
+            "schema": "angle-stable-monitor-state-v1", "baseline": version,
+            "last_detected_version": version, "records": [success, *audit_records],
+        }
+        release_fixture = self.root / "releases.json"
+        release_fixture.write_text(json.dumps({"releases": [{"version": version, "fraction": 1.0,
+            "serving": {"startTime": "2026-11-15T00:00:00Z"}}]}))
+        args = self.args(run_id="1001", fixture=release_fixture)
+        monitor.begin(args)
+
+        persisted = json.loads(args.state.read_text())
+        self.assertEqual(len(persisted["records"]), 1000)
+        self.assertFalse(any(record.get("run_id") == run_id for record in persisted["records"]))
+        indexed = persisted["success_index"][version]
+        self.assertEqual(indexed["platform"], "macOS")
+        self.assertEqual(indexed["architecture"], "x86_64")
+
+        state_archive = io.BytesIO()
+        with zipfile.ZipFile(state_archive, "w") as output:
+            output.writestr("stable-monitor-state.json", args.state.read_text())
+        state_artifact_expiry = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        remote = GitHubActionsArtifacts("owner/repo")
+        with patch.object(remote, "artifacts", return_value=[{
+                "id": 88, "name": "stable-monitor-state", "expired": False,
+                "expires_at": state_artifact_expiry, "created_at": "2026-11-23T00:00:00Z",
+                "workflow_run": {"id": "1001", "head_branch": "main"}}]), \
+                patch.object(remote, "workflow_runs", return_value=[{
+                    "id": "1001", "status": "completed", "created_at": "2026-11-23T00:00:00Z"}]), \
+                patch.object(remote, "download_artifact", return_value=state_archive.getvalue()):
+            loaded_state = remote.load_latest_state("watch-chrome-stable.yml")
+        self.assertIsNotNone(loaded_state)
+        self.assertEqual(loaded_state["success_index"][version]["architecture"], "x86_64")
+
+        artifact_archive = self.root / "artifact.zip"
+        with zipfile.ZipFile(artifact_archive, "w") as output:
+            for path in artifact_dir.rglob("*"):
+                if path.is_file():
+                    output.write(path, arcname=path.relative_to(artifact_dir).as_posix())
+
+        class IndexedClient:
+            def __init__(self):
+                self.state_reads = 0
+                self.downloaded_id = None
+
+            def load_latest_state(self, workflow_file):
+                self.state_reads += 1
+                return copy.deepcopy(loaded_state)
+
+            def artifacts(self):
+                return [{"id": artifact_id, "name": artifact_name, "expired": False,
+                         "expires_at": expiry}]
+
+            def download_artifact(self, requested_id):
+                self.downloaded_id = requested_id
+                return artifact_archive.read_bytes()
+
+        client = IndexedClient()
+        matched, _artifact = find_index_record("owner/repo", version, "x86_64", client)
+        self.assertEqual(matched["run_id"], run_id)
+        with self.assertRaises(LocalError):
+            find_index_record("owner/repo", version, "arm64", client)
+        destination = self.root / "fetched"
+        result = fetch_artifact("owner/repo", version, "x86_64", destination, client)
+        self.assertEqual(client.downloaded_id, artifact_id)
+        self.assertEqual(result["manifest"]["build_key"], manifest["build_key"])
+        self.assertEqual(client.state_reads, 3)
 
     def test_later_failure_does_not_erase_success_or_block_expired_success_reacquire(self):
         version = "157.0.300.2"
