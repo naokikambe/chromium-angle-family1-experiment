@@ -13,6 +13,10 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 import zipfile
 
 from .artifact import ArtifactError, is_unexpired
+from .monitor_policy import (
+    STATE_SCHEMA_V1, STATE_SCHEMA_V2, confirm_final_state,
+    normalize_state, update_outcome,
+)
 
 
 class GitHubError(RuntimeError):
@@ -192,7 +196,10 @@ class GitHubActionsArtifacts:
                                     if a.get("name") == f"stable-monitor-resolved-checkpoint-{run_id}"]
             if finals:
                 state = self._read_state_artifact(finals, "stable-monitor-state.json")
-                return state
+                try:
+                    return confirm_final_state(state)
+                except ValueError as exc:
+                    raise GitHubError("final monitor state is malformed") from exc
             if resolved_checkpoints:
                 state = self._read_state_artifact(resolved_checkpoints, "stable-monitor-state.json")
                 return self._mark_interrupted_checkpoint(state, run_id)
@@ -218,15 +225,20 @@ class GitHubActionsArtifacts:
         if artifact.get("expired") is True or not is_unexpired(artifact.get("expires_at", "")):
             raise GitHubError("state-lost: latest available state artifact has expired")
         state = self.read_json_artifact(artifact, filename)
-        if state.get("schema") != "angle-stable-monitor-state-v1":
+        if state.get("schema") not in {STATE_SCHEMA_V1, STATE_SCHEMA_V2}:
             raise GitHubError("unsupported monitor state schema")
-        return state
+        try:
+            return normalize_state(state)
+        except ValueError as exc:
+            raise GitHubError("monitor state is malformed") from exc
 
     @staticmethod
     def _mark_interrupted_checkpoint(state: dict[str, Any], run_id: str) -> dict[str, Any]:
-        records = state.get("records")
-        if not isinstance(records, list):
-            raise GitHubError("checkpoint monitor state has malformed records")
+        try:
+            state = normalize_state(state)
+        except ValueError as exc:
+            raise GitHubError("checkpoint monitor state is malformed") from exc
+        records = state["records"]
         for record in records:
             if not isinstance(record, dict) or str(record.get("run_id", "")) != run_id:
                 continue
@@ -240,6 +252,7 @@ class GitHubActionsArtifacts:
                 record.update({"status": "CI_BUILD_INTERRUPTED",
                                "reason": failure_stage,
                                "failure_stage": failure_stage})
+                update_outcome(state, record)
         return state
 
     def find_artifact(self, name: str) -> dict[str, Any] | None:

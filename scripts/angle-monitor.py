@@ -12,7 +12,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from src.maintenance_angle.github_artifacts import GitHubActionsArtifacts, GitHubError, usable_artifact  # noqa: E402
-from src.maintenance_angle.stable import ReleaseError, select_candidate  # noqa: E402
+from src.maintenance_angle.monitor_policy import (  # noqa: E402
+    ACTIVE_STATUSES, FAILED_STATUSES, FingerprintError, STATE_SCHEMA_V2,
+    comparison_baseline, effective_input_fingerprint, normalize_state, update_outcome,
+)
+from src.maintenance_angle.stable import ReleaseError, select_candidate, version_key  # noqa: E402
 from src.maintenance_angle.versionhistory import fetch_releases  # noqa: E402
 
 BASELINE = "156.0.8078.48"
@@ -20,11 +24,88 @@ WORKFLOW = "watch-chrome-stable.yml"
 EXACT_VERSION = re.compile(r"\d+(?:\.\d+){3}")
 SHA1 = re.compile(r"[0-9a-f]{40}")
 SHA256 = re.compile(r"[0-9a-f]{64}")
-RETRYABLE_FAILURES = {"CI_BUILD_FAILED", "CI_BUILD_INTERRUPTED"}
+RETRYABLE_FAILURES = FAILED_STATUSES
 
 
 def _valid_version(value: str) -> bool:
     return bool(EXACT_VERSION.fullmatch(value))
+
+
+def _initial_state(start_version: str = BASELINE) -> dict:
+    return {
+        "schema": STATE_SCHEMA_V2, "baseline": start_version,
+        "monitor_start_version": start_version, "last_detected_version": start_version,
+        "last_successful_version": None, "success_index": {}, "candidate_outcomes": {},
+        "records": [], "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "state_backend": "GitHub Actions artifacts", "state_retention_days": 90,
+    }
+
+
+def _source_pins_for_version(state: dict, version: str) -> dict | None:
+    outcome = state.get("candidate_outcomes", {}).get(version, {})
+    pins = outcome.get("source_pins") if isinstance(outcome, dict) else None
+    if isinstance(pins, dict):
+        return pins
+    success = state.get("success_index", {}).get(version, {})
+    if isinstance(success, dict):
+        chromium, angle = success.get("chromium_revision"), success.get("angle_revision")
+        if isinstance(chromium, str) and isinstance(angle, str):
+            return {"chromium_revision": chromium, "angle_revision": angle}
+    for record in reversed(state["records"]):
+        if record.get("chrome_version") != version:
+            continue
+        chromium, angle = record.get("chromium_revision"), record.get("angle_revision")
+        if isinstance(chromium, str) and isinstance(angle, str):
+            return {"chromium_revision": chromium, "angle_revision": angle}
+    return None
+
+
+def _source_pin_run_for_version(state: dict, version: str) -> str | None:
+    outcome = state.get("candidate_outcomes", {}).get(version, {})
+    run_id = outcome.get("source_pin_run_id") if isinstance(outcome, dict) else None
+    if isinstance(run_id, str) and run_id:
+        return run_id
+    success = state.get("success_index", {}).get(version, {})
+    if isinstance(success, dict) and isinstance(success.get("run_id"), str):
+        return success["run_id"]
+    for record in reversed(state["records"]):
+        if record.get("chrome_version") != version:
+            continue
+        for key in ("source_resolution_run_id", "retry_source_pin_run_id",
+                    "expected_source_pin_run_id", "reacquire_of_run_id"):
+            if isinstance(record.get(key), str) and record[key]:
+                return record[key]
+        if record.get("chromium_revision") and record.get("angle_revision"):
+            return str(record.get("run_id", "")) or None
+    return None
+
+
+def _attempt_block_reason(outcome: dict | None, fingerprint: str) -> str | None:
+    if not isinstance(outcome, dict):
+        return None
+    if outcome.get("status") == "IN_PROGRESS":
+        return "prior-attempt-may-still-be-active-or-incomplete"
+    if outcome.get("auto_retry_blocked"):
+        return str(outcome.get("auto_retry_block_reason", "prior-failure-inputs-unknown"))
+    attempted = outcome.get("attempted_fingerprints", outcome.get("automatic_attempt_fingerprints", []))
+    if fingerprint in attempted:
+        if (outcome.get("status") in RETRYABLE_FAILURES and
+                outcome.get("effective_fingerprint") == fingerprint):
+            return "same-effective-inputs-already-failed"
+        return "same-effective-inputs-already-attempted"
+    if outcome.get("status") in RETRYABLE_FAILURES and outcome.get("effective_fingerprint") == fingerprint:
+        return "same-effective-inputs-already-attempted"
+    return None
+
+
+def _merge_fingerprints(*values: list[str] | str) -> list[str]:
+    merged: list[str] = []
+    for value in values:
+        items = [value] if isinstance(value, str) else value
+        for item in items:
+            if item not in merged:
+                merged.append(item)
+    return merged
 
 
 def _run_record(state: dict, run_id: str, version: str) -> dict:
@@ -53,19 +134,8 @@ def write(path: Path, value: dict) -> None:
 
 def begin(args: argparse.Namespace) -> int:
     client = GitHubActionsArtifacts(args.repository)
-    state = client.load_latest_state(WORKFLOW) or {
-        "schema": "angle-stable-monitor-state-v1",
-        "baseline": BASELINE,
-        "last_detected_version": BASELINE,
-        "records": [],
-        "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "state_backend": "GitHub Actions artifacts",
-        "state_retention_days": 90,
-    }
-    if not isinstance(state.get("records"), list) or not isinstance(state.get("last_detected_version"), str):
-        raise ValueError("monitor state is malformed")
-    if any(not isinstance(record, dict) for record in state["records"]):
-        raise ValueError("monitor state contains a malformed version record")
+    loaded_state = client.load_latest_state(WORKFLOW)
+    state = _initial_state() if loaded_state is None else normalize_state(loaded_state)
     reacquire_version = args.reacquire_version
     retry_version = getattr(args, "retry_failed_version", "")
     operation = getattr(args, "operation", "")
@@ -85,11 +155,28 @@ def begin(args: argparse.Namespace) -> int:
                         and record.get("chrome_version") == version]
         if any(str(record.get("run_id", "")) == str(args.run_id) for record in same_version):
             raise ValueError("this workflow run already has an attempt record for the requested version")
-        if not same_version or same_version[-1].get("status") not in RETRYABLE_FAILURES:
+        prior_outcome = state["candidate_outcomes"].get(version, {})
+        latest_attempt = next((record for record in reversed(same_version)
+                               if record.get("status") in RETRYABLE_FAILURES | ACTIVE_STATUSES |
+                               {"CI_BUILD_SUCCEEDED", "CI_BUILD_SUCCEEDED_PENDING_STATE"}), None)
+        latest_status = (prior_outcome.get("status") if isinstance(prior_outcome, dict)
+                         and prior_outcome.get("status") else
+                         latest_attempt.get("status") if latest_attempt else None)
+        if latest_status not in RETRYABLE_FAILURES:
             raise ValueError("the latest indexed attempt for this version is not failed or interrupted; use artifact re-acquire only for an expired success")
-        previous = same_version[-1]
+        previous = next((record for record in reversed(same_version)
+                         if latest_attempt and str(record.get("run_id", "")) ==
+                         str(prior_outcome.get("run_id", latest_attempt.get("run_id", "")))), None)
+        if previous is None:
+            previous = prior_outcome if isinstance(prior_outcome, dict) else latest_attempt
+        pins = prior_outcome.get("source_pins") if isinstance(prior_outcome, dict) else None
         previous_source = next((record for record in reversed(same_version)
                                 if record.get("chromium_revision") or record.get("angle_revision")), None)
+        if isinstance(pins, dict):
+            pin_run_id = prior_outcome.get("source_pin_run_id")
+            if not isinstance(pin_run_id, str) or not pin_run_id:
+                pin_run_id = _source_pin_run_for_version(state, version)
+            previous_source = {**pins, "run_id": pin_run_id or ""}
         expected_pins = None
         if previous_source is not None:
             chromium_revision = previous_source.get("chromium_revision")
@@ -108,6 +195,10 @@ def begin(args: argparse.Namespace) -> int:
                                               "selection_mode", "workflow_revision") if record.get(key) is not None
         } for record in reversed(same_version) if any(record.get(key) is not None for key in (
             "patchset_id", "patch_sha256", "recipe_id", "recipe_sha256", "selection_mode", "workflow_revision"))), {})
+        if not previous_inputs and isinstance(prior_outcome, dict):
+            previous_inputs = {key: prior_outcome[key] for key in (
+                "patchset_id", "patch_sha256", "recipe_id", "recipe_sha256", "selection_mode", "workflow_revision"
+            ) if prior_outcome.get(key) is not None}
         failure_stage = previous.get("failure_stage") or previous.get("reason") or "unknown"
         retry_record = {
             "chrome_version": version, "platform": "macOS", "architecture": "x86_64",
@@ -116,6 +207,9 @@ def begin(args: argparse.Namespace) -> int:
             "retry_of_status": previous.get("status"), "retry_of_failure_stage": failure_stage,
             "retry_source_mode": source_mode,
             "retry_source_pin_run_id": str(previous_source.get("run_id", "")) if previous_source else None,
+            "attempted_fingerprints": list(prior_outcome.get("attempted_fingerprints",
+                                                             prior_outcome.get("automatic_attempt_fingerprints", [])))
+            if isinstance(prior_outcome, dict) else [],
             "expected_source_pins": expected_pins,
             "retry_previous_inputs": previous_inputs,
             "retry_unpinned_source_acknowledged": expected_pins is None,
@@ -134,12 +228,12 @@ def begin(args: argparse.Namespace) -> int:
         version = reacquire_version
         if not _valid_version(version):
             raise ValueError("re-acquire target must be an exact four-part version")
+        indexed_success = state["success_index"].get(version)
         prior = [record for record in state["records"] if record.get("chrome_version") == version
                  and record.get("status") == "CI_BUILD_SUCCEEDED"]
-        prior.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
-        if not prior:
+        old = indexed_success or (prior[-1] if prior else None)
+        if old is None:
             raise ValueError("no successful indexed record exists for the requested version")
-        old = prior[0]
         if any(str(record.get("run_id", "")) == str(args.run_id) for record in state["records"]
                if isinstance(record, dict) and record.get("chrome_version") == version):
             raise ValueError("this workflow run already has an attempt record for the requested version")
@@ -166,28 +260,103 @@ def begin(args: argparse.Namespace) -> int:
                       "reacquire_of_artifact_id": old.get("artifact_id")}
     elif args.fixture:
         payload = json.loads(args.fixture.read_text(encoding="utf-8"))
-        candidate = select_candidate(payload, state.get("last_detected_version", BASELINE))
+        candidate = select_candidate(payload, comparison_baseline(state))
         output = candidate or {"status": "NO_NEW_FULLY_ROLLED_OUT_STABLE"}
     else:
         payload = fetch_releases()
-        candidate = select_candidate(payload, state.get("last_detected_version", BASELINE))
+        candidate = select_candidate(payload, comparison_baseline(state))
         output = candidate or {"status": "NO_NEW_FULLY_ROLLED_OUT_STABLE"}
     if output.get("status") == "stable-fully-rolled-out" and "chrome_version" in output:
         output = {**output, "status": "BUILD_CANDIDATE"}
     if output.get("status") == "BUILD_CANDIDATE" and not output.get("reacquire") and not output.get("retry_failed_version"):
         candidate = output
-        state["last_detected_version"] = candidate["chrome_version"]
-        release = {**candidate, "status": "stable-fully-rolled-out"}
-        state["records"].append({
-            "chrome_version": candidate["chrome_version"],
-            "platform": "macOS",
-            "architecture": "x86_64",
-            "status": "STABLE_RELEASE_DETECTED",
-            "release": release,
-            "detected_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "run_id": args.run_id,
-        })
-        output = {"status": "BUILD_CANDIDATE", **candidate}
+        version = candidate["chrome_version"]
+        last_detected = state.get("last_detected_version", state["monitor_start_version"])
+        if version_key(version) > version_key(last_detected):
+            state["last_detected_version"] = version
+        prior_outcome = state["candidate_outcomes"].get(version)
+        try:
+            fingerprint = effective_input_fingerprint(ROOT, version)
+        except FingerprintError as exc:
+            reason = "effective-input-fingerprint-unavailable"
+            record = {
+                "chrome_version": version, "platform": "macOS", "architecture": "x86_64",
+                "status": "EFFECTIVE_INPUT_FINGERPRINT_FAILED", "reason": reason,
+                "failure_stage": reason, "run_id": str(args.run_id),
+                "detected_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            }
+            state["records"].append(record)
+            unavailable = state["candidate_outcomes"].get(version)
+            if isinstance(unavailable, dict):
+                unavailable.update({"requires_action": True, "fingerprint_inspection_error": str(exc)})
+            else:
+                state["candidate_outcomes"][version] = {
+                    "status": "FINGERPRINT_UNAVAILABLE",
+                    "detail": str(exc), "run_id": str(args.run_id),
+                }
+            output = {"status": "ACTION_REQUIRED", "chrome_version": version,
+                      "reason": reason, "detail": str(exc)}
+        else:
+            block_reason = _attempt_block_reason(prior_outcome, fingerprint)
+            if block_reason:
+                if isinstance(prior_outcome, dict):
+                    prior_outcome["requires_action"] = True
+                    prior_outcome["auto_retry_suppressed"] = True
+                    prior_outcome["auto_retry_suppression_reason"] = block_reason
+                for old_record in reversed(state["records"]):
+                    if old_record.get("chrome_version") == version and old_record.get("status") in RETRYABLE_FAILURES:
+                        old_record["requires_action"] = True
+                        old_record["auto_retry_suppressed"] = True
+                        old_record["auto_retry_suppression_reason"] = block_reason
+                        break
+                output = {"status": "ACTION_REQUIRED", "chrome_version": version,
+                          "reason": block_reason,
+                          "effective_fingerprint": fingerprint,
+                          "prior_run_id": prior_outcome.get("run_id") if prior_outcome else None}
+            else:
+                expected_pins = _source_pins_for_version(state, version)
+                release = {**candidate, "status": "stable-fully-rolled-out"}
+                record = {
+                    "chrome_version": version, "platform": "macOS", "architecture": "x86_64",
+                    "status": "STABLE_RELEASE_DETECTED", "release": release,
+                    "effective_fingerprint": fingerprint, "attempt_kind": "automatic",
+                    "attempted_fingerprints": _merge_fingerprints(
+                        prior_outcome.get("attempted_fingerprints",
+                                          prior_outcome.get("automatic_attempt_fingerprints", []))
+                        if isinstance(prior_outcome, dict) else [], fingerprint),
+                    "expected_source_pins": expected_pins,
+                    "expected_source_pin_run_id": _source_pin_run_for_version(state, version),
+                    "detected_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "run_id": str(args.run_id),
+                }
+                state["records"].append(record)
+                update_outcome(state, record)
+                output = {"status": "BUILD_CANDIDATE", **candidate,
+                          "effective_fingerprint": fingerprint,
+                          "expected_source_pins": expected_pins}
+    if output.get("status") == "BUILD_CANDIDATE" and (output.get("reacquire") or output.get("retry_failed_version")):
+        version = output["chrome_version"]
+        try:
+            fingerprint = effective_input_fingerprint(ROOT, version)
+        except FingerprintError as exc:
+            record = _run_record(state, str(args.run_id), version)
+            record.update({"status": "EFFECTIVE_INPUT_FINGERPRINT_FAILED",
+                           "reason": "effective-input-fingerprint-unavailable",
+                           "failure_stage": "effective-input-fingerprint"})
+            output = {"status": "ACTION_REQUIRED", "chrome_version": version,
+                      "reason": "effective-input-fingerprint-unavailable", "detail": str(exc)}
+        else:
+            record = _run_record(state, str(args.run_id), version)
+            record["effective_fingerprint"] = fingerprint
+            record["attempt_kind"] = "artifact-reacquire" if output.get("reacquire") else "explicit-retry"
+            prior_outcome = state["candidate_outcomes"].get(version, {})
+            record["attempted_fingerprints"] = _merge_fingerprints(
+                prior_outcome.get("attempted_fingerprints",
+                                  prior_outcome.get("automatic_attempt_fingerprints", []))
+                if isinstance(prior_outcome, dict) else [],
+                record.get("attempted_fingerprints", []), fingerprint)
+            output["effective_fingerprint"] = fingerprint
+            update_outcome(state, record)
     if len(state["records"]) > 1000:
         state["records"] = state["records"][-1000:]
     state["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -307,7 +476,8 @@ def finish(args: argparse.Namespace) -> int:
             except (OSError, json.JSONDecodeError):
                 manifest = None
             workflow_run = artifact.get("workflow_run", {}) if artifact else {}
-            artifact_belongs_to_run = str(workflow_run.get("id", "")) == str(args.run_id)
+            artifact_belongs_to_run = (str(workflow_run.get("id", "")) == str(args.run_id) and
+                                        workflow_run.get("head_branch") == "main")
             if not usable_artifact(artifact) or not artifact_belongs_to_run or not isinstance(manifest, dict):
                 record.update({"status": "ARTIFACT_MISSING_OR_EXPIRED", "reason": "artifact-upload-not-confirmed",
                                "failure_stage": "artifact-publication"})
@@ -325,7 +495,7 @@ def finish(args: argparse.Namespace) -> int:
                                    "failure_stage": "artifact-metadata-validation"})
                 else:
                     record.update({
-                        "status": "CI_BUILD_SUCCEEDED", "artifact_id": artifact["id"],
+                        "status": "CI_BUILD_SUCCEEDED_PENDING_STATE", "artifact_id": artifact["id"],
                         "artifact_name": artifact["name"], "run_id": str(args.run_id),
                         "created_at": artifact.get("created_at"), "expires_at": artifact.get("expires_at"),
                         "platform": manifest.get("platform"), "architecture": manifest.get("architecture"),
@@ -345,12 +515,16 @@ def finish(args: argparse.Namespace) -> int:
                         "reacquire_of_artifact_id": record.get("reacquire_of_artifact_id"),
                         "device_compatibility": "not-assessed", "adoption_status": "not-assessed",
                     })
+                    update_outcome(state, record)
         else:
             stage = args.failure_stage or "candidate-build"
             status = "CI_BUILD_INTERRUPTED" if args.job_status == "cancelled" else "CI_BUILD_FAILED"
             record.update({"status": status, "reason": stage, "failure_stage": stage})
             if stage == "official-tag-resolution" and record.get("source_resolution_status") != "resolved":
                 record["source_resolution_status"] = "failed"
+            update_outcome(state, record)
+        if record.get("status") in {"ARTIFACT_MISSING_OR_EXPIRED", "ARTIFACT_METADATA_MISMATCH"}:
+            update_outcome(state, record)
     state["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     write(args.state, state)
     print("monitor state finalized")
@@ -374,12 +548,8 @@ def recover(args: argparse.Namespace) -> int:
             raise ValueError("recovery version cannot be older than the catalog baseline")
         if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+){1,8}", reason) or len(reason) < 12:
             raise ValueError("state is unavailable; provide a generic lowercase recovery reason slug")
-        state = {
-            "schema": "angle-stable-monitor-state-v1", "baseline": BASELINE,
-            "last_detected_version": version, "records": [],
-            "state_backend": "GitHub Actions artifacts",
-            "state_retention_days": 90,
-        }
+        state = _initial_state(version)
+        state["last_detected_version"] = version
     else:
         retained_version = state.get("last_detected_version")
         if not isinstance(retained_version, str):
@@ -392,6 +562,7 @@ def recover(args: argparse.Namespace) -> int:
         elif not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+){1,8}", reason):
             raise ValueError("recovery reason must be a generic lowercase slug")
         recovery_source = "retained-state-or-checkpoint"
+    state = normalize_state(state)
     records = state.get("records")
     if not isinstance(records, list):
         raise ValueError("monitor state records are malformed")

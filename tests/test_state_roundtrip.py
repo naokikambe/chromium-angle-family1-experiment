@@ -41,6 +41,14 @@ class StateArtifactRoundTripTests(unittest.TestCase):
                 monitor.begin(first_args)
             written = json.loads(state_path.read_text())
             self.assertEqual(written["last_detected_version"], "157.0.300.2")
+            self.assertIsNone(written["last_successful_version"])
+            # Model finish() after artifact and manifest validation. The success
+            # is still pending until the final state artifact can be read back.
+            written["records"][0].update({"status": "CI_BUILD_SUCCEEDED_PENDING_STATE",
+                                          "artifact_id": 91, "created_at": "2026-11-15T00:00:00Z",
+                                          "expires_at": "2999-01-01T00:00:00Z",
+                                          "artifact_name": "angle-macos-x86_64-chrome-157.0.300.2-run-10"})
+            state_path.write_text(json.dumps(written))
 
             archive = io.BytesIO()
             with zipfile.ZipFile(archive, "w") as output:
@@ -54,7 +62,10 @@ class StateArtifactRoundTripTests(unittest.TestCase):
                                                                             "created_at": "2026-11-15T00:00:00Z"}]), \
                     patch.object(remote, "download_artifact", return_value=archive.getvalue()):
                 loaded = remote.load_latest_state("watch-chrome-stable.yml")
-            self.assertEqual(loaded, written)
+            self.assertEqual(loaded["schema"], "angle-stable-monitor-state-v2")
+            self.assertEqual(loaded["last_detected_version"], "157.0.300.2")
+            self.assertEqual(loaded["last_successful_version"], "157.0.300.2")
+            self.assertEqual(loaded["records"][0]["status"], "CI_BUILD_SUCCEEDED")
 
             class NextRunClient:
                 def __init__(self, repository):
@@ -80,7 +91,7 @@ class StateArtifactRoundTripTests(unittest.TestCase):
             state = {"schema": "angle-stable-monitor-state-v1", "baseline": monitor.BASELINE,
                      "last_detected_version": INTERRUPTED_VERSION, "records": [
                          {"run_id": "20", "chrome_version": INTERRUPTED_VERSION,
-                          "status": "STABLE_RELEASE_DETECTED"}]}
+                          "status": "STABLE_RELEASE_DETECTED", "effective_fingerprint": "f" * 64}]}
             state_path = root / "stable-monitor-state.json"
             state_path.write_text(json.dumps(state))
             archive = io.BytesIO()
@@ -111,11 +122,13 @@ class StateArtifactRoundTripTests(unittest.TestCase):
             args = type("Args", (), {"repository": "owner/repo", "run_id": "21",
                 "state": root / "next-state.json", "output": root / "candidate.json",
                 "fixture": release_fixture, "github_output": None, "reacquire_version": ""})()
-            with patch.object(monitor, "GitHubActionsArtifacts", NextRunClient):
+            with patch.object(monitor, "GitHubActionsArtifacts", NextRunClient), \
+                    patch.object(monitor, "effective_input_fingerprint", return_value="f" * 64):
                 monitor.begin(args)
             next_state = json.loads(args.state.read_text())
             candidate = json.loads(args.output.read_text())
-            self.assertEqual(candidate["status"], "NO_NEW_FULLY_ROLLED_OUT_STABLE")
+            self.assertEqual(candidate["status"], "ACTION_REQUIRED")
+            self.assertEqual(candidate["reason"], "same-effective-inputs-already-failed")
             self.assertEqual(next_state["records"][0]["status"], "CI_BUILD_INTERRUPTED")
             self.assertFalse(any(r.get("status") == "CI_BUILD_SUCCEEDED" for r in next_state["records"]))
 

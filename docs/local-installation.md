@@ -15,7 +15,7 @@ python3 scripts/local-angle.py plan --app "/Applications/Chrome for Testing.app"
   --profile-dir "/path/to/profile-family1" --runtime-architecture x86_64
 ```
 
-`GH_TOKEN` may contain the owner’s existing read-only token with `actions:read`. Exact four-part version, macOS platform, selected runtime architecture, successful status, non-expired artifact metadata, run/artifact ID, build key, manifest, library hashes, and license files must agree. `fetch` extracts to a new unused directory and removes a partial extraction if checks fail.
+`GH_TOKEN` may contain the owner’s existing read-only token with `actions:read`. Exact four-part version, macOS platform, selected runtime architecture, successful status, non-expired artifact metadata, run/artifact ID, build key, manifest, library hashes, and license files must agree. Match/fetch reads recent records and the persistent success index, so trimming old records does not hide a still-valid indexed artifact. Legacy summaries missing exact platform or architecture data are not accepted by inference. `fetch` extracts to a new unused directory and removes a partial extraction if checks fail.
 
 Chrome can contain a universal executable. `inspect` reports its available slices; `plan` and `prepare` require an explicit runtime architecture. The selected slice must exist in the Chrome executable and match the artifact architecture. The catalog currently produces x86_64 artifacts, so an arm64 request stops unless an exact arm64 artifact is later published. The helper chooses `Chrome Framework.framework/Versions/<exact Chrome version>/Libraries` only when `Versions/Current` resolves to that same numeric version. It refuses mismatches and ambiguous layouts.
 
